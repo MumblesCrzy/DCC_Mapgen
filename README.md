@@ -24,9 +24,9 @@ Word banks (names, mobs, bosses, loot, room flavor, etc.) live in `data/*.json` 
 
 | Main map | Room detail (per neighborhood) |
 |---|---|
-| ![main map example](sample.png) | ![room detail example](sample_room_A.png) |
+| ![main map example](sample/floor1_large_seed914613.png) | ![room detail example](sample/floor1_large_seed914613_room_A.png) |
 
-(`floor1_medium_seed477717.md` in this repo is a full sample write-up if you want to see the Markdown output.)
+(`sample/floor1_large_seed914613.md` in this repo is a full sample write-up for a large dungeon if you want to see the Markdown output.)
 
 ## Installation
 
