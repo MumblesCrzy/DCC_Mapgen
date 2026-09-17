@@ -1,0 +1,2 @@
+# Optional: only needed for PNG map/image output (.svg works with no dependencies).
+resvg-py

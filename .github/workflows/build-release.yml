@@ -1,0 +1,43 @@
+name: Build Windows executable
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller -r requirements.txt
+
+      - name: Build onefile executable
+        run: |
+          pyinstaller --onefile --name dcc_mapgen --add-data "data;data" dcc_mapgen.py
+
+      - name: Smoke test the executable
+        run: |
+          .\dist\dcc_mapgen.exe --floor 1 --size small --seed 1 --out smoke_test.md
+          Get-Content smoke_test.md | Select-Object -First 5
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dcc_mapgen-windows-exe
+          path: dist/dcc_mapgen.exe
+
+      - name: Attach to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/dcc_mapgen.exe
