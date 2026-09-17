@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-dcc_mapgen.py - Dungeon Crawler Carl style floor generator (Floors 1 and 2).
+dcc_mapgen.py - Dungeon Crawler Carl style floor generator (Floors 1 - 11).
 
 No dependencies beyond the standard library. Output is Markdown.
 
@@ -113,7 +113,10 @@ ROOM_FILLER_COUNT_BY_SIZE = {
 import json
 import os
 
-DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+# When frozen by PyInstaller, data files are unpacked under sys._MEIPASS instead of
+# living next to this .py file.
+_BASE_DIR = getattr(sys, "_MEIPASS", os.path.dirname(os.path.abspath(__file__)))
+DATA_DIR = os.path.join(_BASE_DIR, "data")
 
 
 def _load_bank(name: str) -> dict:
