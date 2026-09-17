@@ -1,0 +1,197 @@
+{
+ "MOB_QUIRKS": [
+  [
+   "Attack in coordinated packs and retreat to regroup when one falls.",
+   1
+  ],
+  [
+   "Explode on death. Do not melee the last one in a group.",
+   1
+  ],
+  [
+   "Will trade contraband for shiny objects if you approach unarmed.",
+   -1
+  ],
+  [
+   "Blind, but hunt by sound. Silence works better than stealth.",
+   0
+  ],
+  [
+   "Territorial and slow. Easy to outrun, nearly impossible to outfight in their lair.",
+   0
+  ],
+  [
+   "Cowardly alone, murderous in groups of four or more.",
+   0
+  ],
+  [
+   "Cast a low-tier fear effect on their first hit.",
+   1
+  ],
+  [
+   "Steal one item from inventory on a critical hit, then flee.",
+   0
+  ],
+  [
+   "Spit a corrosive fluid that eats non-magical armor.",
+   1
+  ],
+  [
+   "Feign death after taking 50% damage. Confirm the kill.",
+   0
+  ],
+  [
+   "Follow a shrieking alpha; kill the alpha and the rest scatter.",
+   -1
+  ],
+  [
+   "Regenerate slowly unless the wound is burned.",
+   1
+  ],
+  [
+   "Hoard trash and build barricades across chokepoints.",
+   0
+  ],
+  [
+   "Distracted by food. A dropped ration buys thirty seconds.",
+   -1
+  ],
+  [
+   "Aggressive toward anyone carrying a lit flame.",
+   0
+  ],
+  [
+   "Set crude tripwire traps at every intersection in their territory.",
+   1
+  ],
+  [
+   "Carry rusted weapons that inflict a lingering disease debuff.",
+   1
+  ],
+  [
+   "Pathologically drawn to safe room doors. Expect a welcoming party when you leave.",
+   0
+  ],
+  [
+   "Nocturnal by floor-clock; halve their numbers during the floor's 'day' cycle.",
+   -1
+  ],
+  [
+   "Mistake anyone in a hat for their leader. Briefly.",
+   -1
+  ]
+ ],
+ "SYSTEM_DESC": [
+  "Imagine {a} {b} that has been told, repeatedly and by everyone, that it is not enough. Now give it a weapon.",
+  "The {noun} of this neighborhood have formed a cooperative. The cooperative has one rule, and it is about you.",
+  "They are {adj_l}. They are {noun_l}. They are exactly as bad as that sounds.",
+  "Each of these {noun_l} was once a promising young {noun_sing}. Then they discovered crawlers.",
+  "Somebody in the writers' room really wanted {noun_l} on this floor. That person has since been reassigned. The {noun_l} remain.",
+  "Do not pet the {noun_l}. Do not feed the {noun_l}. Do not make eye contact with the {noun_l}. Honestly, just leave.",
+  "Not the strongest thing on this floor. Not the smartest. Definitely the most committed.",
+  "These come in bunches. Like bananas, if bananas hated you personally."
+ ],
+ "BOSS_FIRST": [
+  "Gorlak",
+  "Mabel",
+  "Tiberius",
+  "Wendeline",
+  "Krug",
+  "Doris",
+  "Fenwick",
+  "Ophelia",
+  "Bartholomew",
+  "Ludmila",
+  "Snagglethorpe",
+  "Persephone",
+  "Chadwick",
+  "Grunhilda",
+  "Percival",
+  "Vexnia",
+  "Reginald",
+  "Tallulah",
+  "Mortimer",
+  "Beatrix",
+  "Ignatius",
+  "Delphine",
+  "Clovis",
+  "Marjorie"
+ ],
+ "BOSS_TITLE": [
+  "the Unwashed",
+  "the Magnificent",
+  "the Landlord",
+  "the Ever-Hungry",
+  "the Regional Manager",
+  "the Twice-Divorced",
+  "the Patient",
+  "the Loud",
+  "of the Nine Chins",
+  "the Recently Promoted",
+  "the Unbothered",
+  "the Auditor",
+  "the Perpetually Damp",
+  "the Well-Reviewed",
+  "the Unemployed",
+  "the Recurring",
+  "Who Was Warned",
+  "the Brood Mother",
+  "the Toll Keeper",
+  "the Middle Child"
+ ],
+ "BOSS_FORMS": [
+  "{a_size} {size}-foot mass of fused {noun_l}, rolling as a single screaming unit",
+  "{a_size} gaunt, {size}-foot giant wearing the pelts of {noun_l} like a shawl",
+  "an obese, waist-deep-in-garbage matriarch of the local {noun_l}",
+  "a mechanical contraption piloted by an unknown number of {noun_l}",
+  "{a_size} {size}-foot centipede-thing with {noun_sing} heads grafted along its length",
+  "a floating, bloated sac that births {noun_l} when struck",
+  "a former crawler, long since turned, still wearing the remains of a uniform",
+  "a hive-mind swarm that takes a humanoid shape only when it wants to talk to you",
+  "a hulking {noun_sing} who has clearly been eating the other {noun_l}",
+  "{a_size} {size}-foot stone effigy animated by the collective spite of the {noun_l}"
+ ],
+ "BOSS_MECHANICS": [
+  "Splits into two smaller copies at 50% health. Kill both within a minute or it reforms.",
+  "Immune to damage while any of its minions are alive in the chamber.",
+  "The arena floor shifts every 30 seconds, funneling crawlers toward it.",
+  "Summons a wave of local mobs each time it loses a quarter of its health.",
+  "Only vulnerable from behind. Turns slowly.",
+  "Screams on a timer; the scream stuns anyone not behind cover.",
+  "Grabs and swallows a crawler; the swallowed crawler must deal damage from inside.",
+  "Drops the chamber's lights at 25% health. Bring your own.",
+  "Weak point is exposed only while it performs its charge attack.",
+  "Feeds on dropped items in the arena; a spilled inventory heals it.",
+  "Can be talked to. Cannot be reasoned with.",
+  "Bleeds an acid pool that grows as the fight drags on. Speed matters.",
+  "Fixates on the lowest-level crawler in the chamber.",
+  "Enrages when the floor timer crosses a whole hour."
+ ],
+ "LOOT_THEMES": [
+  "Goblin engineering: coal, gunpowder, crude mechanical parts, and the occasional working gadget.",
+  "Alchemical scraps: half-labeled vials, reagents, and glassware. Some of it is still potent.",
+  "Scavenged crawler gear: mismatched armor pieces, worn boots, and looted personal effects.",
+  "Butcher's bounty: hides, organs, teeth, and other crafting materials. Bring bags.",
+  "Contraband: narcotics, moonshine, counterfeit coin, and things you cannot legally carry on most planets.",
+  "Ritual junk: candles, bone charms, and low-tier cursed trinkets that mostly don't do anything.",
+  "Tools and hardware: hammers, chain, spikes, bolts. Nothing enchanted; everything useful.",
+  "Rations and consumables: preserved food, dubious water, bandages, and torches.",
+  "Textiles and vanity: cloaks, jewelry, cosmetics, and enchanted accessories of questionable taste.",
+  "Weapon scrap: broken blades, spear shafts, and arrowheads. Good for a crafter, dead weight for anyone else.",
+  "Paper trail: ledgers, maps, letters, and lore drops about this floor's storyline.",
+  "Trap components: tripwire, pressure plates, and reusable spring mechanisms.",
+  "Explosives: crude, unstable, and plentiful.",
+  "Pets and eggs: unhatched or infant versions of the local mob. Handle carefully.",
+  "Coin and bribes: small gold drops and items the local mobs value for trade."
+ ],
+ "JANITOR_MECHANICS": [
+  "Consume corpses; each corpse eaten raises them one level. Clear bodies or clear out.",
+  "Spawn in proportion to the local kill count. Big fights breed big swarms.",
+  "White-tagged until struck. Striking one aggroes every janitor in earshot.",
+  "Drag corpses to a central pit. Follow the drag marks and you'll find the pit. Don't.",
+  "Mutate after enough meals into a flying, aggressive adult form.",
+  "Ignore crawlers entirely unless a crawler is carrying a corpse or body part.",
+  "Sweep the tunnels on a cycle; be inside a safe room when you hear the chittering.",
+  "Dissolve loot left on corpses within an hour. Loot fast."
+ ]
+}

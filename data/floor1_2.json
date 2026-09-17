@@ -1,0 +1,354 @@
+{
+ "THEMES": [
+  "Destruction",
+  "Rebirth",
+  "Home",
+  "Grief",
+  "Hunger",
+  "Victory",
+  "Memory",
+  "Betrayal",
+  "Mercy",
+  "Family",
+  "Fire",
+  "Silence",
+  "Debt",
+  "Harvest",
+  "Exile",
+  "Joy",
+  "Rot",
+  "Ascension"
+ ],
+ "FLOAT_IDEAS": {
+  "Destruction": [
+   "a tank firing blanks in time with a drumline",
+   "a collapsing tower rebuilt every hundred meters",
+   "everything from the garage, on fire, on a trailer"
+  ],
+  "Rebirth": [
+   "a cracked egg the size of a bus with a crawler climbing out at the stands",
+   "a burned float that blooms with conjured flowers on cue",
+   "a phoenix rig on the vehicle's roof"
+  ],
+  "Home": [
+   "a full-size living room on a flatbed, occupied",
+   "the party's first safe room, rebuilt from memory",
+   "a kitchen serving food to the crowd that can't eat it"
+  ],
+  "Grief": [
+   "a hearse pulled by the mount, empty",
+   "portraits of the dead in black dahlias",
+   "a bell rung once per lost crawler"
+  ],
+  "Hunger": [
+   "a feast table that empties as it moves",
+   "the food truck, doors open, serving nobody",
+   "a giant mouth float that the procession walks into"
+  ],
+  "Victory": [
+   "a podium with no one on it",
+   "captured banners from every floor",
+   "a triumphal arch that is also a ramp"
+  ],
+  "Memory": [
+   "a scrolling wall of every achievement notice the party has earned",
+   "the old apartment, or what's left of it",
+   "a slideshow projected on smoke"
+  ],
+  "Betrayal": [
+   "a two-faced float that reverses at the stands",
+   "a handshake sculpture with a knife in it",
+   "an ally's banner, upside down"
+  ],
+  "Mercy": [
+   "cages with the doors open",
+   "a healer's tent that treats the crowd",
+   "the mount, unarmored, walking free"
+  ],
+  "Family": [
+   "every party member and pet on one platform, no weapons",
+   "a dinner table set for the missing",
+   "a float pulled by hand, no vehicle"
+  ],
+  "Fire": [
+   "a bonfire on treads",
+   "the vehicle's exhaust routed through a hundred torches",
+   "a phoenix rig, again, because it works"
+  ],
+  "Silence": [
+   "a float that plays nothing while every other group plays music",
+   "masked figures who never move",
+   "a bell with no clapper"
+  ],
+  "Debt": [
+   "a ledger float listing everything owed to sponsors",
+   "a repossession truck with the party's gear on the back",
+   "coins thrown to a crowd that can't pick them up"
+  ],
+  "Harvest": [
+   "a combine harvester through the fog",
+   "scarecrows made from tenth-floor rivals' colors",
+   "a cornucopia that spills real loot"
+  ],
+  "Exile": [
+   "a boat on wheels",
+   "a signpost pointing every direction but forward",
+   "a wall with a door that won't open"
+  ],
+  "Joy": [
+   "a carousel, working",
+   "fireworks from a Floor 8 card",
+   "the whole party dancing, badly, on purpose"
+  ],
+  "Rot": [
+   "a float that decays along the route and arrives as bones",
+   "mushroom-grown sculpture of the floor boss",
+   "the garage attendants, dressed as janitor mobs"
+  ],
+  "Ascension": [
+   "a staircase to nowhere, climbed at the stands",
+   "balloons lifting a coffin",
+   "the mount, on a lift, above everything"
+  ]
+ },
+ "JUDGES": [
+  "a retired warlord who scores on spectacle",
+  "a Syndicate art critic who scores on theme fidelity",
+  "a former crawler who scores on whether it made them feel anything",
+  "a sponsor's representative who scores on brand visibility",
+  "a child, apparently, who scores on whether it's scary"
+ ],
+ "CRITERIA": [
+  "Theme (0–10): does the float say the word without saying it?",
+  "Spectacle (0–10): would it read from orbit?",
+  "Performance (0–10): what happens at the Judging Stands?",
+  "Craft (0–10): does it hold together for three kilometers?"
+ ],
+ "ROUTE_EVENTS": [
+  "The fog lifts for fifty meters. The spectators' masks are all the same face.",
+  "A rival group's float breaks down ahead; pass or push.",
+  "The Grand Master calls your team by name over the speakers. Wrong name.",
+  "A spectator hands a party member something. It cannot be refused.",
+  "The yellow bricks change color underfoot for one section. Nobody explains.",
+  "Music from every float syncs for eleven seconds.",
+  "A child in the crowd removes its mask. The parade does not stop.",
+  "The road rises; the arena is visible ahead, already lit."
+ ],
+ "GRANDMASTER": [
+  "a bewildered hospitality manager who was told this morning",
+  "a former game-show host with a broken microphone",
+  "a sentient parade balloon",
+  "the tenth floor's least-liked announcer, promoted",
+  "a Bopca in a marshal's sash who keeps checking a clipboard"
+ ],
+ "FORMER_FIRST": [
+  "Bautista",
+  "Elle",
+  "Prepp",
+  "Tsuki",
+  "Rafe",
+  "Mechana",
+  "Ilse",
+  "Diego",
+  "Wren",
+  "Kip",
+  "Amara",
+  "Sol",
+  "Vinh",
+  "Petra",
+  "Oz",
+  "Lucinda"
+ ],
+ "FORMER_CLASS": [
+  "Compensated Anarchist",
+  "Necromancer",
+  "Shock Trooper",
+  "Card Sharp",
+  "Beast Rider",
+  "Combat Alchemist",
+  "Crowd Pleaser",
+  "Tunnel Rat",
+  "Pyromaniac",
+  "Duelist",
+  "Grief Priest",
+  "Sniper",
+  "Rage Elemental (former)",
+  "Fleshmancer"
+ ],
+ "FORMER_HOW": [
+  "came in last in heat 3",
+  "killed by a rival rammer in heat 5",
+  "lost the vehicle to the meat grinder tunnel",
+  "drowned in the flooded city",
+  "fell off the sky bridges",
+  "burned in the lava fields",
+  "ran out of drivers",
+  "took a deal and came back wrong"
+ ],
+ "FORMER_SIG": [
+  "fights exactly the way they died: fast and angry",
+  "has their old float parts fused on as armor",
+  "still thinks it's the race; targets the party's vehicle",
+  "wants to talk first. Means it.",
+  "carries a Floor 8 totem that still works",
+  "will switch sides if their garage attendant is spared",
+  "immune to the party's signature spell; the System learned",
+  "explodes on death, per the audience vote"
+ ],
+ "SUBSTITUTES": [
+  "a tenth-floor rival team, revived for the occasion",
+  "a Hunter from the sixth floor, held over",
+  "a deckmaster from the eighth floor with a fresh deck",
+  "the party's own garage attendants, corrupted",
+  "a Krakaren clone with a parade mask"
+ ],
+ "ARENA_MOBS": [
+  "Tenth-floor track hazards, animated: rolling boulders with faces, sniper gantries on legs.",
+  "A pit crew of gremlins that repair the boss mid-fight.",
+  "Spectators, unmasked, in the lower rows, who will now attack.",
+  "Three rival vehicles from the race, driverless, circling."
+ ],
+ "PARADE_RULES": [
+  "Ninety minutes to build. Anything in the garage, inventory, or safe room is material. A procession can be any length and any number of floats.",
+  "Five groups, five themes, one word each. Express it visually and performatively.",
+  "The route is three kilometers of yellow-brick road with knee-high fog. Spectators line the whole thing and cannot attack.",
+  "The Judging Stands are at roughly two kilometers; each group performs there once.",
+  "The tenth floor's vehicle rules are gone. No magical repair, no consumable refresh. Fix it by hand or don't.",
+  "The route ends in an arena stocked with tenth-floor mobs, former crawlers (or substitutes), and the floor boss. The stairwell opens when the boss dies.",
+  "Total floor time: three hours and fifteen minutes. The staging area is a safe room until the parade starts."
+ ],
+ "PARADE_BOSS_MECHANICS": [
+  "Only damaged while a float is intact within the arena; the floats are the weak points and it knows it.",
+  "Summons a wave of former crawlers each time it loses a quarter of its health.",
+  "Breaks the arena floor in stages; the fighting ring shrinks.",
+  "Silences spells while the crowd is chanting; kill the noise or fight in it.",
+  "Takes a parade theme each phase and becomes it.",
+  "Cannot be killed while the Grand Master lives. The Grand Master is in the stands."
+ ],
+ "PARADE_BOSS_FORM": [
+  "a colossal centipede-thing wearing the parade's discarded masks as scales",
+  "a hundred-foot marionette worked by nothing",
+  "a slow, cathedral-sized beetle whose shell opens to reveal a second arena",
+  "a headless titan in a marshal's uniform carrying its own head as a lantern",
+  "a swarm of every tenth-floor mob type fused into one crowd-shaped mass",
+  "a mirror-plated dragon that reflects the party's own floats back at them"
+ ],
+ "LOOT_BOX_TIERS": ["Bronze", "Silver", "Gold", "Platinum", "Legendary", "Celestial"],
+ "ACHIEVEMENTS": [
+  ["Crazy Cat Lady", "Enter the dungeon with a pet.", "flavor only"],
+  ["Early Adopter", "Be among the first wave of crawlers to enter.", "flavor only"],
+  ["Empty Pockets", "Enter without supplies.", "Bronze Adventurer Box"],
+  ["Why Aren't You Wearing Pants?", "Enter without pants.", "Gold Apparel Box"],
+  ["Unarmed Combat", "Enter without a weapon.", "Bronze Weapon Box"],
+  ["Loner", "Enter without a human companion.", "flavor only"],
+  ["Fall Into an Obvious Trap", "Fall into an obvious trap.", "flavor only"],
+  ["Read an Official Dungeon Sign", "Locate and read a tutorial guild sign.", "flavor only"],
+  ["You've Entered a Guildhall!", "Enter a guildhall.", "flavor only"],
+  ["First Blood", "Deal damage to a mob for the first time.", "flavor only"],
+  ["You've Killed a Mob!", "Land a first kill.", "unlocks experience gain"],
+  ["Giant Slayer", "Kill a mob higher level than yourself.", "Bronze Adventurer Box"],
+  ["Unarmed and Dangerous", "Kill an armed mob with your bare hands.", "Bronze Weapon Box"],
+  ["Level-Up, Baby!", "Reach level 2.", "flavor only"],
+  ["Loot", "Wear something found in the dungeon.", "flavor only"],
+  ["Oooh, Magic", "Wear an enchanted item.", "flavor only"],
+  ["Podophilia!", "Crush an opponent with your bare feet.", "Gold Shoe Box"],
+  ["Borough Boss!", "Locate a borough boss chamber.", "flavor only"],
+  ["Boss Babe", "Deal damage to a dungeon boss for the first time.", "flavor only"],
+  ["Boom!", "Cause an explosion for the first time.", "Silver Goblin Box"],
+  ["Bully and a Thief", "Steal from a lower-level crawler.", "flavor only"],
+  ["You Found Stairs!", "Locate a stairwell to the next floor.", "flavor only"]
+ ],
+ "RANDOM_ENCOUNTERS": [
+  "A vending machine embedded in the tunnel wall sells one random item for blood instead of coin.",
+  "A wounded mob begs for its life in surprisingly good English. It is lying.",
+  "The floor briefly displays a leaderboard of nearby crawlers' kill counts, unprompted.",
+  "A patron-sponsored firework goes off overhead for no discernible reason, illuminating the tunnel.",
+  "A stray pet, clearly someone's lost class-mate, wanders past looking for its crawler.",
+  "The System interrupts to announce a rival crawler's death nearby. No further detail is given.",
+  "A cart of unattended loot sits in the open. It is almost certainly a trap.",
+  "Distant screaming, then silence, then normal ambient noise resumes as if nothing happened.",
+  "A sign warns of a shortcut. The sign is riddled with claw marks.",
+  "A small shrine to a god no one has heard of grants a minor, temporary buff to anyone who leaves an offering."
+ ],
+ "TEAM_SURNAME": [
+  "Meadow Lark", "Ironside", "Blackwater", "Sunnyvale", "Fenwick Ave",
+  "Harbor View", "Redbrick", "Last Call", "Greenway", "Old Mill", "Thistle", "Hollow Creek"
+ ],
+ "TEAM_ORIGIN": [
+  "residents and staff of an eldercare facility",
+  "a night shift crew from a hardware store",
+  "a wedding reception, groom included",
+  "a prison work-release van that never made it back",
+  "a community theater troupe mid-rehearsal",
+  "a Little League team and half their parents",
+  "a group of night-shift nurses from the same hospital floor",
+  "a book club that met in someone's garage",
+  "a touring cover band and their roadies",
+  "a family reunion, three generations deep"
+ ],
+ "TEAM_STATUS": [
+  "last seen holding a safe room in neighborhood {label}",
+  "wiped out by the neighborhood boss in {label} two days ago, per the death feed",
+  "trading loot at the neighborhood {label} safe-room door",
+  "reported alive and moving toward the stairwell in {label}",
+  "gone quiet; last known position was neighborhood {label}",
+  "still arguing about which stairwell to take, somewhere near {label}",
+  "down to half their number, holed up in {label}",
+  "unexpectedly thriving, having adopted the local mob as pets, near {label}"
+ ],
+ "COLLAPSE_NOTES": [
+  "Days ago, every structure on Earth larger than a shed folded downward into the ground in perfect unison \u2014 the Collapse. Anyone caught inside a falling building died instantly; anyone caught outside, in a basement, or in the open woke to find the wreckage gone and a dungeon in its place.",
+  "The Collapse took every building on the planet at once, without warning, and without survivors inside them. What's left of humanity entered the dungeon that swallowed the wreckage, because the alternative \u2014 the open, monster-infested surface \u2014 was worse.",
+  "The System harvested Earth's buildings in the Collapse and replaced them with this dungeon. Everyone who wasn't standing in a doorway, a basement, or open ground when it happened is simply gone."
+ ],
+ "MORDECAI_FORMS": {"1": "Rat Hooligan", "2": "Bugaboo"},
+ "TUTORIAL_GUILD_BLURB": [
+  "Runs the crawler tutorial: interface, inventory, loot boxes, stats, and the media economy that rewards being watched as much as being skilled.",
+  "Offers race and class guidance, potion-brewing services, and a blunt explanation of why survival and spectacle are the same skill down here.",
+  "Explains achievements, followers, and patrons to anyone who walks in, whether or not they asked."
+ ],
+ "ROOM_KINDS": {
+  "Den": [
+   "a nest of {mob}, bedding and bones",
+   "a barricaded guard post the {mob} use to watch the corridor",
+   "a picked-clean feeding pit",
+   "a warm, dark sleeping warren"
+  ],
+  "Junction": [
+   "a four-way tunnel crossing where every echo carries",
+   "a collapsed section forcing a narrow single-file crawl",
+   "a flooded low point, knee-deep and cold",
+   "an old subway platform repurposed as a crossroads"
+  ],
+  "Cache": [
+   "a supply cache the {mob} haven't found yet",
+   "a looted vendor stall, still worth checking",
+   "a maintenance closet with one locked cabinet",
+   "a corpse pile worth searching, if you can stomach it"
+  ],
+  "Overlook": [
+   "a catwalk above the main floor with good sightlines",
+   "a security booth with a still-working camera feed",
+   "a crawlspace looking down into the next room",
+   "a balcony over a two-story drop"
+  ],
+  "Shrine": [
+   "a shrine to a god the dungeon declines to name",
+   "a wall of hand-written names, hundreds of them",
+   "a single flickering vending-machine light, otherwise dark",
+   "an untouched altar; nobody has decided yet if it's safe"
+  ]
+ },
+ "ROOM_ENTRANCE_DESC": [
+  "a collapsed loading dock, still smoking",
+  "a rubble-choked stairwell down from street level",
+  "a maintenance hatch dropped straight into the tunnels",
+  "a blown-out storefront, glass everywhere"
+ ],
+ "SAFE_ROOM_DESC": [
+  "Warded; no mobs, no PvP, and the floor timer stops mattering for as long as you're inside.",
+  "A stocked bunkroom with a working door ward. First one there gets the good cot.",
+  "Bare warded room, but warded is warded.",
+  "Doubles as a vendor stall between fights; still no combat allowed inside."
+ ]
+}

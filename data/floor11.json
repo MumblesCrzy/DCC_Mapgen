@@ -1,0 +1,561 @@
+{
+ "CHASSIS_MECH": [
+  [
+   "Food truck (armored)",
+   {
+    "speed": 2,
+    "toughness": 4,
+    "handling": 2,
+    "capacity": 4
+   },
+   "Serves hot food at speed; morale buff to anyone eating, including rivals who board."
+  ],
+  [
+   "Six-wheeled war buggy",
+   {
+    "speed": 4,
+    "toughness": 2,
+    "handling": 4,
+    "capacity": 2
+   },
+   "Fast and twitchy; rolls if the driver blinks."
+  ],
+  [
+   "Steam locomotive on treads",
+   {
+    "speed": 3,
+    "toughness": 5,
+    "handling": 1,
+    "capacity": 4
+   },
+   "Needs coal; the tender is a target."
+  ],
+  [
+   "Hover skiff",
+   {
+    "speed": 4,
+    "toughness": 1,
+    "handling": 3,
+    "capacity": 3
+   },
+   "Ignores terrain, hates weather."
+  ],
+  [
+   "Drill tank",
+   {
+    "speed": 1,
+    "toughness": 5,
+    "handling": 2,
+    "capacity": 3
+   },
+   "Can tunnel through short obstacles; slow everywhere else."
+  ],
+  [
+   "Rocket sled",
+   {
+    "speed": 5,
+    "toughness": 1,
+    "handling": 1,
+    "capacity": 2
+   },
+   "Straight lines only. Really."
+  ],
+  [
+   "Amphibious half-track",
+   {
+    "speed": 3,
+    "toughness": 3,
+    "handling": 3,
+    "capacity": 3
+   },
+   "Boring and reliable; floats."
+  ],
+  [
+   "Mecha-walker (two-legged)",
+   {
+    "speed": 2,
+    "toughness": 3,
+    "handling": 4,
+    "capacity": 2
+   },
+   "Climbs; falls hard."
+  ]
+ ],
+ "CHASSIS_BIO": [
+  [
+   "Giant beetle",
+   {
+    "speed": 2,
+    "toughness": 5,
+    "handling": 3,
+    "capacity": 3
+   },
+   "Carapace shrugs off hits; hates fire."
+  ],
+  [
+   "War ostrich (pair)",
+   {
+    "speed": 5,
+    "toughness": 1,
+    "handling": 4,
+    "capacity": 2
+   },
+   "Fast, panicky, kicks rivals."
+  ],
+  [
+   "Sky manta",
+   {
+    "speed": 4,
+    "toughness": 2,
+    "handling": 3,
+    "capacity": 3
+   },
+   "Flies; must land to rest every segment."
+  ],
+  [
+   "Cave salamander",
+   {
+    "speed": 3,
+    "toughness": 3,
+    "handling": 4,
+    "capacity": 2
+   },
+   "Amphibious; regenerates limbs between heats without a vet."
+  ],
+  [
+   "Mammoth",
+   {
+    "speed": 2,
+    "toughness": 5,
+    "handling": 1,
+    "capacity": 4
+   },
+   "Immune to cold; tramples."
+  ],
+  [
+   "Six-legged riding lizard",
+   {
+    "speed": 3,
+    "toughness": 3,
+    "handling": 5,
+    "capacity": 2
+   },
+   "Wall-climber; needs sun."
+  ],
+  [
+   "Dire goat",
+   {
+    "speed": 3,
+    "toughness": 3,
+    "handling": 4,
+    "capacity": 2
+   },
+   "Eats anything, including rival vehicles' cabling."
+  ],
+  [
+   "Land shark",
+   {
+    "speed": 4,
+    "toughness": 3,
+    "handling": 2,
+    "capacity": 2
+   },
+   "Bites; cannot reverse."
+  ]
+ ],
+ "ATTENDANT_NAMES": [
+  "Hedy",
+  "Waldrip",
+  "Sprocket",
+  "Mabel-9",
+  "Grudge",
+  "Tolliver",
+  "Pim",
+  "Ratchet",
+  "Ysolde",
+  "Bunt",
+  "Clank",
+  "Dr. Fennimore"
+ ],
+ "ATTENDANT_SPECIES": [
+  "gremlin",
+  "kobold",
+  "bopca",
+  "goblin engineer",
+  "changeling",
+  "animated toolbox",
+  "very old dwarf",
+  "tarsier in a lab coat"
+ ],
+ "ATTENDANT_QUIRKS": [
+  "Fights the other attendant constantly. Both are excellent.",
+  "Sells parts to rivals on the side.",
+  "Terrified of the vehicle.",
+  "Will die for the team, and says so hourly.",
+  "Has done this nine seasons and knows which tracks repeat.",
+  "Only works while being complimented."
+ ],
+ "MERCS": [
+  [
+   "Grease",
+   "mechanic-gunner",
+   "Fixes mid-race; shoots badly.",
+   "Half his fee up front, the other half to whoever finishes ahead of you."
+  ],
+  [
+   "Sister Anneke",
+   "combat medic",
+   "Keeps the driver conscious through anything.",
+   "Prays out loud. Rivals hear it."
+  ],
+  [
+   "Two-Ton",
+   "ram specialist",
+   "Adds a toughness point when aboard; eats two capacity.",
+   "Was on a team that came in last. Won't say how he's here."
+  ],
+  [
+   "Nix",
+   "saboteur",
+   "Boards rival vehicles at speed.",
+   "Has three other contracts this floor."
+  ],
+  [
+   "Old Marrow",
+   "driver-for-hire",
+   "Counts as a driver for one heat.",
+   "Blind in one eye. Which one changes."
+  ],
+  [
+   "Quillet",
+   "navigator",
+   "Reveals the track's twist one segment early.",
+   "Charges per segment. Bill arrives mid-race."
+  ]
+ ],
+ "HAZARDS": [
+  "boulder fall",
+  "rival pit lane",
+  "mob nest across the track",
+  "crumbling shelf",
+  "audience-thrown debris",
+  "a bridge that's also a mimic",
+  "wind shear",
+  "sinkhole",
+  "sniper gantry",
+  "sponsor billboard collapse",
+  "jump gap",
+  "hairpin over nothing",
+  "toll gate (pay or ram)",
+  "flooded dip",
+  "stampede crossing",
+  "oil slick"
+ ],
+ "TWISTS": [
+  "The finish line moves after the leader passes segment 3.",
+  "Mid-race the track reverses; last becomes first for one segment.",
+  "The heat's last-place team is announced at segment 2. It's a lie.",
+  "A garage attendant from a rival team is on the track. Killing them counts as a team.",
+  "The System offers a shortcut. It is a real shortcut. It is also on camera.",
+  "Segment 4 is a pit stop; anyone who skips it loses the vehicle's repair next heat.",
+  "The track is a loop and nobody said how many laps.",
+  "A rival team is a plant: full sponsor kit, no stake in surviving."
+ ],
+ "HINTS": {
+  "open": "It's going to be a straight one. Mostly.",
+  "climb": "The audience has voted for 'vertical'.",
+  "heat": "You'll want heat shielding. Or not. Ha.",
+  "sealed": "Bring something that likes water.",
+  "cold": "Dress warm.",
+  "flight": "Mind the gap. Gaps.",
+  "grip": "Hold onto something. Then hold onto something else.",
+  "amphibious": "Bring boots. Tall ones.",
+  "toughness": "Don't bother with the paint job.",
+  "light": "Pack a light source."
+ },
+ "UPGRADES": {
+  "Offense": [
+   [
+    "Ram plate",
+    "Bronze",
+    [
+     "ram"
+    ],
+    "+1 toughness when ramming; deal 1 damage on contact."
+   ],
+   [
+    "Mounted harpoon",
+    "Silver",
+    [
+     "ram",
+     "grapple"
+    ],
+    "Hook a rival or a ledge; drag or climb."
+   ],
+   [
+    "Broadside battery",
+    "Gold",
+    [
+     "ram"
+    ],
+    "Fire once per segment: target rival loses a segment."
+   ]
+  ],
+  "Defense": [
+   [
+    "Plate armor",
+    "Bronze",
+    [
+     "armor",
+     "toughness"
+    ],
+    "+1 toughness."
+   ],
+   [
+    "Sealed cabin",
+    "Silver",
+    [
+     "sealed",
+     "heat",
+     "cold"
+    ],
+    "Crew survives immersion, heat, and cold."
+   ],
+   [
+    "Reactive shell",
+    "Gold",
+    [
+     "armor",
+     "toughness",
+     "heat"
+    ],
+    "+2 toughness; ignore the first hit each segment."
+   ]
+  ],
+  "Mobility": [
+   [
+    "Spiked treads",
+    "Bronze",
+    [
+     "cold",
+     "grip",
+     "amphibious"
+    ],
+    "Traction on ice, mud, and walls of moderate slope."
+   ],
+   [
+    "Grapple-climb rig",
+    "Silver",
+    [
+     "climb",
+     "grapple",
+     "grip"
+    ],
+    "Ascend cliffs at speed 2; anchor against gravity flips."
+   ],
+   [
+    "Lift package",
+    "Gold",
+    [
+     "flight",
+     "climb"
+    ],
+    "Clear gaps up to one segment; fly for one segment per heat."
+   ]
+  ],
+  "Utility": [
+   [
+    "Floodlamps",
+    "Bronze",
+    [
+     "light"
+    ],
+    "See in the dark; blind rivals behind you."
+   ],
+   [
+    "Sensor suite",
+    "Silver",
+    [
+     "light",
+     "navigate"
+    ],
+    "Reveal the next segment's hazard before entering it."
+   ],
+   [
+    "Time-skip coil",
+    "Gold",
+    [
+     "navigate"
+    ],
+    "Skip one segment per heat. Once."
+   ]
+  ],
+  "Crew": [
+   [
+    "Second attendant",
+    "Bronze",
+    [
+     "repair"
+    ],
+    "Repairs still happen if one attendant dies."
+   ],
+   [
+    "Field repair kit",
+    "Silver",
+    [
+     "repair"
+    ],
+    "Repair 1 toughness mid-race, once per heat."
+   ],
+   [
+    "Cloned driver",
+    "Gold",
+    [
+     "driver"
+    ],
+    "An extra legal driver for one heat. It looks like you."
+   ]
+  ]
+ },
+ "AUDIENCE_VOTES": [
+  "Spinning rims. Cosmetic. The audience loved it.",
+  "A horn that plays your worst moment on the floor at full volume.",
+  "Racing stripes: +1 speed, -1 toughness, no choice.",
+  "A live sponsor mascot bolted to the hood. It talks.",
+  "Actually a Silver sealed cabin. Someone in the audience likes you.",
+  "A bumper sticker: 'DON'T COME IN LAST'. Rivals target you first."
+ ],
+ "RIVAL_NAMES": [
+  "The Widowmakers",
+  "Team Refund",
+  "Sunday Drivers",
+  "The Late Fees",
+  "Grandma's Boys",
+  "Six Feet Faster",
+  "The Underdogs (sponsored)",
+  "Pit Vipers",
+  "Brake Check",
+  "The Final Lap",
+  "Hazard Pay",
+  "Speed Bump",
+  "Team Overdraft",
+  "The Understudies",
+  "Merge Lane",
+  "The Also-Rans"
+ ],
+ "RIVAL_STYLES": [
+  [
+   "rammer",
+   "Will trade paint with anyone in reach.",
+   3
+  ],
+  [
+   "sprinter",
+   "Runs, doesn't fight. Dangerous in open tracks.",
+   2
+  ],
+  [
+   "saboteur",
+   "Boards vehicles, cuts cables, leaves.",
+   4
+  ],
+  [
+   "turtle",
+   "Slow, armored, impossible to push into last place.",
+   2
+  ],
+  [
+   "glass cannon",
+   "Broadside battery on a rocket sled. One good hit and they're done.",
+   4
+  ],
+  [
+   "plant",
+   "Full sponsor kit. Here to make television.",
+   5
+  ]
+ ],
+ "TRACK_ENVS": [
+  [
+   "Salt flats",
+   "open",
+   "none",
+   1,
+   "Flat and fast. Rammers thrive here."
+  ],
+  [
+   "Canyon switchbacks",
+   "climb",
+   "Silver",
+   2,
+   "Tight turns over drops. Handling or a climb upgrade, or both."
+  ],
+  [
+   "Lava fields",
+   "heat",
+   "Silver",
+   3,
+   "Cooling or heat shielding at Silver or better, or the vehicle takes a toughness point of damage per segment."
+  ],
+  [
+   "Drowned city",
+   "sealed",
+   "Silver",
+   3,
+   "Submerged for two segments. Sealing or breathing at Silver, or the crew drowns in segment 3."
+  ],
+  [
+   "Glacier run",
+   "cold",
+   "Bronze",
+   2,
+   "Ice and blizzard. Traction or cold-proofing at Bronze; without it, handling counts as 1."
+  ],
+  [
+   "Sky bridges",
+   "flight",
+   "Gold",
+   4,
+   "Gaps between platforms. Flight, jump, or grapple at Gold, or you don't finish."
+  ],
+  [
+   "Upside-down highway",
+   "grip",
+   "Silver",
+   4,
+   "Gravity flips at the halfway marker. Grip or anchoring at Silver, or the vehicle falls into the sky."
+  ],
+  [
+   "Swamp of teeth",
+   "amphibious",
+   "Bronze",
+   2,
+   "Mud and biting things. Amphibious or armor at Bronze, or lose a segment to a stuck vehicle."
+  ],
+  [
+   "Meat grinder tunnel",
+   "toughness",
+   "Silver",
+   4,
+   "Crushing pistons. Toughness 4+ or armor at Silver, or the vehicle is destroyed in segment 2."
+  ],
+  [
+   "Void stretch",
+   "light",
+   "Bronze",
+   3,
+   "Total dark; the track is unmarked. A light or sensor upgrade at Bronze, or the driver rolls blind."
+  ]
+ ],
+ "RACE_RULES": [
+  "Seven heats. Nine teams start each heat. Don't come in last: the last team across doesn't leave the track.",
+  "Try not to kill more than one team per heat. If more than two teams fail to finish, the System's threat was cut off mid-sentence; assume it's bad.",
+  "Teams are no bigger than four. Every heat needs a different driver, so a party of two alternates and a party of four has spares. Hired drivers count.",
+  "Party leader picks mechanical or biological; the wheel picks the chassis or creature. Pet spells don't work on special mounts.",
+  "The vehicle is fully repaired or healed between heats as long as a garage attendant is alive.",
+  "You may attack rival vehicles. You cannot steal them. No movement spells onto vehicles, yours or theirs.",
+  "Better finishes get more upgrade picks (1st: three picks at Gold; 2nd–4th: two picks up to Silver; 5th–7th: one pick at Bronze; 8th: audience vote). Everyone gets one Golden pick after heat 4.",
+  "You always get a hint of the next environment. The hint is honest, usually.",
+  "Mercenaries can be hired from the garage board between heats. The level timer is suspended for the floor."
+ ]
+}

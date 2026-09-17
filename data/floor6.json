@@ -1,0 +1,343 @@
+{
+ "QUADRANT_DATA": {
+  "Land": {
+   "color": "#c9a66b",
+   "biomes": [
+    "a sand-blasted desert bowl",
+    "a fungal steppe under a bruised sky",
+    "a shattered volcanic plateau",
+    "rolling grassland studded with standing stones",
+    "a salt flat that used to be a sea",
+    "a petrified forest of glass trees",
+    "terraced farmland gone feral"
+   ],
+   "castle_forms": [
+    "a four-level sandcastle built into the side of a tomb",
+    "a hill fort of basalt ringed by seven ditches",
+    "a walking castle on stone legs that only stops to feed",
+    "a cathedral-fortress grown from a single tree",
+    "a sunken amphitheater with the keep at its focus",
+    "a ziggurat with a moat of molten glass"
+   ],
+   "traversal": [
+    "A sandstorm cycle blinds the approach every six hours.",
+    "The plain between settlement and castle is patrolled by something that hunts by vibration.",
+    "The castle moves. Its route is predictable; its schedule is not.",
+    "A dry riverbed is the only cover, and it floods without warning."
+   ],
+   "mobs": [
+    "Dune Striders",
+    "Salt Jackals",
+    "Glass Beetles",
+    "Stone-Shepherds",
+    "Bactrian Changelings",
+    "Grass Wyrms",
+    "Ash Hounds",
+    "Tomb Scarabs"
+   ]
+  },
+  "Sea": {
+   "color": "#5b8fb9",
+   "biomes": [
+    "an archipelago of black-sand islets",
+    "a shallow, warm sea over a drowned city",
+    "an ice-choked strait",
+    "a kelp forest deep enough to lose the sun",
+    "a lagoon ringed by singing reefs",
+    "open ocean with one lighthouse and no land",
+    "a brine lake, heavier than water, floating things that should sink"
+   ],
+   "castle_forms": [
+    "a sunken submarine, still pressurized",
+    "a coral keep grown over a shipwreck",
+    "a lighthouse with a fortress in its foundations",
+    "a pirate hulk lashed to a sea stack",
+    "a drowned cathedral, the nave still full of air",
+    "an iceberg hollowed into a palace"
+   ],
+   "traversal": [
+    "The castle is at lethal depth. Breath, pressure, and cold all need solving.",
+    "Nothing on the surface is safe after dark; the water glows where they hunt.",
+    "The only vessels belong to a faction that charges in favors, not gold.",
+    "Tides expose the approach for ninety minutes twice a day."
+   ],
+   "mobs": [
+    "Octo-Sharks",
+    "Reef Wraiths",
+    "Brine Kelpies",
+    "Pressure Ghouls",
+    "Barnacle Knights",
+    "Siren Eels",
+    "Salt-Drowned Sailors",
+    "Kraken Spawn"
+   ]
+  },
+  "Air": {
+   "color": "#a9c9e8",
+   "biomes": [
+    "a desert basin beneath an endless sky",
+    "a cloud plateau with islands of rock",
+    "a canyon country where the wind never stops",
+    "a mountain of kites and cables",
+    "a stormfront that never moves",
+    "a scrapyard plain under a permanent eclipse"
+   ],
+   "castle_forms": [
+    "a dirigible fortress of scrap metal, thousands of feet up",
+    "a kite city tethered to a mountain",
+    "a citadel on a floating rock, moored by chains",
+    "a nest-tower of bone and rope",
+    "a cloud-keep that solidifies only at dusk",
+    "a crashed sky-ark, half its decks still airworthy"
+   ],
+   "traversal": [
+    "The castle floats. Reaching it needs flight, a captured airship, or a very bad idea.",
+    "The wind at altitude tears anything unanchored off the rock.",
+    "The castle drops bombs on anything that gathers in the open.",
+    "The tethers are the only way up, and they are guarded from above."
+   ],
+   "mobs": [
+    "Dirigible Gnomes",
+    "Wind Sirens",
+    "Razorfoxes",
+    "Nightgaunts",
+    "Kite Harpies",
+    "Storm Crows",
+    "Ballast Golems",
+    "Sky-Lampreys"
+   ]
+  },
+  "Subterranean": {
+   "color": "#8d7b6a",
+   "biomes": [
+    "a necropolis of layered tombs",
+    "a cavern sea lit by glow-worms",
+    "a lava tube complex that still breathes heat",
+    "a mine that was dug from the bottom up",
+    "an ossuary maze built from a single enormous skeleton",
+    "a fungal cathedral with its own weather",
+    "a buried city, streets intact, sky of stone"
+   ],
+   "castle_forms": [
+    "a crypt-palace of trapped corridors and false thrones",
+    "a keep carved downward into a shaft",
+    "a fortress of living stone that reshapes itself",
+    "a hive-palace of wax and bone",
+    "a temple at the bottom of a pit, reachable by stair or by falling",
+    "a mine-lord's manor built across a chasm"
+   ],
+   "traversal": [
+    "Every corridor is trapped. The traps are the castle's real garrison.",
+    "There is no map; the tunnels reorder when nobody is looking.",
+    "Air runs out in the deep sections. Bring light and a clock.",
+    "The approach passes through the faction's burial grounds; they take that personally."
+   ],
+   "mobs": [
+    "Crypt Wardens",
+    "Mole Knights",
+    "Glow-Worm Cultists",
+    "Cave Trolls",
+    "Ossuary Spiders",
+    "Deep Gnomes",
+    "Blind Cavefish-men",
+    "Shaft Ghouls"
+   ]
+  }
+ },
+ "FACTION_ADJ": [
+  "Dirigible",
+  "Dromedarian",
+  "Bactrian",
+  "Razorfox",
+  "Nightgaunt",
+  "Salt-Tongue",
+  "Kelp-Court",
+  "Deep-Crown",
+  "Ash-Kin",
+  "Kite",
+  "Brine",
+  "Hollow-Bone",
+  "Glasswright"
+ ],
+ "FACTION_NOUN": [
+  "Gnomes",
+  "Camel-folk",
+  "Changelings",
+  "Sirens",
+  "Corsairs",
+  "Monks",
+  "Merchants",
+  "Clans",
+  "Knights",
+  "Pilgrims",
+  "Engineers",
+  "Cultists",
+  "Nomads"
+ ],
+ "FACTION_WANT": [
+  "the castle's throne for themselves",
+  "the other faction's water rights",
+  "a piece of an artifact held in another quadrant",
+  "to be left alone, violently",
+  "the crawlers as mercenaries",
+  "to breach the dome and leave",
+  "revenge for a massacre the others deny",
+  "a marriage alliance nobody else wants"
+ ],
+ "TENSION": [
+  "{A} and {B} have been at war for a generation over {W}; {C} sells to both sides.",
+  "{A} holds the throne of one castle and {B} wants it; {C} is neutral until someone pays.",
+  "{A} and {B} are allied against {C}, whose castle nobody has breached. The alliance is one insult from collapsing.",
+  "All three want {W}. Two of them will ally with crawlers. The third will pretend to.",
+  "{A} secretly serves {C}. {B} suspects. The crawlers will be asked to prove it."
+ ],
+ "STORYLINE": [
+  "An artifact in three pieces, one in each faction's keeping. Assembled, it does something the dungeon won't describe.",
+  "A mad mage has turned himself into an elemental and is the real power behind one castle.",
+  "A feral god's egg is buried under the neutral quadrant. Every faction knows. None of them will say it.",
+  "The dome is failing early. The factions blame each other. The clock on the wall is wrong.",
+  "One faction's ruler is a former crawler from a past season. They remember the rules better than you do.",
+  "The castles' thrones are linked: sit on one and the other three rulers feel it."
+ ],
+ "CASTLE_NAME": [
+  "The {adj} {thing}",
+  "{name}'s {thing}",
+  "The {thing} of the {adj} {noun}",
+  "{thing} {name}"
+ ],
+ "CASTLE_ADJ": [
+  "Wasteland",
+  "Drowned",
+  "Hollow",
+  "Gilded",
+  "Screaming",
+  "Sunless",
+  "Salt",
+  "Broken",
+  "Weeping",
+  "Iron",
+  "Glass",
+  "Bone"
+ ],
+ "CASTLE_THING": [
+  "Fortress",
+  "Keep",
+  "Citadel",
+  "Bastion",
+  "Redoubt",
+  "Palace",
+  "Hold",
+  "Eyrie",
+  "Bridge",
+  "Sanctum"
+ ],
+ "CASTLE_NOUN": [
+  "King",
+  "Queen",
+  "Mage",
+  "Admiral",
+  "Prophet",
+  "Brood Mother",
+  "Duke",
+  "Warden",
+  "Abbot",
+  "Tyrant"
+ ],
+ "RULER_TITLE": [
+  "the Mad",
+  "the Unwed",
+  "the Ninth",
+  "the Drowned",
+  "of the Long Sleep",
+  "the Kite-King",
+  "the Brood Mother",
+  "the Unseated",
+  "the Bookkeeper",
+  "the Last"
+ ],
+ "THRONE_NOTE": [
+  "The throne is real. Sitting on it counts. Standing next to it does not.",
+  "The throne room is above the stairwell, not beside it. Take the room, then find the trapdoor.",
+  "The throne is occupied by something that is not the boss. Killing it still counts.",
+  "Throne room doors seal when the boss drops below half. Nobody in, nobody out.",
+  "Two thrones. One is a mimic. The dungeon finds this very funny.",
+  "The throne room is flooded to the waist. The stairwell is dry. Nobody knows how."
+ ],
+ "APPROACH": [
+  "Front gate is a killing field; the service entrance is real but guarded by the faction that built it.",
+  "The garrison rotates every twelve hours; the changeover is the window.",
+  "A civilian population lives inside. Collateral is on the crawlers.",
+  "The castle's defenses are automated and stupid. Its ruler is not.",
+  "There is a traitor inside who will open a door, once, for a price.",
+  "Nothing inside is hostile until the throne room. Then all of it is."
+ ],
+ "OBSTACLE": [
+  "A hangar/dock full of the castle's vehicles, crewed and fueled.",
+  "A great hall of feasting guests who are also the garrison.",
+  "A puzzle door keyed to the faction's language.",
+  "A vault of cages; what's inside can be freed or used.",
+  "A chapel where the faction's god actually answers.",
+  "A bridge that only bears the weight of one crawler at a time.",
+  "An armory. Everything in it is trapped, and everything in it is good."
+ ],
+ "CHAMBERS": {
+  "Gate": [
+   "portcullis with murder holes and a garrison of {mob}",
+   "a drawbridge that raises when three or more cross",
+   "no gate: a hull breach guarded by {mob}",
+   "a tethered docking platform, guns above"
+  ],
+  "Courtyard": [
+   "open ground under archer towers",
+   "a hangar of idle war machines",
+   "a flooded bailey with something under the surface",
+   "a market square of NPC civilians who scream"
+  ],
+  "Keep": [
+   "a spiral of trapped corridors",
+   "barracks of off-duty {mob}, drunk and armed",
+   "a library that is also a maze",
+   "engine decks: heat, noise, and no cover"
+  ],
+  "Throne": [
+   "the boss on its throne and the stairwell behind it",
+   "the boss in the rafters; the throne is bait",
+   "the boss is the throne",
+   "an empty throne; the boss arrives when someone sits"
+  ]
+ },
+ "DIFFICULTY": [
+  [
+   "Easy",
+   "Meant to fall first. A competent party can take it in a day."
+  ],
+  [
+   "Moderate",
+   "Needs preparation or a faction ally, not a miracle."
+  ],
+  [
+   "Hard",
+   "Needs the bubble's other resources: vehicles, allies, or numbers."
+  ],
+  [
+   "Brutal",
+   "Designed to be last. Expect to lose people."
+  ]
+ ],
+ "BUBBLE_STATE": [
+  "Mostly under-leveled and directionless; a handful of competent teams are hoarding gear.",
+  "Split into two camps that won't share a safe room.",
+  "Led, badly, by whoever shouted first.",
+  "Twenty of them are a single well-run guild who consider the rest ballast.",
+  "Thinning fast. The count on the safe-room screen drops every hour.",
+  "One famous name in the bubble, and everyone is waiting for them to solve it."
+ ],
+ "RIVALS": [
+  "a top-ten crawler with a bounty and a temper",
+  "a trap specialist who works alone",
+  "a cleric selling blessings",
+  "a duo of siblings who have already taken one castle and won't say how",
+  "a leaderboard hunter looking for boss kills",
+  "nobody worth naming, which is its own problem"
+ ]
+}

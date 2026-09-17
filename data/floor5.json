@@ -1,0 +1,183 @@
+{
+ "LINE_COLORS": {
+  "Red": "#d62828",
+  "Orange": "#f77f00",
+  "Yellow": "#e6c200",
+  "Indigo": "#4b0082",
+  "Emerald": "#2e8b57",
+  "Azure": "#007fff",
+  "Purple": "#7b2cbf",
+  "Brown": "#8b5a2b",
+  "Mauve": "#b784a7",
+  "Green": "#3a9d23",
+  "Tangerine": "#f28500",
+  "Plum": "#8e4585",
+  "Winter Sky": "#a0c8e8",
+  "Ochre": "#cc7722",
+  "Fulvous": "#e48400",
+  "Camel": "#c19a6b",
+  "Cobalt": "#0047ab",
+  "Puce": "#cc8899",
+  "Vermillion": "#e34234",
+  "Mango": "#ffc324",
+  "Amaranth": "#e52b50",
+  "Pink": "#ff69b4",
+  "Sinopia": "#cb410b",
+  "Mindaro": "#e3f988",
+  "Grullo": "#a99a86",
+  "Zomp": "#39a78e"
+ },
+ "TRAIN_MOB_ADJ": [
+  "Ticketless",
+  "Unionized",
+  "Off-Shift",
+  "Withdrawal-Stage",
+  "Overtime",
+  "Gilded",
+  "Mold-Lunged",
+  "Hobnailed",
+  "Sleepless",
+  "Coal-Blackened",
+  "Punch-Card",
+  "Third-Class",
+  "Hazard-Pay",
+  "Rev-Up Addled",
+  "Brakeline",
+  "Signal-Blind"
+ ],
+ "TRAIN_MOB_NOUN": [
+  "Porters",
+  "Conductors",
+  "Ticket Inspectors",
+  "Brakemen",
+  "Stokers",
+  "Signalmen",
+  "Tunnel Trolls",
+  "Fleshers",
+  "Skellies",
+  "Hobgoblins",
+  "Ghouls",
+  "Dining-Car Staff",
+  "Sleeper-Car Wraiths",
+  "Rail Gremlins",
+  "Lost-and-Found Mimics",
+  "Commuters",
+  "Baggage Handlers",
+  "Trackwalkers",
+  "Ratcatchers",
+  "Coupling Imps"
+ ],
+ "ENGINEER_SPECIES": [
+  "a hobgoblin skellie",
+  "a troll flesher",
+  "a gremlin technician",
+  "a cyclopean dwarf",
+  "a fused pair of goblins",
+  "an animate coal-suit with no one inside",
+  "a very old, very calm ghoul",
+  "a bugbear in a pressed uniform"
+ ],
+ "WITHDRAWAL_PROFILE": [
+  "Stage 1 through day 4: mobs are functional and follow the every-five-stops rule.",
+  "Stage 1 through day 3, then the porters start missing their stops and panicking.",
+  "This line runs hot: stage 2 tremors by day 3, stage 3 seizures by day 6.",
+  "Crew is medicated on schedule; stays stage 1 until the final 48 hours, then it all goes at once.",
+  "Engineer skims the Rev-Up supply. Stage 2 from day 2. Cars 10 and 15 are not safe on this line."
+ ],
+ "STATION_FLAVOR": {
+  "spawn": [
+   "Platform smells of ozone and old coffee. A souvenir stand sells hats.",
+   "Broken turnstiles, a working vending machine, and a sign reading NO REFUNDS.",
+   "A bench, a map with the wrong colors, and a clock that runs backwards.",
+   "Crawlers arrived here still holding their Floor 3 loot. Some of it is still on the tracks."
+  ],
+  "stairwell": [
+   "Stairwell behind the ticket office; opens six hours before collapse.",
+   "Stairwell in the maintenance closet at the far end of the platform. Locked until the final six hours.",
+   "Stairwell disguised as the down escalator. Sealed until six hours out."
+  ],
+  "transfer": [
+   "Safe room on the mezzanine between platforms.",
+   "Safe room is the old station pub; the taps still work.",
+   "Two platforms stacked; the safe room is the stationmaster's office between them.",
+   "Cross-platform transfer. Safe room doubles as a lost-and-found."
+  ],
+  "exit_cavern": [
+   "Exit-only cavern. Mobs get their Rev-Up here; the 'rollercoaster' track at the back runs to the trainyard.",
+   "Exit-only cavern: a dispensary counter, a queue of twitching porters, and a rusted coaster rail.",
+   "Exit-only cavern. Whatever gets off here does not get back on this train."
+  ]
+ },
+ "NAMED_PREFIX": [
+  "Midnight",
+  "Screaming",
+  "Gilded",
+  "Hollow",
+  "Weeping",
+  "Velvet",
+  "Bleeding",
+  "Sunday",
+  "Funeral",
+  "Widow's",
+  "Orphan",
+  "Coffin",
+  "Lullaby",
+  "Rust",
+  "Wedding"
+ ],
+ "NAMED_SUFFIX": [
+  "Express",
+  "Limited",
+  "Flyer",
+  "Special",
+  "Cannonball",
+  "Zephyr",
+  "Comet",
+  "Local",
+  "Sleeper",
+  "Mail"
+ ],
+ "NAMED_STOCK": [
+  "a jet-black steam locomotive with a cowcatcher and forty cars",
+  "a sleek white maglev with a glass nose and two cars",
+  "a wooden funicular that should not be able to move on flat track",
+  "a double-decker diesel with the top deck missing",
+  "a hearse-black electric with velvet seats and no lights",
+  "a circus train, cages first, still painted",
+  "a hospital train with an operating car that is in use",
+  "a gold-plated dining train that is always mid-course",
+  "a freight train of sealed refrigerated cars",
+  "a children's park train, scaled up to full size, still playing its jingle"
+ ],
+ "NAMED_ENTRY": [
+  "Enter through the last car only; the doors between cars open one at a time toward the front.",
+  "Only the first car opens. It is empty. It is not empty.",
+  "Boards from the trackbed, not the platform. Jump.",
+  "Doors open for exactly eight seconds.",
+  "Entry requires a ticket sold by a conductor on any colored line. The conductor will not want to sell it."
+ ],
+ "NAMED_GIMMICK": [
+  "The engineer's compartment is a boiler fed by a bound demon who will negotiate.",
+  "Triggers a quest on boarding: the crew wants the engineer dead and the engineer knows it.",
+  "Runs through the Abyss on every loop; the doors open over the pit.",
+  "Cars rearrange between stops. Count them.",
+  "Carries a working portal scoop on the front; can pull stranded crawlers off a platform at speed.",
+  "Every passenger is a crawler from a previous season, or something wearing one.",
+  "Stops for exactly one minute at each station on its loop, whether or not the station exists.",
+  "The last car is a mimic. It has been the last car for a very long time."
+ ],
+ "MIMIC_TELL": [
+  "the timetable is right",
+  "the platform is clean",
+  "the benches are warm",
+  "there is no smell",
+  "the announcements pronounce your name correctly",
+  "the station name changes when you look away"
+ ],
+ "F4_STORY": [
+  "The floor is a Syndicate logo when viewed from above. Nobody on the floor can view it from above.",
+  "The Rev-Up supply is being cut. The withdrawal timeline is the real countdown.",
+  "Trainyard crews remember home lives that do not match each other. They notice if asked.",
+  "An interdiction crash-response team was supposed to be stationed at 75. The station is empty. The cart is not."
+ ]
+}

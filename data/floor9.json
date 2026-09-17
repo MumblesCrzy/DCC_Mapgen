@@ -1,0 +1,540 @@
+{
+ "FOLKLORE": {
+  "Northern Europe": {
+   "places": [
+    "Bergen, Norway",
+    "Reykjavik, Iceland",
+    "Tallinn, Estonia",
+    "Aberdeen, Scotland",
+    "Turku, Finland"
+   ],
+   "common": [
+    "Draugr",
+    "Trolls",
+    "Huldra",
+    "Nøkken (river spirits)",
+    "Kelpies",
+    "Redcaps",
+    "Nisse",
+    "Mare (night hags)",
+    "Selkies",
+    "Lindworms"
+   ],
+   "legendary": [
+    "a Jötunn",
+    "the Nuckelavee",
+    "Fenrir's cub",
+    "a Draugr King",
+    "the Wild Hunt's master"
+   ]
+  },
+  "Mediterranean": {
+   "places": [
+    "Palermo, Italy",
+    "Athens, Greece",
+    "Valencia, Spain",
+    "Marseille, France",
+    "Tunis, Tunisia"
+   ],
+   "common": [
+    "Harpies",
+    "Satyrs",
+    "Lamia",
+    "Strix (screech owls)",
+    "Cyclopes",
+    "Gorgon spawn",
+    "Empusa",
+    "Sirens",
+    "Basilisks",
+    "Centaurs"
+   ],
+   "legendary": [
+    "a Minotaur",
+    "the Chimera",
+    "a Hydra",
+    "Scylla",
+    "a Sphinx"
+   ]
+  },
+  "Eastern Europe": {
+   "places": [
+    "Brasov, Romania",
+    "Kraków, Poland",
+    "Kyiv, Ukraine",
+    "Belgrade, Serbia",
+    "Prague, Czechia"
+   ],
+   "common": [
+    "Strigoi",
+    "Pricolici (wolf-ghouls)",
+    "Rusalki",
+    "Vodyanoi",
+    "Leshy",
+    "Domovoi",
+    "Vampires",
+    "Werewolves",
+    "Upyr",
+    "Vila"
+   ],
+   "legendary": [
+    "Baba Yaga",
+    "a Zmey (three-headed dragon)",
+    "Koschei the Deathless",
+    "a Vampire Voivode",
+    "the Likho"
+   ]
+  },
+  "British Isles": {
+   "places": [
+    "Cork, Ireland",
+    "Cardiff, Wales",
+    "York, England",
+    "Inverness, Scotland",
+    "Belfast, Northern Ireland"
+   ],
+   "common": [
+    "Banshees",
+    "Leprechauns",
+    "Redcaps",
+    "Black Dogs",
+    "Púca",
+    "Boggarts",
+    "Dullahan",
+    "Fomorians",
+    "Will-o'-the-wisps",
+    "Kelpies"
+   ],
+   "legendary": [
+    "the Black Shuck",
+    "a Fomorian King",
+    "the Cú Sídhe",
+    "Jenny Greenteeth",
+    "the Sluagh"
+   ]
+  },
+  "East Asia": {
+   "places": [
+    "Kyoto, Japan",
+    "Busan, Korea",
+    "Hangzhou, China",
+    "Taipei, Taiwan",
+    "Sapporo, Japan"
+   ],
+   "common": [
+    "Kappa",
+    "Tengu",
+    "Oni",
+    "Kitsune",
+    "Jiangshi",
+    "Gumiho",
+    "Yuki-onna",
+    "Nue",
+    "Dokkaebi",
+    "Hungry ghosts"
+   ],
+   "legendary": [
+    "an Orochi",
+    "a Nine-Tailed Fox",
+    "the Gashadokuro",
+    "a Dragon King",
+    "a Great Oni Lord"
+   ]
+  },
+  "South Asia": {
+   "places": [
+    "Jaipur, India",
+    "Kathmandu, Nepal",
+    "Colombo, Sri Lanka",
+    "Lahore, Pakistan",
+    "Dhaka, Bangladesh"
+   ],
+   "common": [
+    "Rakshasas",
+    "Vetalas",
+    "Nagas",
+    "Bhuta",
+    "Pishacha",
+    "Churel",
+    "Yakshas",
+    "Preta",
+    "Garuda-kin",
+    "Asuras"
+   ],
+   "legendary": [
+    "Ravana's shade",
+    "a Naga Raja",
+    "a Rakshasa King",
+    "Makara",
+    "the Bhoota Vahana"
+   ]
+  },
+  "Middle East": {
+   "places": [
+    "Isfahan, Iran",
+    "Amman, Jordan",
+    "Muscat, Oman",
+    "Baghdad, Iraq",
+    "Istanbul, Türkiye"
+   ],
+   "common": [
+    "Ghouls",
+    "Jinn",
+    "Ifrit",
+    "Marid",
+    "Peri",
+    "Al (birth demons)",
+    "Nasnas",
+    "Roc chicks",
+    "Shaitan",
+    "Manticore cubs"
+   ],
+   "legendary": [
+    "a Roc",
+    "a Marid Sultan",
+    "the Bahamut",
+    "Zahhak",
+    "a Manticore"
+   ]
+  },
+  "West Africa": {
+   "places": [
+    "Accra, Ghana",
+    "Lagos, Nigeria",
+    "Dakar, Senegal",
+    "Abidjan, Côte d'Ivoire",
+    "Cotonou, Benin"
+   ],
+   "common": [
+    "Adze (firefly vampires)",
+    "Asanbosam",
+    "Mami Wata's court",
+    "Anansi's children",
+    "Eloko",
+    "Obayifo",
+    "Sasabonsam",
+    "Tikoloshe",
+    "Ninki Nanka spawn",
+    "Egbere"
+   ],
+   "legendary": [
+    "the Ninki Nanka",
+    "a Sasabonsam Elder",
+    "Anansi",
+    "Mami Wata",
+    "the Grootslang"
+   ]
+  },
+  "Latin America": {
+   "places": [
+    "Oaxaca, Mexico",
+    "Cusco, Peru",
+    "Salvador, Brazil",
+    "Cartagena, Colombia",
+    "Valparaíso, Chile"
+   ],
+   "common": [
+    "Chupacabras",
+    "Nahuales",
+    "La Llorona's children",
+    "Cadejos",
+    "Curupira",
+    "Saci",
+    "Boto (river dolphins)",
+    "Alux",
+    "Cipitio",
+    "Pishtacos"
+   ],
+   "legendary": [
+    "the Chupacabra Prime",
+    "Quetzalcoatl's shade",
+    "the Mapinguari",
+    "a Cadejo Alpha",
+    "El Silbón"
+   ]
+  },
+  "Caribbean": {
+   "places": [
+    "Havana, Cuba",
+    "Kingston, Jamaica",
+    "Nassau, Bahamas",
+    "Port-au-Prince, Haiti",
+    "San Juan, Puerto Rico"
+   ],
+   "common": [
+    "Soucouyants",
+    "Duppies",
+    "Douens",
+    "Lagahoo",
+    "Rolling Calves",
+    "Zombies (bokor-made)",
+    "Ciguapas",
+    "Jumbies",
+    "Chupacabras",
+    "Monk seals (possessed)"
+   ],
+   "legendary": [
+    "Papa Bois",
+    "the Ol' Higue Queen",
+    "a Lagahoo Lord",
+    "the Bokor's Baron",
+    "Mama D'Leau"
+   ]
+  },
+  "North America": {
+   "places": [
+    "Seattle, Washington",
+    "New Orleans, Louisiana",
+    "Toronto, Canada",
+    "Santa Fe, New Mexico",
+    "Anchorage, Alaska"
+   ],
+   "common": [
+    "Wendigo",
+    "Skinwalkers",
+    "Jackalopes",
+    "Rougarou",
+    "Hodags",
+    "Mothmen",
+    "Thunderbird chicks",
+    "Sasquatch",
+    "Fearsome Critters",
+    "Goatmen"
+   ],
+   "legendary": [
+    "the Wendigo Elder",
+    "the Jersey Devil",
+    "a Thunderbird",
+    "the Mothman",
+    "Bigfoot"
+   ]
+  },
+  "Oceania": {
+   "places": [
+    "Auckland, New Zealand",
+    "Sydney, Australia",
+    "Suva, Fiji",
+    "Port Moresby, Papua New Guinea",
+    "Darwin, Australia"
+   ],
+   "common": [
+    "Bunyips",
+    "Taniwha",
+    "Yowies",
+    "Drop Bears",
+    "Patupaiarehe",
+    "Yara-ma-yha-who",
+    "Min Min lights",
+    "Ponaturi",
+    "Hairy Men",
+    "Rainbow Serpent spawn"
+   ],
+   "legendary": [
+    "the Rainbow Serpent",
+    "a Great Taniwha",
+    "the Bunyip King",
+    "a Yowie Chieftain",
+    "Papatuanuku's wrath"
+   ]
+  }
+ },
+ "STRUCTURES": [
+  "a national capitol building",
+  "a cathedral",
+  "a football stadium",
+  "an international airport terminal",
+  "a natural history museum",
+  "a hospital",
+  "a casino hotel",
+  "a central train station",
+  "a shopping mall",
+  "an opera house",
+  "a university library",
+  "a convention center"
+ ],
+ "ENVIRONMENTS": {
+  "1": [
+   "downtown core",
+   "government district",
+   "old town",
+   "waterfront promenade",
+   "financial district"
+  ],
+  "2": [
+   "suburbs",
+   "industrial park",
+   "university district",
+   "port and docks",
+   "hospital and stadium district",
+   "highway interchange"
+  ],
+  "3": [
+   "countryside",
+   "coastal cliffs",
+   "mountain foothills",
+   "farmland",
+   "national park edge",
+   "lake district",
+   "fishing villages"
+  ]
+ },
+ "GHOST_HAZARDS": [
+  "Ghost traffic: cars drive through you, but a totem in the road causes a real pile-up.",
+  "Crowds: a ghost stampede knocks loose real wallets and phones, and real glass.",
+  "A memory loop replays a fire every hour. The fire is real for ninety seconds.",
+  "Ghost police cordons that mobs respect and crawlers do not.",
+  "A concert crowd; sound cover for anything hunting in it.",
+  "Ghost construction: cranes swing on schedule, loads are real.",
+  "Market day. Thousands of ghosts, real produce, real knives on the tables.",
+  "A funeral procession that the folklore mobs follow like a parade."
+ ],
+ "TOTEM_ABILITIES": [
+  "Taunt: enemy totems must target it for 10 s after summon.",
+  "Drain: heals its summoner's lead totem for damage dealt.",
+  "Phase: immune to snares while moving.",
+  "Swarm: summons as three weak copies.",
+  "Ambush: first hit from stealth is a critical.",
+  "Bulwark: halves damage to totems behind it.",
+  "Howl: fear on all enemy totems for 5 s.",
+  "Burrow: unsummon and resummon once per combat at no cost.",
+  "Hex: the enemy's next utility card fizzles.",
+  "Frenzy: +10% damage per 10 s summoned.",
+  "Grapple: locks one enemy totem in place.",
+  "Ward: reflects one mystic card.",
+  "Scavenge: steals a random buff from the totem it kills.",
+  "Shriek: interrupts the enemy leader's next draw."
+ ],
+ "UTILITY_CARDS": [
+  [
+   "Iron Hide",
+   "utility",
+   "Target totem takes 30% less damage for the rest of the combat."
+  ],
+  [
+   "Second Wind",
+   "utility",
+   "Target totem returns to full health once. Consumable."
+  ],
+  [
+   "Bloodlust",
+   "utility",
+   "Target totem attacks 50% faster; it cannot be unsummoned early."
+  ],
+  [
+   "Mirror Skin",
+   "utility",
+   "Target totem reflects the next snare played on it."
+  ],
+  [
+   "Overtime",
+   "utility",
+   "Target totem's summon duration is doubled this combat."
+  ],
+  [
+   "Split Hairs",
+   "utility",
+   "Target totem summons as two half-strength copies next time."
+  ]
+ ],
+ "SNARE_CARDS": [
+  [
+   "Salt Circle",
+   "snare",
+   "Enemy totem cannot move for 15 s."
+  ],
+  [
+   "Cold Iron",
+   "snare",
+   "Enemy totem deals 40% less damage for the rest of the combat."
+  ],
+  [
+   "Mistaken Identity",
+   "snare",
+   "Enemy totem attacks its own summoner's other totems for 8 s."
+  ],
+  [
+   "Early Dismissal",
+   "snare",
+   "Enemy totem's summon ends immediately. Cooldown: one combat."
+  ],
+  [
+   "Wet Powder",
+   "snare",
+   "Enemy totem's ability is disabled while it is on the field."
+  ]
+ ],
+ "MYSTIC_CARDS": [
+  [
+   "Card Counter",
+   "mystic",
+   "Reveal the enemy leader's hand for 10 s."
+  ],
+  [
+   "Deck Shuffle",
+   "mystic",
+   "Enemy leader's next three draws are random totems only."
+  ],
+  [
+   "Recall",
+   "mystic",
+   "Your squad may swap one placed totem for a captured one, once. Consumable."
+  ],
+  [
+   "Ghost Wall",
+   "mystic",
+   "Nearby memory ghosts become solid for 20 s. Everyone hits them."
+  ],
+  [
+   "Loaded Dice",
+   "mystic",
+   "Your leader draws every 8 s instead of every 10 s this combat."
+  ],
+  [
+   "Escrow",
+   "mystic",
+   "Totems cannot be stolen from your squad for one hour."
+  ]
+ ],
+ "DECK_QUIRKS": [
+  "Plays by the book. Predictable, thorough, boring, dangerous.",
+  "Draws every 8 seconds instead of 10.",
+  "Runs eighteen totems in a thirty-card deck; the six-totem limit does not apply.",
+  "Never plays snares. Never needs to.",
+  "Panics when its bodyguards die and starts discarding.",
+  "Has a single Epic totem and builds the whole deck around keeping it summoned.",
+  "Talks the whole time. The talking is a mystic card.",
+  "Stands inert until approached, then opens with three summons at once.",
+  "Its deck is stolen crawler totems. Some of them will recognize you."
+ ],
+ "SQUAD_NAMES": [
+  "The Late Shift",
+  "Six Empty Chairs",
+  "Mercy Rule",
+  "Basement Dwellers",
+  "Team No Refunds",
+  "The Understudies",
+  "Cold Iron Collective",
+  "Free Parking",
+  "The Wake",
+  "Sunday Drivers",
+  "The Chaperones",
+  "Last Call"
+ ],
+ "SQUAD_LOGOS": [
+  "a crowned skull",
+  "a broken traffic light",
+  "a paper boat",
+  "three keys on a ring",
+  "a burning wallet",
+  "a smiling shark",
+  "a crossed fork and knife",
+  "a cracked hourglass"
+ ],
+ "SQUAD_BEHAVIOR": [
+  "Steal totems on sight.",
+  "Trade duplicates fairly; hostile if lied to.",
+  "Won't fight crawlers until Phase 2, then they will.",
+  "Hoarding flags; they have more than twenty.",
+  "Camped on the far stairwell already.",
+  "Following your squad. Not subtly."
+ ]
+}

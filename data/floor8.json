@@ -1,0 +1,224 @@
+{
+ "JUNGLE_ADJ": [
+  "Strangler",
+  "Canopy",
+  "Drowned",
+  "Spore",
+  "Kapok",
+  "Fever",
+  "Root-Split",
+  "Vine-Choked",
+  "Ossuary",
+  "Howling",
+  "Mangrove",
+  "Sunless"
+ ],
+ "JUNGLE_PLACE": [
+  "Overpass",
+  "Cistern Ruins",
+  "Cathedral Roots",
+  "Tram Yards",
+  "Amphitheater",
+  "Reservoir",
+  "Terrace Farms",
+  "Parking Structure",
+  "Stadium Bowl",
+  "Dock Ruins",
+  "Greenhouse Row",
+  "Highway Cut",
+  "Water Tower",
+  "Old Zoo",
+  "Refinery Bones",
+  "Bridge Piers"
+ ],
+ "JUNGLE_MOB_ADJ": [
+  "Vine-Bound",
+  "Spore-Blind",
+  "Fever-Eyed",
+  "Canopy",
+  "Root-Gnawed",
+  "Two-Headed",
+  "Camouflaged",
+  "Parasite-Ridden",
+  "Ambush",
+  "Screaming",
+  "Rot-Fed",
+  "Luminous"
+ ],
+ "JUNGLE_MOB_NOUN": [
+  "Bugbears",
+  "Raptors",
+  "Jaguars",
+  "Mantis-Men",
+  "Sambhur",
+  "Leech Hounds",
+  "Howler Ghouls",
+  "Tapir Brutes",
+  "Mosquito Swarms",
+  "Crocodile Knights",
+  "Carnivorous Sloths",
+  "Hornbill Riders",
+  "Tree Pythons",
+  "Ant Legions",
+  "Spore Zombies",
+  "Tarsier Assassins",
+  "Boar Titans",
+  "Vine Golems"
+ ],
+ "FLORA_HAZARDS": [
+  "Strangler vines drop from the canopy on anything that stops moving.",
+  "Spore clouds at dusk: a slow disease debuff unless you cover your mouth.",
+  "Pitcher pits big enough to swallow a party; the smell is the warning.",
+  "Razor grass on every open slope. Boots first, then everything else.",
+  "Sleep-flowers along the river. Whoever sleeps here doesn't wake.",
+  "Luminous fungus that marks anyone who touches it for a day. Hunters know this.",
+  "Bleeding trees; the sap is flammable and the mobs know it.",
+  "A canopy so thick the minimap loses the sky. No flight above tree level here."
+ ],
+ "JUNGLE_RACES": [
+  "Ursine",
+  "Bugbears",
+  "Mushroom-folk",
+  "Frog-folk",
+  "Naiads",
+  "High Elves",
+  "Lizardmen",
+  "Monkey-folk",
+  "Beetle-folk",
+  "Sloth-folk"
+ ],
+ "RIVER_CROSSINGS": [
+  "a rope ferry run by frog-folk who charge in blood-bar time",
+  "a collapsed highway bridge, passable single file",
+  "a ford that's knee-deep for exactly two hours a day",
+  "a naiad toll bridge; the toll is a secret",
+  "no crossing: swim, and the naiads decide"
+ ],
+ "HUNTER_SPECIES": [
+  "Skyfowl",
+  "Saccathian",
+  "Bopca",
+  "Crocodilian",
+  "Half-Giant",
+  "Gondii",
+  "Insectoid",
+  "Naga",
+  "Changeling",
+  "Mantid",
+  "Cervid",
+  "Ophidian"
+ ],
+ "HUNTER_LEADER": [
+  "Vrix",
+  "Baron Tolo",
+  "Lady Sennisa",
+  "Grask",
+  "The Twins Ulmo",
+  "Countess Feyra",
+  "Ordo Nine",
+  "Krell-Vashti",
+  "Dame Rhoswen",
+  "Pashk the Younger",
+  "Admiral Quen",
+  "Tibb",
+  "Mother Ysolde",
+  "Dr. Havel-Sung",
+  "Prince Oduya"
+ ],
+ "HUNTER_WEAPONS": [
+  "pulse rifle",
+  "railgun with a scope that sees through foliage",
+  "anti-air autocannon on a tripod",
+  "plasma cutter (close work)",
+  "smart-grenade launcher",
+  "flechette shotgun",
+  "sonic lance",
+  "net-caster with shock lines",
+  "enchanted greatsword (heirloom)",
+  "sniper crossbow with tracking bolts"
+ ],
+ "HUNTER_ARMOR": [
+  "ceramic plate armor",
+  "reactive scale mesh",
+  "adaptive camouflage suit",
+  "powered exoskeleton frame",
+  "blessed silk that turns blades",
+  "a shield bubble on a belt (four charges)"
+ ],
+ "HUNTER_TECH": [
+  "recon drone swarm",
+  "safe-room door sensor",
+  "scent-tracker pet",
+  "portable turret",
+  "jamming pylon for crawler minimaps",
+  "medical nanite pod",
+  "a hover-skiff",
+  "thermal goggles",
+  "a captured Funeral Bell in a cage",
+  "a stasis cage for live captures"
+ ],
+ "SPONSOR_PERKS": [
+  "a one-time resurrection paid for by their home planet",
+  "daily supply drops at their camp",
+  "a shared kill-feed with every other hunter of their species",
+  "a bounty multiplier on named crawlers",
+  "a personal Syndicate camera crew (which can be followed)",
+  "a tame city-boss on a leash, once",
+  "diplomatic immunity in Zockau",
+  "a portal home that only opens on their death"
+ ],
+ "HUNT_STYLES": [
+  "Ambush predators: sit on trails between settlements and wait.",
+  "Drone-scouted sweeps; they know where you slept.",
+  "Bait safe rooms with wounded crawlers and shoot whoever comes to help.",
+  "Camp-and-patrol; they never split up and never move at night.",
+  "Trophy hunters: only interested in top-listed crawlers, ignore everyone else.",
+  "Slavers with a stasis cage; they want you alive.",
+  "Loud. Music, lights, fireworks. Want to be found.",
+  "Follow the thorn wall and shoot what it flushes."
+ ],
+ "CAMP_TYPES": [
+  "a fortified ruin with turrets",
+  "a hover-yacht moored above the canopy",
+  "a captured settlement inn",
+  "tents around a supply-drop beacon",
+  "a cave with a portal generator",
+  "a treehouse platform ringed with sensors"
+ ],
+ "BOUNTY_BOARD": [
+  [
+   "Hunter Hand (any hunter)",
+   "trade for one item from the hunter's own loadout, or 1,000 gold"
+  ],
+  [
+   "Hunter Hand (party leader)",
+   "a Gold Hunter Box and a Syndicate-broadcast interview you can refuse"
+  ],
+  [
+   "Hunter camp cleared",
+   "everything in the camp, plus the supply-drop beacon keeps working for you"
+  ],
+  [
+   "Hunter's sponsor token",
+   "one use of that hunter's sponsor perk"
+  ],
+  [
+   "Ten hunter kills (floor total)",
+   "a permanent title, a stat token, and every hunter on the floor told your name"
+  ],
+  [
+   "Captured hunter (alive)",
+   "ransom from their home planet, paid in gear, delivered to a safe room"
+  ],
+  [
+   "Scalp (what they get for you)",
+   "your gear, sold to the Faction Wars; the better your kit, the higher your price"
+  ]
+ ],
+ "ZOCKAU_NOTES": [
+  "1950s small-town main street under a jungle canopy; pubs, a town square, the Desperado Club at the end of the strip.",
+  "Ursine police attack crawlers on sight. Diplomatic hunters walk freely.",
+  "The stairwell in the park is unguarded, and everyone on the floor knows exactly where it is.",
+  "One real safe room on the pub strip; the rest are fronts."
+ ]
+}
