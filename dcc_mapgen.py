@@ -3793,5 +3793,49 @@ def main(argv=None):
     else:
         print(text)
 
+def interactive_mode() -> None:
+    """Friendly prompt-driven flow for the standalone .exe: double-clicking it from
+    Explorer gives no chance to pass CLI flags and the console closes the instant the
+    script ends, so ask a few quick questions, always save files, and pause at the end."""
+    print("=" * 60)
+    print("  DCC Mapgen -- Dungeon Crawler Carl floor generator")
+    print("=" * 60)
+    print("No command-line options were given, so here's the quick version.")
+    print("Just press Enter to accept the default shown in [brackets].\n")
+
+    floor_choices = [1, 2, 3, 4, 5, 6, 8, 9, 10, 11]
+    raw = input("Floor number (1,2,3,4,5,6,8,9,10,11) [1]: ").strip()
+    try:
+        floor = int(raw) if raw else 1
+    except ValueError:
+        floor = 1
+    if floor not in floor_choices:
+        print(f"'{raw}' isn't a valid floor -- using 1 instead.")
+        floor = 1
+
+    raw = input("Size (small/medium/large) [medium]: ").strip().lower()
+    size = raw if raw in SIZE_CFG else "medium"
+
+    seed = input("Seed number (blank = random) []: ").strip()
+
+    out_dir = input("Folder to save into [current folder]: ").strip() or "."
+
+    argv = ["--floor", str(floor), "--size", size, "--save", out_dir]
+    if seed:
+        argv += ["--seed", seed]
+
+    print("\nGenerating...\n")
+    try:
+        main(argv)
+    except SystemExit as e:
+        if e.code not in (0, None):
+            print(f"\nSomething went wrong: {e}")
+    except Exception as e:
+        print(f"\nUnexpected error: {e}")
+    input("\nDone. Press Enter to close this window...")
+
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) == 1 and getattr(sys, "frozen", False):
+        interactive_mode()
+    else:
+        main()
