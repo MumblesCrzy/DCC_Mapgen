@@ -1,561 +1,236 @@
 {
- "CHASSIS_MECH": [
-  [
-   "Food truck (armored)",
-   {
-    "speed": 2,
-    "toughness": 4,
-    "handling": 2,
-    "capacity": 4
-   },
-   "Serves hot food at speed; morale buff to anyone eating, including rivals who board."
-  ],
-  [
-   "Six-wheeled war buggy",
-   {
-    "speed": 4,
-    "toughness": 2,
-    "handling": 4,
-    "capacity": 2
-   },
-   "Fast and twitchy; rolls if the driver blinks."
-  ],
-  [
-   "Steam locomotive on treads",
-   {
-    "speed": 3,
-    "toughness": 5,
-    "handling": 1,
-    "capacity": 4
-   },
-   "Needs coal; the tender is a target."
-  ],
-  [
-   "Hover skiff",
-   {
-    "speed": 4,
-    "toughness": 1,
-    "handling": 3,
-    "capacity": 3
-   },
-   "Ignores terrain, hates weather."
-  ],
-  [
-   "Drill tank",
-   {
-    "speed": 1,
-    "toughness": 5,
-    "handling": 2,
-    "capacity": 3
-   },
-   "Can tunnel through short obstacles; slow everywhere else."
-  ],
-  [
-   "Rocket sled",
-   {
-    "speed": 5,
-    "toughness": 1,
-    "handling": 1,
-    "capacity": 2
-   },
-   "Straight lines only. Really."
-  ],
-  [
-   "Amphibious half-track",
-   {
-    "speed": 3,
-    "toughness": 3,
-    "handling": 3,
-    "capacity": 3
-   },
-   "Boring and reliable; floats."
-  ],
-  [
-   "Mecha-walker (two-legged)",
-   {
-    "speed": 2,
-    "toughness": 3,
-    "handling": 4,
-    "capacity": 2
-   },
-   "Climbs; falls hard."
-  ]
+ "THEMES": [
+  "Destruction",
+  "Rebirth",
+  "Home",
+  "Grief",
+  "Hunger",
+  "Victory",
+  "Memory",
+  "Betrayal",
+  "Mercy",
+  "Family",
+  "Fire",
+  "Silence",
+  "Debt",
+  "Harvest",
+  "Exile",
+  "Joy",
+  "Rot",
+  "Ascension"
  ],
- "CHASSIS_BIO": [
-  [
-   "Giant beetle",
-   {
-    "speed": 2,
-    "toughness": 5,
-    "handling": 3,
-    "capacity": 3
-   },
-   "Carapace shrugs off hits; hates fire."
+ "FLOAT_IDEAS": {
+  "Destruction": [
+   "a tank firing blanks in time with a drumline",
+   "a collapsing tower rebuilt every hundred meters",
+   "everything from the garage, on fire, on a trailer"
   ],
-  [
-   "War ostrich (pair)",
-   {
-    "speed": 5,
-    "toughness": 1,
-    "handling": 4,
-    "capacity": 2
-   },
-   "Fast, panicky, kicks rivals."
+  "Rebirth": [
+   "a cracked egg the size of a bus with a crawler climbing out at the stands",
+   "a burned float that blooms with conjured flowers on cue",
+   "a phoenix rig on the vehicle's roof"
   ],
-  [
-   "Sky manta",
-   {
-    "speed": 4,
-    "toughness": 2,
-    "handling": 3,
-    "capacity": 3
-   },
-   "Flies; must land to rest every segment."
+  "Home": [
+   "a full-size living room on a flatbed, occupied",
+   "the party's first safe room, rebuilt from memory",
+   "a kitchen serving food to the crowd that can't eat it"
   ],
-  [
-   "Cave salamander",
-   {
-    "speed": 3,
-    "toughness": 3,
-    "handling": 4,
-    "capacity": 2
-   },
-   "Amphibious; regenerates limbs between heats without a vet."
+  "Grief": [
+   "a hearse pulled by the mount, empty",
+   "portraits of the dead in black dahlias",
+   "a bell rung once per lost crawler"
   ],
-  [
-   "Mammoth",
-   {
-    "speed": 2,
-    "toughness": 5,
-    "handling": 1,
-    "capacity": 4
-   },
-   "Immune to cold; tramples."
+  "Hunger": [
+   "a feast table that empties as it moves",
+   "the food truck, doors open, serving nobody",
+   "a giant mouth float that the procession walks into"
   ],
-  [
-   "Six-legged riding lizard",
-   {
-    "speed": 3,
-    "toughness": 3,
-    "handling": 5,
-    "capacity": 2
-   },
-   "Wall-climber; needs sun."
+  "Victory": [
+   "a podium with no one on it",
+   "captured banners from every floor",
+   "a triumphal arch that is also a ramp"
   ],
-  [
-   "Dire goat",
-   {
-    "speed": 3,
-    "toughness": 3,
-    "handling": 4,
-    "capacity": 2
-   },
-   "Eats anything, including rival vehicles' cabling."
+  "Memory": [
+   "a scrolling wall of every achievement notice the party has earned",
+   "the old apartment, or what's left of it",
+   "a slideshow projected on smoke"
   ],
-  [
-   "Land shark",
-   {
-    "speed": 4,
-    "toughness": 3,
-    "handling": 2,
-    "capacity": 2
-   },
-   "Bites; cannot reverse."
-  ]
- ],
- "ATTENDANT_NAMES": [
-  "Hedy",
-  "Waldrip",
-  "Sprocket",
-  "Mabel-9",
-  "Grudge",
-  "Tolliver",
-  "Pim",
-  "Ratchet",
-  "Ysolde",
-  "Bunt",
-  "Clank",
-  "Dr. Fennimore"
- ],
- "ATTENDANT_SPECIES": [
-  "gremlin",
-  "kobold",
-  "bopca",
-  "goblin engineer",
-  "changeling",
-  "animated toolbox",
-  "very old dwarf",
-  "tarsier in a lab coat"
- ],
- "ATTENDANT_QUIRKS": [
-  "Fights the other attendant constantly. Both are excellent.",
-  "Sells parts to rivals on the side.",
-  "Terrified of the vehicle.",
-  "Will die for the team, and says so hourly.",
-  "Has done this nine seasons and knows which tracks repeat.",
-  "Only works while being complimented."
- ],
- "MERCS": [
-  [
-   "Grease",
-   "mechanic-gunner",
-   "Fixes mid-race; shoots badly.",
-   "Half his fee up front, the other half to whoever finishes ahead of you."
+  "Betrayal": [
+   "a two-faced float that reverses at the stands",
+   "a handshake sculpture with a knife in it",
+   "an ally's banner, upside down"
   ],
-  [
-   "Sister Anneke",
-   "combat medic",
-   "Keeps the driver conscious through anything.",
-   "Prays out loud. Rivals hear it."
+  "Mercy": [
+   "cages with the doors open",
+   "a healer's tent that treats the crowd",
+   "the mount, unarmored, walking free"
   ],
-  [
-   "Two-Ton",
-   "ram specialist",
-   "Adds a toughness point when aboard; eats two capacity.",
-   "Was on a team that came in last. Won't say how he's here."
+  "Family": [
+   "every party member and pet on one platform, no weapons",
+   "a dinner table set for the missing",
+   "a float pulled by hand, no vehicle"
   ],
-  [
-   "Nix",
-   "saboteur",
-   "Boards rival vehicles at speed.",
-   "Has three other contracts this floor."
+  "Fire": [
+   "a bonfire on treads",
+   "the vehicle's exhaust routed through a hundred torches",
+   "a phoenix rig, again, because it works"
   ],
-  [
-   "Old Marrow",
-   "driver-for-hire",
-   "Counts as a driver for one heat.",
-   "Blind in one eye. Which one changes."
+  "Silence": [
+   "a float that plays nothing while every other group plays music",
+   "masked figures who never move",
+   "a bell with no clapper"
   ],
-  [
-   "Quillet",
-   "navigator",
-   "Reveals the track's twist one segment early.",
-   "Charges per segment. Bill arrives mid-race."
-  ]
- ],
- "HAZARDS": [
-  "boulder fall",
-  "rival pit lane",
-  "mob nest across the track",
-  "crumbling shelf",
-  "audience-thrown debris",
-  "a bridge that's also a mimic",
-  "wind shear",
-  "sinkhole",
-  "sniper gantry",
-  "sponsor billboard collapse",
-  "jump gap",
-  "hairpin over nothing",
-  "toll gate (pay or ram)",
-  "flooded dip",
-  "stampede crossing",
-  "oil slick"
- ],
- "TWISTS": [
-  "The finish line moves after the leader passes segment 3.",
-  "Mid-race the track reverses; last becomes first for one segment.",
-  "The heat's last-place team is announced at segment 2. It's a lie.",
-  "A garage attendant from a rival team is on the track. Killing them counts as a team.",
-  "The System offers a shortcut. It is a real shortcut. It is also on camera.",
-  "Segment 4 is a pit stop; anyone who skips it loses the vehicle's repair next heat.",
-  "The track is a loop and nobody said how many laps.",
-  "A rival team is a plant: full sponsor kit, no stake in surviving."
- ],
- "HINTS": {
-  "open": "It's going to be a straight one. Mostly.",
-  "climb": "The audience has voted for 'vertical'.",
-  "heat": "You'll want heat shielding. Or not. Ha.",
-  "sealed": "Bring something that likes water.",
-  "cold": "Dress warm.",
-  "flight": "Mind the gap. Gaps.",
-  "grip": "Hold onto something. Then hold onto something else.",
-  "amphibious": "Bring boots. Tall ones.",
-  "toughness": "Don't bother with the paint job.",
-  "light": "Pack a light source."
- },
- "UPGRADES": {
-  "Offense": [
-   [
-    "Ram plate",
-    "Bronze",
-    [
-     "ram"
-    ],
-    "+1 toughness when ramming; deal 1 damage on contact."
-   ],
-   [
-    "Mounted harpoon",
-    "Silver",
-    [
-     "ram",
-     "grapple"
-    ],
-    "Hook a rival or a ledge; drag or climb."
-   ],
-   [
-    "Broadside battery",
-    "Gold",
-    [
-     "ram"
-    ],
-    "Fire once per segment: target rival loses a segment."
-   ]
+  "Debt": [
+   "a ledger float listing everything owed to sponsors",
+   "a repossession truck with the party's gear on the back",
+   "coins thrown to a crowd that can't pick them up"
   ],
-  "Defense": [
-   [
-    "Plate armor",
-    "Bronze",
-    [
-     "armor",
-     "toughness"
-    ],
-    "+1 toughness."
-   ],
-   [
-    "Sealed cabin",
-    "Silver",
-    [
-     "sealed",
-     "heat",
-     "cold"
-    ],
-    "Crew survives immersion, heat, and cold."
-   ],
-   [
-    "Reactive shell",
-    "Gold",
-    [
-     "armor",
-     "toughness",
-     "heat"
-    ],
-    "+2 toughness; ignore the first hit each segment."
-   ]
+  "Harvest": [
+   "a combine harvester through the fog",
+   "scarecrows made from tenth-floor rivals' colors",
+   "a cornucopia that spills real loot"
   ],
-  "Mobility": [
-   [
-    "Spiked treads",
-    "Bronze",
-    [
-     "cold",
-     "grip",
-     "amphibious"
-    ],
-    "Traction on ice, mud, and walls of moderate slope."
-   ],
-   [
-    "Grapple-climb rig",
-    "Silver",
-    [
-     "climb",
-     "grapple",
-     "grip"
-    ],
-    "Ascend cliffs at speed 2; anchor against gravity flips."
-   ],
-   [
-    "Lift package",
-    "Gold",
-    [
-     "flight",
-     "climb"
-    ],
-    "Clear gaps up to one segment; fly for one segment per heat."
-   ]
+  "Exile": [
+   "a boat on wheels",
+   "a signpost pointing every direction but forward",
+   "a wall with a door that won't open"
   ],
-  "Utility": [
-   [
-    "Floodlamps",
-    "Bronze",
-    [
-     "light"
-    ],
-    "See in the dark; blind rivals behind you."
-   ],
-   [
-    "Sensor suite",
-    "Silver",
-    [
-     "light",
-     "navigate"
-    ],
-    "Reveal the next segment's hazard before entering it."
-   ],
-   [
-    "Time-skip coil",
-    "Gold",
-    [
-     "navigate"
-    ],
-    "Skip one segment per heat. Once."
-   ]
+  "Joy": [
+   "a carousel, working",
+   "fireworks from a Floor 8 card",
+   "the whole party dancing, badly, on purpose"
   ],
-  "Crew": [
-   [
-    "Second attendant",
-    "Bronze",
-    [
-     "repair"
-    ],
-    "Repairs still happen if one attendant dies."
-   ],
-   [
-    "Field repair kit",
-    "Silver",
-    [
-     "repair"
-    ],
-    "Repair 1 toughness mid-race, once per heat."
-   ],
-   [
-    "Cloned driver",
-    "Gold",
-    [
-     "driver"
-    ],
-    "An extra legal driver for one heat. It looks like you."
-   ]
+  "Rot": [
+   "a float that decays along the route and arrives as bones",
+   "mushroom-grown sculpture of the floor boss",
+   "the garage attendants, dressed as janitor mobs"
+  ],
+  "Ascension": [
+   "a staircase to nowhere, climbed at the stands",
+   "balloons lifting a coffin",
+   "the mount, on a lift, above everything"
   ]
  },
- "AUDIENCE_VOTES": [
-  "Spinning rims. Cosmetic. The audience loved it.",
-  "A horn that plays your worst moment on the floor at full volume.",
-  "Racing stripes: +1 speed, -1 toughness, no choice.",
-  "A live sponsor mascot bolted to the hood. It talks.",
-  "Actually a Silver sealed cabin. Someone in the audience likes you.",
-  "A bumper sticker: 'DON'T COME IN LAST'. Rivals target you first."
+ "JUDGES": [
+  "a retired warlord who scores on spectacle",
+  "a Syndicate art critic who scores on theme fidelity",
+  "a former crawler who scores on whether it made them feel anything",
+  "a sponsor's representative who scores on brand visibility",
+  "a child, apparently, who scores on whether it's scary"
  ],
- "RIVAL_NAMES": [
-  "The Widowmakers",
-  "Team Refund",
-  "Sunday Drivers",
-  "The Late Fees",
-  "Grandma's Boys",
-  "Six Feet Faster",
-  "The Underdogs (sponsored)",
-  "Pit Vipers",
-  "Brake Check",
-  "The Final Lap",
-  "Hazard Pay",
-  "Speed Bump",
-  "Team Overdraft",
-  "The Understudies",
-  "Merge Lane",
-  "The Also-Rans"
+ "CRITERIA": [
+  "Theme (0–10): does the float say the word without saying it?",
+  "Spectacle (0–10): would it read from orbit?",
+  "Performance (0–10): what happens at the Judging Stands?",
+  "Craft (0–10): does it hold together for three kilometers?"
  ],
- "RIVAL_STYLES": [
-  [
-   "rammer",
-   "Will trade paint with anyone in reach.",
-   3
-  ],
-  [
-   "sprinter",
-   "Runs, doesn't fight. Dangerous in open tracks.",
-   2
-  ],
-  [
-   "saboteur",
-   "Boards vehicles, cuts cables, leaves.",
-   4
-  ],
-  [
-   "turtle",
-   "Slow, armored, impossible to push into last place.",
-   2
-  ],
-  [
-   "glass cannon",
-   "Broadside battery on a rocket sled. One good hit and they're done.",
-   4
-  ],
-  [
-   "plant",
-   "Full sponsor kit. Here to make television.",
-   5
-  ]
+ "ROUTE_EVENTS": [
+  "The fog lifts for fifty meters. The spectators' masks are all the same face.",
+  "A rival group's float breaks down ahead; pass or push.",
+  "The Grand Master calls your team by name over the speakers. Wrong name.",
+  "A spectator hands a party member something. It cannot be refused.",
+  "The yellow bricks change color underfoot for one section. Nobody explains.",
+  "Music from every float syncs for eleven seconds.",
+  "A child in the crowd removes its mask. The parade does not stop.",
+  "The road rises; the arena is visible ahead, already lit."
  ],
- "TRACK_ENVS": [
-  [
-   "Salt flats",
-   "open",
-   "none",
-   1,
-   "Flat and fast. Rammers thrive here."
-  ],
-  [
-   "Canyon switchbacks",
-   "climb",
-   "Silver",
-   2,
-   "Tight turns over drops. Handling or a climb upgrade, or both."
-  ],
-  [
-   "Lava fields",
-   "heat",
-   "Silver",
-   3,
-   "Cooling or heat shielding at Silver or better, or the vehicle takes a toughness point of damage per segment."
-  ],
-  [
-   "Drowned city",
-   "sealed",
-   "Silver",
-   3,
-   "Submerged for two segments. Sealing or breathing at Silver, or the crew drowns in segment 3."
-  ],
-  [
-   "Glacier run",
-   "cold",
-   "Bronze",
-   2,
-   "Ice and blizzard. Traction or cold-proofing at Bronze; without it, handling counts as 1."
-  ],
-  [
-   "Sky bridges",
-   "flight",
-   "Gold",
-   4,
-   "Gaps between platforms. Flight, jump, or grapple at Gold, or you don't finish."
-  ],
-  [
-   "Upside-down highway",
-   "grip",
-   "Silver",
-   4,
-   "Gravity flips at the halfway marker. Grip or anchoring at Silver, or the vehicle falls into the sky."
-  ],
-  [
-   "Swamp of teeth",
-   "amphibious",
-   "Bronze",
-   2,
-   "Mud and biting things. Amphibious or armor at Bronze, or lose a segment to a stuck vehicle."
-  ],
-  [
-   "Meat grinder tunnel",
-   "toughness",
-   "Silver",
-   4,
-   "Crushing pistons. Toughness 4+ or armor at Silver, or the vehicle is destroyed in segment 2."
-  ],
-  [
-   "Void stretch",
-   "light",
-   "Bronze",
-   3,
-   "Total dark; the track is unmarked. A light or sensor upgrade at Bronze, or the driver rolls blind."
-  ]
+ "GRANDMASTER": [
+  "a bewildered hospitality manager who was told this morning",
+  "a former game-show host with a broken microphone",
+  "a sentient parade balloon",
+  "the tenth floor's least-liked announcer, promoted",
+  "a Bopca in a marshal's sash who keeps checking a clipboard"
  ],
- "RACE_RULES": [
-  "Seven heats. Nine teams start each heat. Don't come in last: the last team across doesn't leave the track.",
-  "Try not to kill more than one team per heat. If more than two teams fail to finish, the System's threat was cut off mid-sentence; assume it's bad.",
-  "Teams are no bigger than four. Every heat needs a different driver, so a party of two alternates and a party of four has spares. Hired drivers count.",
-  "Party leader picks mechanical or biological; the wheel picks the chassis or creature. Pet spells don't work on special mounts.",
-  "The vehicle is fully repaired or healed between heats as long as a garage attendant is alive.",
-  "You may attack rival vehicles. You cannot steal them. No movement spells onto vehicles, yours or theirs.",
-  "Better finishes get more upgrade picks (1st: three picks at Gold; 2nd–4th: two picks up to Silver; 5th–7th: one pick at Bronze; 8th: audience vote). Everyone gets one Golden pick after heat 4.",
-  "You always get a hint of the next environment. The hint is honest, usually.",
-  "Mercenaries can be hired from the garage board between heats. The level timer is suspended for the floor."
+ "FORMER_FIRST": [
+  "Bautista",
+  "Elle",
+  "Prepp",
+  "Tsuki",
+  "Rafe",
+  "Mechana",
+  "Ilse",
+  "Diego",
+  "Wren",
+  "Kip",
+  "Amara",
+  "Sol",
+  "Vinh",
+  "Petra",
+  "Oz",
+  "Lucinda"
+ ],
+ "FORMER_CLASS": [
+  "Compensated Anarchist",
+  "Necromancer",
+  "Shock Trooper",
+  "Card Sharp",
+  "Beast Rider",
+  "Combat Alchemist",
+  "Crowd Pleaser",
+  "Tunnel Rat",
+  "Pyromaniac",
+  "Duelist",
+  "Grief Priest",
+  "Sniper",
+  "Rage Elemental (former)",
+  "Fleshmancer"
+ ],
+ "FORMER_HOW": [
+  "came in last in heat 3",
+  "killed by a rival rammer in heat 5",
+  "lost the vehicle to the meat grinder tunnel",
+  "drowned in the flooded city",
+  "fell off the sky bridges",
+  "burned in the lava fields",
+  "ran out of drivers",
+  "took a deal and came back wrong"
+ ],
+ "FORMER_SIG": [
+  "fights exactly the way they died: fast and angry",
+  "has their old float parts fused on as armor",
+  "still thinks it's the race; targets the party's vehicle",
+  "wants to talk first. Means it.",
+  "carries a Floor 8 totem that still works",
+  "will switch sides if their garage attendant is spared",
+  "immune to the party's signature spell; the System learned",
+  "explodes on death, per the audience vote"
+ ],
+ "SUBSTITUTES": [
+  "a tenth-floor rival team, revived for the occasion",
+  "a Hunter from the sixth floor, held over",
+  "a deckmaster from the eighth floor with a fresh deck",
+  "the party's own garage attendants, corrupted",
+  "a Krakaren clone with a parade mask"
+ ],
+ "ARENA_MOBS": [
+  "Tenth-floor track hazards, animated: rolling boulders with faces, sniper gantries on legs.",
+  "A pit crew of gremlins that repair the boss mid-fight.",
+  "Spectators, unmasked, in the lower rows, who will now attack.",
+  "Three rival vehicles from the race, driverless, circling."
+ ],
+ "PARADE_RULES": [
+  "Ninety minutes to build. Anything in the garage, inventory, or safe room is material. A procession can be any length and any number of floats.",
+  "Five groups, five themes, one word each. Express it visually and performatively.",
+  "The route is three kilometers of yellow-brick road with knee-high fog. Spectators line the whole thing and cannot attack.",
+  "The Judging Stands are at roughly two kilometers; each group performs there once.",
+  "The tenth floor's vehicle rules are gone. No magical repair, no consumable refresh. Fix it by hand or don't.",
+  "The route ends in an arena stocked with tenth-floor mobs, former crawlers (or substitutes), and the floor boss. The stairwell opens when the boss dies.",
+  "Total floor time: three hours and fifteen minutes. The staging area is a safe room until the parade starts."
+ ],
+ "PARADE_BOSS_MECHANICS": [
+  "Only damaged while a float is intact within the arena; the floats are the weak points and it knows it.",
+  "Summons a wave of former crawlers each time it loses a quarter of its health.",
+  "Breaks the arena floor in stages; the fighting ring shrinks.",
+  "Silences spells while the crowd is chanting; kill the noise or fight in it.",
+  "Takes a parade theme each phase and becomes it.",
+  "Cannot be killed while the Grand Master lives. The Grand Master is in the stands."
+ ],
+ "PARADE_BOSS_FORM": [
+  "a colossal centipede-thing wearing the parade's discarded masks as scales",
+  "a hundred-foot marionette worked by nothing",
+  "a slow, cathedral-sized beetle whose shell opens to reveal a second arena",
+  "a headless titan in a marshal's uniform carrying its own head as a lantern",
+  "a swarm of every tenth-floor mob type fused into one crowd-shaped mass",
+  "a mirror-plated dragon that reflects the party's own floats back at them"
  ]
 }

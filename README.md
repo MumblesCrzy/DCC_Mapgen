@@ -6,7 +6,7 @@ A procedural floor/map generator in the style of the *Dungeon Crawler Carl* book
 
 ## Features
 
-- **Floors 1 & 2** — neighborhood/borough/city grid, bosses (with a word-bank uniqueness guard so names/forms don't collide), loot boxes, achievements, an Elite, other crawler teams, the tutorial guild, and a full connected **room graph** per neighborhood (safe rooms, hidden passages, guild hall, filler rooms, corridor encounters).
+- **Floors 1 & 2** — neighborhood/borough/city grid (small/medium/large, plus huge/giant/massive for bigger cities — bosses still cap out at city tier), bosses (with a word-bank uniqueness guard so names/forms don't collide), loot boxes, achievements, an Elite, other crawler teams, the tutorial guild, and a full connected **room graph** per neighborhood (safe rooms, hidden passages, guild hall, filler rooms, corridor encounters). `--stair-chance` and `--borough-boss-rate` tune how often neighborhood stairwells and borough bosses show up.
 - **Floor 3** (The Over City) — settlements on a wilderness grid, roaming bosses, locked stairwells, quests, one Elite.
 - **Floor 4** (The Iron Tangle) — schematic rail/transit map.
 - **Floor 5** (The Bubbles) — four quadrants, castles, factions.
@@ -41,9 +41,9 @@ pip install -r requirements.txt   # optional, only needed for PNG output
 python dcc_mapgen.py --floor 1 --size medium
 ```
 
-### Option B: standalone executable (Windows)
+### Option B: standalone executable (Windows or Linux)
 
-Check the [Releases](../../releases) page for a bundled `.exe` — no Python install required. Built automatically from this repo via GitHub Actions.
+Check the [Releases](../../releases) page for a bundled `.exe` (Windows) or binary (Linux) — no Python install required. Both are built automatically from this repo via GitHub Actions.
 
 ## Usage
 
@@ -53,6 +53,8 @@ python dcc_mapgen.py --floor 2 --size large --scaling distance --seed 42
 python dcc_mapgen.py --floor 1 --size small --days 5 --out floor1.md
 python dcc_mapgen.py --floor 2 --size large --seed 9 --out f2.md --image f2.svg
 python dcc_mapgen.py --floor 2 --size large --save maps/     # writes maps/floor2_large_seedNNN.md + .png + room maps
+python dcc_mapgen.py --floor 1 --size massive --seed 1        # 10x10 neighborhoods, still one city boss
+python dcc_mapgen.py --floor 1 --size large --stair-chance 0.5 --borough-boss-rate 0.5
 
 # Add room-level detail to a neighborhood you already generated and are playing:
 python dcc_mapgen.py --rooms-for my_floor1.md --rooms-for-label C --seed 42 --image roomC.png

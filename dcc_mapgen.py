@@ -12,10 +12,14 @@ Usage:
     python dcc_mapgen.py --floor 2 --size large --save maps/     # writes maps/floor2_large_seedNNN.md + .png
 
 Sizes:
-    small   1 neighborhood, 1 neighborhood boss,  +1 hidden stairwell
-    medium  1 borough  (2x2 neighborhoods), 1 borough boss, 4 nbhd bosses, +2 hidden
-    large   1 city     (4x4 neighborhoods, 4 boroughs), 1 city boss, 4 borough
-            bosses, 16 nbhd bosses, +4 hidden
+    small    1 neighborhood, 1 neighborhood boss,  +1 hidden stairwell
+    medium   1 borough  (2x2 neighborhoods), 1 borough boss, 4 nbhd bosses, +2 hidden
+    large    1 city     (4x4 neighborhoods, 4 boroughs), 1 city boss, 4 borough
+             bosses, 16 nbhd bosses, +4 hidden
+    huge/giant/massive (floors 1-2 only): same shape as large, just more boroughs —
+             6x6/8x8/10x10 neighborhoods (9/16/25 boroughs), still one city boss.
+             Use --stair-chance and --borough-boss-rate to thin out neighborhood
+             stairwells / borough bosses on any of these sizes.
 
 Floor 3 (the Over City) uses a different layout: settlements on a grid of
 wilderness regions (small 3x3, medium 4x4, large 5x5), roaming bosses, locked
@@ -53,8 +57,10 @@ and 2/4/6 former crawlers by size.
 
 Word banks live in ./data/*.json — edit those to add content.
 
-Every neighborhood boss chamber contains a stairwell. Borough and city boss
-chambers also contain one (canon) unless --no-boss-stairs is passed.
+Every neighborhood boss chamber contains a stairwell by default (canon); --stair-chance turns
+that into a probability instead of a guarantee. Borough and city boss chambers also contain
+one (canon) unless --no-boss-stairs is passed. Borough bosses are likewise one per borough by
+default; --borough-boss-rate turns that into a probability too.
 """
 
 import argparse
@@ -95,14 +101,25 @@ SIZE_CFG = {
     "small":  {"grid": 1, "hidden": 1},
     "medium": {"grid": 2, "hidden": 2},
     "large":  {"grid": 4, "hidden": 4},
+    # Floors 1-2 only (see --size validation in main()): same shape as "large" — a grid of
+    # 2x2 borough blocks with one city boss overall — just more boroughs.
+    "huge":    {"grid": 6, "hidden": 6},
+    "giant":   {"grid": 8, "hidden": 8},
+    "massive": {"grid": 10, "hidden": 10},
 }
+BIG_SIZES = ("huge", "giant", "massive")   # floors 1-2 only
 
 # Extra filler rooms added per neighborhood on top of its mandatory rooms (entrance,
 # boss chamber, safe rooms, guild hall, hidden passages) — never eats into that budget.
+# Per-neighborhood detail doesn't grow with the overall city size, so huge/giant/massive
+# reuse "large"'s range.
 ROOM_FILLER_COUNT_BY_SIZE = {
     "small":  (2, 3),
     "medium": (4, 5),
     "large":  (5, 6),
+    "huge":   (5, 6),
+    "giant":  (5, 6),
+    "massive": (5, 6),
 }
 
 
@@ -149,6 +166,24 @@ def singular(noun: str) -> str:
 
 def article(word: str) -> str:
     return "an" if word[0].lower() in "aeiou" else "a"
+
+def grid_label(i: int) -> str:
+    """Spreadsheet-column-style label: 0->A, 25->Z, 26->AA, ... — plain A-Z runs out past
+    26 neighborhoods, which huge/giant/massive floors need."""
+    i += 1
+    s = ""
+    while i > 0:
+        i, r = divmod(i - 1, 26)
+        s = chr(ord("A") + r) + s
+    return s
+
+def borough_label(br: int, bc: int, k: int) -> str:
+    """Label for the borough block at (br, bc) in a k x k grid of 2x2 neighborhood blocks."""
+    if k == 1:
+        return "Borough"
+    if k == 2:
+        return ("N" if br == 0 else "S") + ("W" if bc == 0 else "E")
+    return f"Row {br + 1} Col {bc + 1}"
 
 def compass(r: int, c: int, n: int) -> str:
     """Compass label for a cell in an n x n grid."""
@@ -261,7 +296,8 @@ class Floor:
 
 class Generator:
     def __init__(self, floor: int, size: str, scaling: str, seed: int,
-                 days: Optional[int], boss_stairs: bool):
+                 days: Optional[int], boss_stairs: bool,
+                 stair_chance: float = 1.0, borough_boss_rate: float = 1.0):
         self.rng = random.Random(seed)
         self.seed = seed
         self.floor = floor
@@ -272,6 +308,8 @@ class Generator:
         self.hidden = SIZE_CFG[size]["hidden"]
         self.days_override = days
         self.boss_stairs = boss_stairs
+        self.stair_chance = stair_chance
+        self.borough_boss_rate = borough_boss_rate
         self.used_mobs = set()
         self.used_names = set()
         self.used_firsts = set()
@@ -335,7 +373,7 @@ class Generator:
         self.used_forms.add(form)
         level = base_level + self.cfg["boss_offset"][tier]
         mechanics = self.rng.sample(BOSS_MECHANICS, 2 if tier != "neighborhood" else 1)
-        stair = True if tier == "neighborhood" else self.boss_stairs
+        stair = (self.rng.random() < self.stair_chance) if tier == "neighborhood" else self.boss_stairs
         return Boss(name, tier, level, form, " ".join(mechanics),
                     self.rng.choice(CHAMBER_STYLE), stair)
 
@@ -437,20 +475,17 @@ class Generator:
         entry = self.rng.choice(edges)
         max_dist = max(abs(r - entry[0]) + abs(c - entry[1]) for r, c in cells)
 
+        k = n // 2   # boroughs are 2x2 blocks of neighborhoods, arranged k x k
         nbhds: List[Neighborhood] = []
         for i, (r, c) in enumerate(cells):
             dist = abs(r - entry[0]) + abs(c - entry[1])
-            borough = None
-            if n == 4:
-                borough = ("N" if r < 2 else "S") + ("W" if c < 2 else "E")
-            elif n == 2:
-                borough = "Borough"
+            borough = borough_label(r // 2, c // 2, k) if k >= 1 else None
             mob = self.make_mob()
             lr = self.level_range(dist, max_dist)
             boss = self.make_boss("neighborhood", mob, lr[1])
             tier_idx = min(len(LOOT_BOX_TIERS) - 1, dist + self.rng.randint(0, 1))
             nbhds.append(Neighborhood(
-                idx=i, label=chr(ord("A") + i), name=self.nbhd_name(),
+                idx=i, label=grid_label(i), name=self.nbhd_name(),
                 row=r, col=c, borough=borough, mob=mob, level_range=lr,
                 boss=boss, loot=self.rng.choice(LOOT_THEMES),
                 safe_rooms=self.rng.randint(*self.cfg["safe_rooms"]),
@@ -467,19 +502,22 @@ class Generator:
         for k in range(self.hidden):
             pool[k % len(pool)].hidden_stairs.append(spots[k])
 
-        # Borough bosses.
+        # Borough bosses. Not every borough necessarily gets one — see --borough-boss-rate.
         borough_bosses = {}
         if n >= 2:
             names = sorted({nb.borough for nb in nbhds})
             for bname in names:
+                if self.rng.random() >= self.borough_boss_rate:
+                    continue
                 members = [nb for nb in nbhds if nb.borough == bname]
                 top = max(nb.level_range[1] for nb in members)
                 mob = self.rng.choice(members).mob
                 borough_bosses[bname] = self.make_boss("borough", mob, top)
 
-        # City boss.
+        # City boss: one, regardless of how many boroughs make up the city (bosses cap at
+        # city tier — huge/giant/massive add more boroughs, not a bigger boss).
         city_boss = None
-        if n == 4:
+        if n >= 4:
             top = max(nb.level_range[1] for nb in nbhds)
             city_boss = self.make_boss("city", self.rng.choice(nbhds).mob, top)
 
@@ -491,7 +529,7 @@ class Generator:
             nb.rooms, nb.corridor_encounters = self.make_rooms(nb, guildmaster_form)
 
         days = self.days_override or self.rng.randint(*self.cfg["days"])
-        title = {"small": "Neighborhood", "medium": "Borough", "large": "City"}[self.size]
+        title = {"small": "Neighborhood", "medium": "Borough"}.get(self.size, "City")
         floor_name = f"The {self.rng.choice(NBHD_ADJ)} {title}"
 
         elite_host = self.rng.choice(nbhds)
@@ -503,7 +541,7 @@ class Generator:
             plot_armor=self.rng.choice(PLOT_ARMOR),
             settlement=elite_host.name, region=floor_name)
 
-        team_count = {"small": 1, "medium": 2, "large": 3}[self.size]
+        team_count = {"small": 1, "medium": 2, "large": 3, "huge": 4, "giant": 5, "massive": 6}[self.size]
         other_crawlers = []
         for _ in range(team_count):
             label = self.rng.choice(nbhds).label
@@ -598,11 +636,20 @@ def render(fl: Floor, boss_stairs: bool) -> str:
     o.append(render_grid(fl))
     o.append("```")
     o.append("")
-    if fl.grid == 4:
-        o.append("Boroughs are the four 2x2 quadrants (NW, NE, SW, SE). Each borough boss "
-                 "chamber sits at the center of its quadrant, reachable from all four of "
-                 "its neighborhoods. The city boss chamber sits at the seam where the four "
-                 "boroughs meet.")
+    if fl.grid >= 4:
+        k = fl.grid // 2
+        if k == 2:
+            o.append("Boroughs are the four 2x2 quadrants (NW, NE, SW, SE). Each borough boss "
+                     "chamber sits at the center of its quadrant, reachable from all four of "
+                     "its neighborhoods. The city boss chamber sits at the seam where the four "
+                     "boroughs meet.")
+        else:
+            o.append(f"Boroughs are {k * k} 2x2 blocks of neighborhoods arranged in a {k}x{k} "
+                     "grid. Each borough boss chamber sits at the center of its block, reachable "
+                     "from all four of its neighborhoods (not every block necessarily has a "
+                     "borough boss — see Borough Bosses below). The city boss chamber sits at "
+                     "the center of the whole city; bosses cap out at city tier regardless of "
+                     "how many boroughs make it up.")
     elif fl.grid == 2:
         o.append("The four neighborhoods form one borough. The borough boss chamber sits at "
                  "the center, reachable from all four neighborhoods.")
@@ -621,7 +668,7 @@ def render(fl: Floor, boss_stairs: bool) -> str:
         o.append("")
         for bname, b in fl.borough_bosses.items():
             members = [nb.label for nb in fl.neighborhoods if nb.borough == bname]
-            head = f"Borough {bname}" if fl.grid == 4 else "The Borough"
+            head = "The Borough" if fl.grid == 2 else f"Borough {bname}"
             o.append(f"### {head} (neighborhoods {', '.join(members)})")
             o.append("")
             o.extend(boss_block(b))
@@ -638,7 +685,7 @@ def render(fl: Floor, boss_stairs: bool) -> str:
         o.append(f"### {nb.label}. {nb.name}")
         o.append("")
         loc = f"- **Location:** {pos}"
-        if nb.borough and fl.grid == 4:
+        if nb.borough and fl.grid >= 4:
             loc += f", Borough {nb.borough}"
         if adj:
             loc += f". Adjacent to {', '.join(adj)}"
@@ -787,10 +834,11 @@ def render_svg(fl: Floor, boss_stairs: bool) -> str:
         # neighborhood boss chamber, bottom-right corner
         bx, by = x + CELL - 30, y + CELL - 30
         o.extend(_boss_marker(bx, by, "neighborhood", ""))
-        o.append(_stair_icon(bx - 32, by - 7))
+        if nb.boss.has_stairwell:
+            o.append(_stair_icon(bx - 32, by - 7))
         # hidden stairs, bottom-left
-        for k, _ in enumerate(nb.hidden_stairs):
-            o.append(_stair_icon(x + 12 + k * 22, y + CELL - 24, hidden=True))
+        for hs_i, _ in enumerate(nb.hidden_stairs):
+            o.append(_stair_icon(x + 12 + hs_i * 22, y + CELL - 24, hidden=True))
         # entry
         if nb.is_entry:
             o.append(f'<rect x="{x+3}" y="{y+3}" width="{CELL-6}" height="{CELL-6}" fill="none" '
@@ -798,24 +846,23 @@ def render_svg(fl: Floor, boss_stairs: bool) -> str:
             o.append(_text(x + CELL // 2, y + CELL - 12, "ENTRY", size=14, weight="bold",
                            anchor="middle", fill="#c0392b"))
 
-    # Borough outlines + bosses
-    if n == 4:
-        for bname, b in fl.borough_bosses.items():
-            r0 = 0 if bname[0] == "N" else 2
-            c0 = 0 if bname[1] == "W" else 2
-            x, y = ox + c0 * CELL, oy + r0 * CELL
+    # Borough outlines + bosses. Every block gets an outline; only blocks that actually
+    # rolled a borough boss (see --borough-boss-rate) get a marker and stairwell icon.
+    k = n // 2
+    if k >= 1:
+        blocks = [(0, 0, "Borough")] if k == 1 else \
+                 [(br, bc, borough_label(br, bc, k)) for br in range(k) for bc in range(k)]
+        for br, bc, bname in blocks:
+            x, y = ox + bc * 2 * CELL, oy + br * 2 * CELL
             o.append(f'<rect x="{x}" y="{y}" width="{CELL*2}" height="{CELL*2}" fill="none" '
                      f'stroke="#222" stroke-width="4"/>')
-            o.extend(_boss_marker(x + CELL, y + CELL, "borough", ""))
-            if boss_stairs and b.has_stairwell:
-                o.append(_stair_icon(x + CELL + 26, y + CELL - 28))
-    elif n == 2:
-        b = next(iter(fl.borough_bosses.values()))
-        o.extend(_boss_marker(ox + CELL, oy + CELL, "borough", ""))
-        if boss_stairs and b.has_stairwell:
-            o.append(_stair_icon(ox + CELL + 26, oy + CELL - 28))
+            b = fl.borough_bosses.get(bname)
+            if b:
+                o.extend(_boss_marker(x + CELL, y + CELL, "borough", ""))
+                if boss_stairs and b.has_stairwell:
+                    o.append(_stair_icon(x + CELL + 26, y + CELL - 28))
     if fl.city_boss:
-        cx, cy = ox + CELL * 2, oy + CELL * 2
+        cx, cy = ox + n * CELL / 2, oy + n * CELL / 2
         o.extend(_boss_marker(cx, cy, "city", ""))
         if boss_stairs and fl.city_boss.has_stairwell:
             o.append(_stair_icon(cx + 34, cy - 36))
@@ -843,7 +890,7 @@ def render_svg(fl: Floor, boss_stairs: bool) -> str:
                        size=12, weight="bold"))
         ky += 18
     for bname, b in fl.borough_bosses.items():
-        tag = f"Borough {bname}" if n == 4 else "Borough"
+        tag = "Borough" if n == 2 else f"Borough {bname}"
         o.append(_text(lx, ky, f"{tag} boss: {b.name} (L{b.level})", size=12))
         ky += 18
 
@@ -3582,7 +3629,7 @@ def render11_svg(fl: Floor11) -> str:
 def _extract_neighborhood_block(text: str, label: Optional[str]) -> str:
     """Isolate one '### X. Name' neighborhood section from a larger pasted file,
     so field regexes never accidentally read into a different neighborhood."""
-    heads = list(re.finditer(r"^#{2,4}\s*([A-Za-z])\.\s*.+$", text, re.M))
+    heads = list(re.finditer(r"^#{2,4}\s*([A-Za-z]+)\.\s*.+$", text, re.M))
     if not heads:
         raise SystemExit("--rooms-for: couldn't find any '### X. Name' neighborhood heading in the input file")
     if label:
@@ -3600,7 +3647,7 @@ def parse_neighborhood_block(block: str) -> Neighborhood:
     """Rebuild a Neighborhood from one pasted '### X. Name' section, as produced by this
     script (with or without the Rooms section) — enough to (re)generate room-level detail
     for pre-existing data without regenerating the whole floor."""
-    heading = re.search(r"^#{2,4}\s*([A-Za-z])\.\s*(.+?)\s*$", block, re.M)
+    heading = re.search(r"^#{2,4}\s*([A-Za-z]+)\.\s*(.+?)\s*$", block, re.M)
     if not heading:
         raise SystemExit("--rooms-for: couldn't find a '### X. Name' neighborhood heading in the input file")
     label, name = heading.group(1).upper(), heading.group(2)
@@ -3666,15 +3713,33 @@ def render_rooms_only(nb: Neighborhood) -> str:
 # ---------------------------------------------------------------------------
 
 def main(argv=None):
+    # Some Windows consoles default to a legacy codepage (cp1252 etc.) that can't encode
+    # the arrows/en-dashes used in the output; force UTF-8 on stdout/stderr so printing to
+    # the console can't crash a run that would otherwise succeed fine when redirected to a file.
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
+
     p = argparse.ArgumentParser(description="Dungeon Crawler Carl floor generator (floors 1-2).")
     p.add_argument("--floor", type=int, choices=[1, 2, 3, 4, 5, 6, 8, 9, 10, 11], default=1)
-    p.add_argument("--size", choices=list(SIZE_CFG), default="medium")
+    p.add_argument("--size", choices=list(SIZE_CFG), default="medium",
+                   help="huge/giant/massive are floors 1-2 only: same shape as large (a grid of "
+                        "2x2 boroughs, one city boss), just more boroughs")
     p.add_argument("--scaling", choices=["distance", "random"], default="distance",
                    help="distance: mob levels rise with distance from entry; random: independent per zone")
     p.add_argument("--seed", type=int, default=None, help="RNG seed for reproducible maps")
     p.add_argument("--days", type=int, default=None, help="override the random countdown length")
     p.add_argument("--no-boss-stairs", action="store_true",
                    help="omit stairwells from borough/city boss chambers (neighborhood chambers always have one)")
+    p.add_argument("--stair-chance", type=float, default=1.0, metavar="0-1",
+                   help="floors 1-2: probability each neighborhood boss chamber gets a stairwell "
+                        "(default 1.0 = always, matching the books' 'every boss chamber' rule)")
+    p.add_argument("--borough-boss-rate", type=float, default=1.0, metavar="0-1",
+                   help="floors 1-2: probability each borough (2x2 block of neighborhoods) gets a "
+                        "borough boss at all (default 1.0 = every borough; e.g. 0.5 for roughly "
+                        "every other one)")
     p.add_argument("--region", type=str, default=None,
                    help="floor 8 only: folklore archetype (e.g. 'East Asia', 'Caribbean'); random if omitted")
     p.add_argument("--warlords", choices=["canon", "generated"], default="canon",
@@ -3697,6 +3762,13 @@ def main(argv=None):
     p.add_argument("--rooms-for-label", type=str, default=None, metavar="LABEL",
                    help="--rooms-for: which neighborhood letter to use if FILE has more than one (default: the first found)")
     a = p.parse_args(argv)
+
+    if a.size in BIG_SIZES and a.floor not in (1, 2):
+        sys.exit(f"--size {a.size} is floor 1-2 only (got --floor {a.floor})")
+    if not 0.0 <= a.stair_chance <= 1.0:
+        sys.exit("--stair-chance must be between 0 and 1")
+    if not 0.0 <= a.borough_boss_rate <= 1.0:
+        sys.exit("--borough-boss-rate must be between 0 and 1")
 
     seed = a.seed if a.seed is not None else random.randrange(1_000_000)
 
@@ -3759,7 +3831,8 @@ def main(argv=None):
         fl = Generator3(a.size, a.scaling, seed, a.days).build()
         text = render3(fl)
     else:
-        gen = Generator(a.floor, a.size, a.scaling, seed, a.days, not a.no_boss_stairs)
+        gen = Generator(a.floor, a.size, a.scaling, seed, a.days, not a.no_boss_stairs,
+                        a.stair_chance, a.borough_boss_rate)
         fl = gen.build()
         text = render(fl, not a.no_boss_stairs)
 
@@ -3813,7 +3886,12 @@ def interactive_mode() -> None:
         print(f"'{raw}' isn't a valid floor -- using 1 instead.")
         floor = 1
 
-    raw = input("Size (small/medium/large) [medium]: ").strip().lower()
+    size_prompt = ("Size (small/medium/large/huge/giant/massive) [medium]: " if floor in (1, 2)
+                   else "Size (small/medium/large) [medium]: ")
+    raw = input(size_prompt).strip().lower()
+    if floor not in (1, 2) and raw in BIG_SIZES:
+        print(f"'{raw}' is floor 1-2 only -- using medium instead.")
+        raw = "medium"
     size = raw if raw in SIZE_CFG else "medium"
 
     seed = input("Seed number (blank = random) []: ").strip()

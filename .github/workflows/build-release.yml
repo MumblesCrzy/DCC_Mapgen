@@ -1,4 +1,4 @@
-name: Build Windows executable
+name: Build executables
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
   contents: write
 
 jobs:
-  build:
+  build-windows:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -44,3 +44,38 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: dist/dcc_mapgen.exe
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller -r requirements.txt
+
+      - name: Build onefile executable
+        run: |
+          pyinstaller --onefile --name dcc_mapgen --add-data "data:data" dcc_mapgen.py
+
+      - name: Smoke test the executable
+        run: |
+          ./dist/dcc_mapgen --floor 1 --size small --seed 1 --out smoke_test.md
+          head -n 5 smoke_test.md
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dcc_mapgen-linux
+          path: dist/dcc_mapgen
+
+      - name: Attach to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/dcc_mapgen
