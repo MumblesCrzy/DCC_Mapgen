@@ -117,6 +117,51 @@
    "You Found Stairs!",
    "Locate a stairwell to the next floor.",
    "flavor only"
+  ],
+  [
+   "Wait, Bosses Can Leave Their Rooms",
+   "Encounter a boss that left its chamber before crawlers entered.",
+   "flavor only"
+  ],
+  [
+   "Dungeonpreneur",
+   "Invent a stackable weapon, device, or potion.",
+   "One gold coin per kill made with the device by other crawlers, for the inventor's natural life (adjusted for exchange rates)"
+  ],
+  [
+   "What Goes Up...",
+   "Be struck with and survive Reverse Gravity.",
+   "flavor only"
+  ],
+  [
+   "Like a Moth to the Flame",
+   "Damage a mob more than 75 levels higher than yourself.",
+   "Platinum Lucky Bastard Box"
+  ],
+  [
+   "Grease Monkey",
+   "Build and deploy a wheeled device.",
+   "Silver Mechanic's Box"
+  ],
+  [
+   "You Call That a Trap",
+   "Injure a mob with something purposely left lying around.",
+   "Gold Sapper's Box"
+  ],
+  [
+   "I'll Take the Ceramic Dalmatian Pat",
+   "Discover a reward room.",
+   "The reward room itself"
+  ],
+  [
+   "Menagerie",
+   "Discover a pet reward room.",
+   "A key to open one cage"
+  ],
+  [
+   "PETA Enthusiast",
+   "Remove the hostility of an aggravated, non-sapient enemy.",
+   "flavor only"
   ]
  ],
  "RANDOM_ENCOUNTERS": [
@@ -506,7 +551,11 @@
   "behind a wall of stacked corpses the janitors haven't reached yet",
   "in the ceiling; the ladder drops only when weight leaves the room",
   "inside a mimic pretending to be a stairwell. The real one is next to it",
-  "in a room that only appears on a Neighborhood Map"
+  "in a room that only appears on a Neighborhood Map",
+  "behind a bricked-over archway nobody's bothered to explain",
+  "under a collapsed stairwell that isn't actually collapsed",
+  "inside a supply closet that's bigger on the inside",
+  "at the bottom of an elevator shaft with no elevator"
  ],
  "STORYLINES": [
   "A multi-level-marketing scheme run by the local bosses; every neighborhood has a 'consultant' recruiting.",

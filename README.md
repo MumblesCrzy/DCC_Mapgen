@@ -6,7 +6,7 @@ A procedural floor/map generator in the style of the *Dungeon Crawler Carl* book
 
 ## Features
 
-- **Floors 1 & 2** — neighborhood/borough/city grid (small/medium/large, plus huge/giant/massive for bigger cities — bosses still cap out at city tier), bosses (with a word-bank uniqueness guard so names/forms don't collide), loot boxes, achievements, an Elite, other crawler teams, the tutorial guild, and a full connected **room graph** per neighborhood (safe rooms, hidden passages, guild hall, filler rooms, corridor encounters). `--stair-chance` and `--borough-boss-rate` tune how often neighborhood stairwells and borough bosses show up.
+- **Floors 1 & 2** — neighborhood/borough/city grid, from small up through large (1 City). Beyond that, huge/giant/massive/continent tile multiple Cities together — County (4 Cities), State (9), Country (16), Continent (25) — each City keeping its own City Boss, with one top-tier boss (County/State/Country/Continent) overseeing all of them. Bosses (with a word-bank uniqueness guard so names/forms don't collide), loot boxes, achievements, an Elite, other crawler teams, the tutorial guild, and a full connected **room graph** per neighborhood (safe rooms, hidden passages, guild hall, filler rooms, corridor encounters). `--stair-chance` and `--borough-boss-rate` tune how often neighborhood stairwells and borough bosses show up.
 - **Floor 3** (The Over City) — settlements on a wilderness grid, roaming bosses, locked stairwells, quests, one Elite.
 - **Floor 4** (The Iron Tangle) — schematic rail/transit map.
 - **Floor 5** (The Bubbles) — four quadrants, castles, factions.
@@ -47,13 +47,31 @@ Check the [Releases](../../releases) page for a bundled `.exe` (Windows) or bina
 
 ## Usage
 
+### One example per floor
+
 ```
-python dcc_mapgen.py --floor 1 --size medium
-python dcc_mapgen.py --floor 2 --size large --scaling distance --seed 42
+python dcc_mapgen.py --floor 1  --size medium --seed 42                                    # The Collapse: neighborhoods/boroughs/city, full room graphs
+python dcc_mapgen.py --floor 2  --size large  --seed 42                                    # Same shape as Floor 1, tougher mob band, bosses roam
+python dcc_mapgen.py --floor 3  --size medium --seed 42                                    # The Over City: settlements, quests, roaming bosses
+python dcc_mapgen.py --floor 4  --size large  --seed 42                                    # The Iron Tangle: schematic rail/transit map
+python dcc_mapgen.py --floor 5  --size medium --seed 42                                    # The Bubbles: four quadrants, castles, factions
+python dcc_mapgen.py --floor 6  --size large  --seed 42                                    # The Hunting Grounds: jungle, hunter parties, bounty board
+python dcc_mapgen.py --floor 8  --size medium --region "East Asia" --seed 42               # Ghosts of Earth: folklore polar map, totem cards
+python dcc_mapgen.py --floor 9  --size large  --warlords generated --wildcard --seed 42    # Faction Wars: nine-slice pie around Larracos
+python dcc_mapgen.py --floor 10 --size medium --vehicle biological --party 3 --seed 42     # Don't Come In Last: seven-heat race season
+python dcc_mapgen.py --floor 11 --size large  --seed 42                                    # A Parade of Horribles: route, judges, arena boss
+```
+
+(Floor 7 doesn't exist, per canon.)
+
+### More options
+
+```
 python dcc_mapgen.py --floor 1 --size small --days 5 --out floor1.md
 python dcc_mapgen.py --floor 2 --size large --seed 9 --out f2.md --image f2.svg
 python dcc_mapgen.py --floor 2 --size large --save maps/     # writes maps/floor2_large_seedNNN.md + .png + room maps
-python dcc_mapgen.py --floor 1 --size massive --seed 1        # 10x10 neighborhoods, still one city boss
+python dcc_mapgen.py --floor 1 --size massive --seed 1        # Country: 16 Cities, 1 Country Boss
+python dcc_mapgen.py --floor 1 --size continent --seed 1       # Continent: 25 Cities, 1 Continent Boss
 python dcc_mapgen.py --floor 1 --size large --stair-chance 0.5 --borough-boss-rate 0.5
 
 # Add room-level detail to a neighborhood you already generated and are playing:
