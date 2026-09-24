@@ -260,6 +260,7 @@ class CrawlerTeam:
     name: str
     origin: str
     status: str
+    day: int = 1        # which day of the countdown this report lands on
 
 @dataclass
 class Room:
@@ -341,6 +342,18 @@ class Generator:
         self.used_forms = set()
 
     # -- pieces --------------------------------------------------------------
+
+    def _distinct(self, bank, k: int) -> list:
+        """k picks from `bank` with no repeats, unless the bank is smaller than k.
+
+        A bank too small to fill the request is a content problem, not a reason to
+        fail a generation, so the shortfall is topped up with repeats rather than
+        raising -- someone trimming a word bank still gets a floor out of it."""
+        if k <= len(bank):
+            return self.rng.sample(bank, k)
+        out = self.rng.sample(bank, len(bank))
+        out += [self.rng.choice(bank) for _ in range(k - len(bank))]
+        return out
 
     def make_mob(self) -> Mob:
         for _ in range(100):
@@ -583,13 +596,31 @@ class Generator:
 
         team_count = {"small": 1, "medium": 2, "large": 3, "huge": 4, "giant": 5,
                      "massive": 6, "continent": 7}[self.size]
+        # Draw without replacement: with independent picks a floor could field
+        # three separate groups all called Team Meadow Lark, and repeat a status
+        # just as easily -- the largest sizes want seven of each.
+        surnames = self._distinct(TEAM_SURNAME, team_count)
+        statuses = self._distinct(TEAM_STATUS, team_count)
+        origins = self._distinct(TEAM_ORIGIN, team_count)
+        # Forms are spread too, or a seven-team floor reads as three sets of
+        # Irregulars even once the names behind them are all different.
+        forms = self._distinct(TEAM_NAME_FORM, team_count)
         other_crawlers = []
-        for _ in range(team_count):
+        for i, (surname, status, origin, form) in enumerate(
+                zip(surnames, statuses, origins, forms)):
+            # One team per slice of the countdown, jittered inside its slice, rather
+            # than an independent roll each: rolling freely piles half the roster
+            # onto the same day often enough to spoil the section as a timeline.
+            lo = 1 + (i * days) // team_count
+            hi = max(lo, ((i + 1) * days) // team_count)
             label = self.rng.choice(nbhds).label
             other_crawlers.append(CrawlerTeam(
-                name=f"Team {self.rng.choice(TEAM_SURNAME)}",
-                origin=self.rng.choice(TEAM_ORIGIN),
-                status=self.rng.choice(TEAM_STATUS).format(label=label)))
+                name=form.format(name=surname),
+                origin=origin,
+                status=status.format(label=label),
+                day=self.rng.randint(lo, hi)))
+        # Chronological, so the section reads as a timeline the DM can run down.
+        other_crawlers.sort(key=lambda ct: ct.day)
 
         return Floor(
             number=self.floor, size=self.size, name=floor_name, days=days,
@@ -808,10 +839,12 @@ def render(fl: Floor) -> str:
 
     o.append("## Other Crawlers")
     o.append("")
-    o.append("Other survivors sharing this floor, per the death feed and rumor:")
+    o.append(f"Other survivors sharing this floor. Each report is dated to a day of the "
+             f"{fl.days}-day countdown — it is what the death feed and the rumor mill carry "
+             f"on that day, not something already true when the party arrives:")
     o.append("")
     for ct in fl.other_crawlers:
-        o.append(f"- **{ct.name}** — formed from {ct.origin}. Status: {ct.status}.")
+        o.append(f"- **Day {ct.day} — {ct.name}** — formed from {ct.origin}; {ct.status}.")
     o.append("")
 
     o.append("## Loot Boxes")
