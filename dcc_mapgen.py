@@ -2030,7 +2030,9 @@ def render4_svg(fl: Floor4) -> str:
     drawn = set()
     for ln in fl.lines:
         for st in ln.stations:
-            for other in set(st.transfer_to):
+            # sorted(), not set(): a set of colour names iterates in per-process hash
+            # order, which reordered these connectors in the SVG from run to run.
+            for other in sorted(set(st.transfer_to)):
                 key = (min(ln.color, other), max(ln.color, other), st.number)
                 if key in drawn:
                     continue

@@ -1,0 +1,52 @@
+name: Tests
+
+# Unlike build-release.yml, which only fires on a tag, this runs on every push so
+# a regression is caught when it lands rather than when a release is cut.
+on:
+  push:
+  pull_request:
+  workflow_dispatch: {}
+
+jobs:
+  test:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Tk and a virtual display (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-tk tk8.6 xvfb
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Generator tests
+        # Stdlib unittest, so these need nothing installed to run locally either.
+        run: python -m unittest discover -s tests -v
+
+      - name: Desktop app smoke test (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run -a python gui_smoke_test.py
+
+      - name: Desktop app smoke test (Windows)
+        if: runner.os == 'Windows'
+        run: python gui_smoke_test.py
+
+      - name: CLI still runs end to end
+        run: |
+          python dcc_mapgen.py --floor 1 --size small --seed 1 --out cli_check.md
+          python dcc_mapgen.py --floor 9 --size medium --seed 1 --save cli_check_dir

@@ -16,7 +16,7 @@ A procedural floor/map generator in the style of the *Dungeon Crawler Carl* book
 - **Floor 10** (Don't Come In Last) — seven-heat race season, garage/vehicle/upgrades.
 - **Floor 11** (A Parade of Horribles) — parade route, judges, arena boss.
 - A **desktop app** (`dcc_mapgen_gui.py`) wrapping all of the above: pick a floor and size, generate, and read the write-up and browse every map without leaving the window. See [Desktop app](#desktop-app).
-- Every floor supports `--seed` for reproducible maps, and `--image`/`--save` for SVG or PNG output (PNG needs the optional `resvg-py` package).
+- Every floor supports `--seed` for reproducible maps — byte-for-byte, and [tested](#tests) as such — and `--image`/`--save` for SVG or PNG output (PNG needs the optional `resvg-py` package).
 - `--rooms-for` can (re)generate just the room-level detail for one neighborhood from a floor you already generated and are playing, without touching the rest of the data.
 
 Word banks (names, mobs, bosses, loot, room flavor, etc.) live in `data/*.json` — edit those to add or reskin content without touching the code.
@@ -114,6 +114,33 @@ python dcc_mapgen.py --rooms-for my_floor1.md --rooms-for-label C --seed 42 --im
 ```
 
 Run `python dcc_mapgen.py --help` for the full flag list (per-floor options like `--region`, `--warlords`, `--vehicle`, `--party`, etc.).
+
+## Tests
+
+```
+python -m unittest discover -s tests -v
+```
+
+Stdlib `unittest`, so nothing needs installing, and it finishes in about a second.
+GitHub Actions runs it on every push across Linux and Windows.
+
+`tests/golden.json` pins a hash of the Markdown and maps for every floor at every
+size, plus the multi-city tiers and each floor's own options. Two things are checked:
+
+- **Output hasn't drifted.** Any change to what the generator emits fails the golden
+  test. When the change is intended, `python tests/update_golden.py` refreshes the
+  hashes and prints which cases moved — commit that diff with the change, and it
+  doubles as a record of what the change actually affected.
+- **Seeds are genuinely reproducible.** The corpus is regenerated in separate
+  interpreters under a spread of `PYTHONHASHSEED` values. Python salts string
+  hashes per process, so anything that lets the iteration order of a set or dict
+  reach the output produces a different map each run — the same seed, a different
+  dungeon. Three such bugs had shipped in this project (corridor encounters, the
+  Floor 9 stairwell angles, and the Floor 4 transfer connectors); within a single
+  process all three were invisible, because that order is stable until the
+  interpreter restarts.
+
+If you add a floor, the suite fails until `tests/corpus.py` covers it.
 
 ## License
 

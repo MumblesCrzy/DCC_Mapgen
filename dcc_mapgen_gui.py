@@ -47,12 +47,13 @@ FLOOR_OPTIONS = {
     11: set(),
 }
 
-# Names as this generator's own module docstring gives them. Floors 1 and 2 name
-# themselves per seed ("The Gilded Neighborhood"), so they are labelled by what they
-# lay out instead.
+# Floors 3-11 are named as this generator's own module docstring names them; keep
+# them in step with it. Floors 1 and 2 have no name there -- they title themselves
+# per seed ("The Gilded Neighborhood") -- so these two are the setting's names for
+# them rather than anything the generator emits.
 FLOOR_LABELS = {
-    1: "1 - City grid",
-    2: "2 - City grid, deeper",
+    1: "1 - The Collapse",
+    2: "2 - The Crawl",
     3: "3 - The Over City",
     4: "4 - The Iron Tangle",
     5: "5 - The Bubbles",
