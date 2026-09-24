@@ -3930,7 +3930,7 @@ def regenerate_rooms(path: str, label: Optional[str] = None, floor: int = 1, *,
     fake_fl = types.SimpleNamespace(number=floor, seed=seed)
     result = GenResult(floor=fake_fl, number=floor, size=size, seed=seed,
                        markdown=render_rooms_only(nb),
-                       svgs=[("", render_room_svg(nb, fake_fl))])
+                       svgs=[(f"_room_{nb.label}", render_room_svg(nb, fake_fl))])
     return nb, result
 
 

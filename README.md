@@ -15,6 +15,7 @@ A procedural floor/map generator in the style of the *Dungeon Crawler Carl* book
 - **Floor 9** (Faction Wars) — the nine-slice pie around Larracos, warlords, stance paths.
 - **Floor 10** (Don't Come In Last) — seven-heat race season, garage/vehicle/upgrades.
 - **Floor 11** (A Parade of Horribles) — parade route, judges, arena boss.
+- A **desktop app** (`dcc_mapgen_gui.py`) wrapping all of the above: pick a floor and size, generate, and read the write-up and browse every map without leaving the window. See [Desktop app](#desktop-app).
 - Every floor supports `--seed` for reproducible maps, and `--image`/`--save` for SVG or PNG output (PNG needs the optional `resvg-py` package).
 - `--rooms-for` can (re)generate just the room-level detail for one neighborhood from a floor you already generated and are playing, without touching the rest of the data.
 
@@ -39,11 +40,39 @@ git clone https://github.com/MumblesCrzy/DCC_Mapgen.git
 cd DCC_Mapgen
 pip install -r requirements.txt   # optional, only needed for PNG output
 python dcc_mapgen.py --floor 1 --size medium
+python dcc_mapgen_gui.py          # ...or the desktop app
 ```
 
 ### Option B: standalone executable (Windows or Linux)
 
 Check the [Releases](../../releases) page for a bundled `.exe` (Windows) or binary (Linux) — no Python install required. Both are built automatically from this repo via GitHub Actions.
+
+## Desktop app
+
+```
+python dcc_mapgen_gui.py
+```
+
+![the desktop app showing a large Floor 1 map](sample/gui.png)
+
+Floor, size and seed are always on the left; the options below them swap to match the
+floor you picked, so you only ever see settings that affect the map in front of you.
+**Generate** fills the *Maps* tab and the *Text* tab, and **Save output...** writes the
+same `floorN_size_seedS.md` plus map files that `--save` produces on the command line.
+
+- The map dropdown lists every map the floor produces — the overview plus one room map
+  per neighborhood on floors 1–2, or the seven heats on floor 10.
+- **Fit**, **1:1** and **+**/**−** zoom; each step re-renders from the SVG rather than
+  scaling pixels, so text stays sharp however far you zoom in. Drag to pan, scroll to
+  scroll, ctrl+scroll to zoom.
+- The seed box is filled in with the seed that was used, so a map you like can be
+  re-rolled or tweaked without hunting for it.
+- **File → Re-roll rooms from a saved floor** is `--rooms-for` in the GUI: point it at a
+  floor 1–2 Markdown file this app wrote and re-roll one neighborhood's rooms.
+
+The inline preview uses `resvg-py` (`pip install -r requirements.txt`). Without it the app
+still generates and saves everything — maps just save as SVG, and **Open in browser**
+shows the map instead of the built-in preview.
 
 ## Usage
 

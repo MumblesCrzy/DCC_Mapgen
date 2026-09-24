@@ -24,26 +24,35 @@ jobs:
           python -m pip install --upgrade pip
           pip install pyinstaller -r requirements.txt
 
-      - name: Build onefile executable
+      - name: Build onefile executables
         run: |
           pyinstaller --onefile --name dcc_mapgen --add-data "data;data" dcc_mapgen.py
+          pyinstaller --onefile --windowed --name dcc_mapgen_gui --add-data "data;data" dcc_mapgen_gui.py
 
-      - name: Smoke test the executable
+      - name: Smoke test the executables
         run: |
           .\dist\dcc_mapgen.exe --floor 1 --size small --seed 1 --out smoke_test.md
           Get-Content smoke_test.md | Select-Object -First 5
+          # --windowed detaches from the console, so the GUI build is checked by
+          # driving the app itself in-process rather than by running the .exe.
+          if (-not (Test-Path .\dist\dcc_mapgen_gui.exe)) { throw "GUI exe was not built" }
+          python gui_smoke_test.py
 
-      - name: Upload build artifact
+      - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: dcc_mapgen-windows-exe
-          path: dist/dcc_mapgen.exe
+          path: |
+            dist/dcc_mapgen.exe
+            dist/dcc_mapgen_gui.exe
 
       - name: Attach to GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/dcc_mapgen.exe
+          files: |
+            dist/dcc_mapgen.exe
+            dist/dcc_mapgen_gui.exe
 
   build-linux:
     runs-on: ubuntu-latest
