@@ -45,7 +45,9 @@ python dcc_mapgen_gui.py          # ...or the desktop app
 
 ### Option B: standalone executable (Windows or Linux)
 
-Check the [Releases](../../releases) page for a bundled `.exe` (Windows) or binary (Linux) — no Python install required. Both are built automatically from this repo via GitHub Actions.
+Check the [Releases](../../releases) page for bundled builds — no Python install required. Each platform ships two: `dcc_mapgen` (the command line) and `dcc_mapgen_gui` (the [desktop app](#desktop-app)). All are built automatically from this repo via GitHub Actions.
+
+On Linux the desktop app needs your distribution's Tk package if it isn't already present (`sudo apt install python3-tk` on Debian/Ubuntu); the command-line build needs nothing.
 
 ## Desktop app
 
@@ -73,6 +75,10 @@ same `floorN_size_seedS.md` plus map files that `--save` produces on the command
 The inline preview uses `resvg-py` (`pip install -r requirements.txt`). Without it the app
 still generates and saves everything — maps just save as SVG, and **Open in browser**
 shows the map instead of the built-in preview.
+
+`python dcc_mapgen_gui.py --self-test` (or `python gui_smoke_test.py`) drives the app
+through a generate and checks the write-up, the map list and the rendered preview all
+arrive — this is what CI runs against the packaged builds.
 
 ## Usage
 

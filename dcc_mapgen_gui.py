@@ -15,7 +15,9 @@ import base64
 import os
 import queue
 import re
+import sys
 import threading
+import time
 import tkinter as tk
 import traceback
 import webbrowser
@@ -660,7 +662,93 @@ def _ask_label(parent):
     return out.get("v")
 
 
+def selftest() -> int:
+    """Drive the real App through a generate and check the results arrived.
+
+    This lives in the app rather than beside it so that `dcc_mapgen_gui --self-test`
+    exercises the *frozen* build: a Tk that PyInstaller failed to bundle only shows
+    up when the packaged binary runs, never when the source does. Returns an exit
+    code, and is pumped with update() rather than mainloop() so it can drive the app
+    and still return -- generation and rasterizing hand their results back through
+    the app's queue, which the pump is what drains.
+    """
+    timeout = 120
+
+    def say(msg):
+        # A --windowed PyInstaller build has no stdout to write to, and the exit
+        # code is what CI checks anyway, so never let logging sink the test.
+        try:
+            print(msg)
+        except Exception:                                  # noqa: BLE001
+            pass
+
+    app = App()
+    app.update()
+
+    def pump(seconds, until):
+        end = time.time() + seconds
+        while time.time() < end:
+            app.update()
+            if until():
+                return True
+            time.sleep(0.02)
+        return False
+
+    failures = []
+
+    def check(cond, msg):
+        say(("  ok   " if cond else "  FAIL ") + msg)
+        if not cond:
+            failures.append(msg)
+
+    say("floor 1 / large / seed 4242")
+    app.floor.set(FLOOR_LABELS[1])
+    app._sync_floor()
+    app.size.set("large")
+    app.seed.set("4242")
+    app.update()
+    app.generate()
+
+    if not pump(timeout, lambda: app.result is not None):
+        say("  FAIL generate finished")
+        app.destroy()
+        return 1
+    say("  ok   generate finished")
+
+    res = app.result
+    check(res.seed == 4242, f"honored the seed (got {res.seed})")
+    check(len(res.svgs) == 17, f"17 maps for a large floor 1 (got {len(res.svgs)})")
+    check(len(res.markdown) > 5000, f"markdown written ({len(res.markdown)} chars)")
+    check(len(app.text.get("1.0", "end")) > 5000, "markdown reached the Text tab")
+    check(app.seed.get() == "4242", "seed box shows the seed used")
+
+    if resvg_py is None:
+        say("  skip  preview render (resvg-py not installed)")
+    else:
+        check(pump(timeout, lambda: app.view._photo is not None), "preview rasterized")
+        if app.view._photo is not None:
+            check(app.view._photo.width() > 100,
+                  f"preview is a real image ({app.view._photo.width()}px wide)")
+
+    # An option combination the generator must reject rather than crash on.
+    errs = []
+    messagebox.showerror = lambda title, msg, **kw: errs.append(msg)
+    app.floor.set(FLOOR_LABELS[3])
+    app._sync_floor()
+    app.size.set("continent")
+    app.update()
+    app.generate()
+    pump(30, lambda: bool(errs))
+    check(bool(errs), "bad floor/size combination is reported, not crashed on")
+
+    app.destroy()
+    say(("FAILED: " + "; ".join(failures)) if failures else "gui ok")
+    return 1 if failures else 0
+
+
 def main():
+    if "--self-test" in sys.argv[1:]:
+        sys.exit(selftest())
     app = App()
     app.mainloop()
 

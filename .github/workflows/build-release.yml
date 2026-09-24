@@ -33,10 +33,13 @@ jobs:
         run: |
           .\dist\dcc_mapgen.exe --floor 1 --size small --seed 1 --out smoke_test.md
           Get-Content smoke_test.md | Select-Object -First 5
-          # --windowed detaches from the console, so the GUI build is checked by
-          # driving the app itself in-process rather than by running the .exe.
           if (-not (Test-Path .\dist\dcc_mapgen_gui.exe)) { throw "GUI exe was not built" }
           python gui_smoke_test.py
+          # A GUI-subsystem exe does not block PowerShell and has no stdout to
+          # print to, so run it detached and judge it purely by its exit code.
+          # This is the only check that catches a Tk that failed to bundle.
+          $p = Start-Process -FilePath .\dist\dcc_mapgen_gui.exe -ArgumentList '--self-test' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "GUI self-test failed (exit $($p.ExitCode))" }
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
@@ -65,26 +68,41 @@ jobs:
 
       - name: Install dependencies
         run: |
+          # tkinter needs the system Tcl/Tk libraries present to import, and the
+          # runner is headless, so xvfb provides a display for the GUI smoke test.
+          sudo apt-get update
+          sudo apt-get install -y python3-tk tk8.6 xvfb
           python -m pip install --upgrade pip
           pip install pyinstaller -r requirements.txt
+          python -c "import tkinter; print('tkinter', tkinter.TkVersion)"
 
-      - name: Build onefile executable
+      - name: Build onefile executables
         run: |
           pyinstaller --onefile --name dcc_mapgen --add-data "data:data" dcc_mapgen.py
+          pyinstaller --onefile --name dcc_mapgen_gui --add-data "data:data" dcc_mapgen_gui.py
 
-      - name: Smoke test the executable
+      - name: Smoke test the executables
         run: |
           ./dist/dcc_mapgen --floor 1 --size small --seed 1 --out smoke_test.md
           head -n 5 smoke_test.md
+          test -x ./dist/dcc_mapgen_gui || { echo "GUI binary was not built"; exit 1; }
+          xvfb-run -a python gui_smoke_test.py
+          # The bundled GUI has to start too -- a missing Tk in the bundle only
+          # shows up when the frozen binary runs, not when the source does.
+          xvfb-run -a ./dist/dcc_mapgen_gui --self-test
 
-      - name: Upload build artifact
+      - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: dcc_mapgen-linux
-          path: dist/dcc_mapgen
+          path: |
+            dist/dcc_mapgen
+            dist/dcc_mapgen_gui
 
       - name: Attach to GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/dcc_mapgen
+          files: |
+            dist/dcc_mapgen
+            dist/dcc_mapgen_gui

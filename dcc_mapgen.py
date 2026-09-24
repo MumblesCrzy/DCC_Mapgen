@@ -871,8 +871,63 @@ def _stair_icon(x, y, hidden=False):
     pts = f"{x},{y+14} {x},{y+9} {x+5},{y+9} {x+5},{y+4} {x+10},{y+4} {x+10},{y} {x+15},{y} {x+15},{y+14}"
     return f'<polygon points="{pts}" fill="{fill}" stroke="#333" stroke-width="1.5"{dash}/>'
 
+LEGEND_GAP = 28        # horizontal space between legend entries
+LEGEND_ROW_GAP = 12    # vertical space between legend rows
+BOSS_R = {"neighborhood": 13, "borough": 22, "city": 30, "top": 38}
+
+
+def _legend_entries(fl) -> List[Tuple[str, object, str]]:
+    """(kind, detail, label) for each marker this map actually uses.
+
+    Only listing what is on the map keeps a small floor from advertising the city
+    and top-tier bosses it does not have -- every size below huge used to show all
+    four boss tiers in the key regardless."""
+    out = [("boss", "neighborhood", "Neighborhood boss")]
+    if fl.borough_bosses:
+        out.append(("boss", "borough", "Borough boss"))
+    if fl.city_bosses:
+        out.append(("boss", "city", "City boss"))
+    if fl.top_boss:
+        out.append(("boss", "top", f"{fl.top_tier_name or 'Top-tier'} boss"))
+    out.append(("stair", False, "Stairwell"))
+    if any(nb.hidden_stairs for nb in fl.neighborhoods):
+        out.append(("stair", True, "Hidden stairwell"))
+    out.append(("entry", None, "Entry"))
+    return out
+
+
+def _legend_half(kind, detail) -> float:
+    """Half the height (and width) of one legend marker."""
+    if kind == "boss":
+        return BOSS_R[detail]
+    return 8.0 if kind == "stair" else 9.0
+
+
+def _legend_width(entry) -> float:
+    kind, detail, label = entry
+    # 6.2 px/char approximates 11px Helvetica closely enough to flow rows with.
+    return 2 * _legend_half(kind, detail) + 8 + len(label) * 6.2 + LEGEND_GAP
+
+
+def _legend_layout(entries, avail: float):
+    """Flow entries into rows no wider than `avail`, as (rows, total height)."""
+    rows, cur, cur_w = [], [], 0.0
+    for e in entries:
+        w = _legend_width(e)
+        if cur and cur_w + w > avail:
+            rows.append(cur)
+            cur, cur_w = [], 0.0
+        cur.append(e)
+        cur_w += w
+    if cur:
+        rows.append(cur)
+    height = sum(max(_legend_half(k, d) for k, d, _ in row) * 2 for row in rows)
+    height += LEGEND_ROW_GAP * (len(rows) - 1)
+    return rows, height
+
+
 def _boss_marker(cx, cy, tier, label):
-    r = {"neighborhood": 13, "borough": 22, "city": 30, "top": 38}[tier]
+    r = BOSS_R[tier]
     color = {"neighborhood": "#cd7f32", "borough": "#a8a9ad", "city": "#d4af37", "top": "#7a1f7a"}[tier]
     out = [f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="{color}" stroke="#222" stroke-width="2"/>']
     glyph = {"neighborhood": "N", "borough": "B", "city": "C", "top": "★"}[tier]
@@ -883,7 +938,10 @@ def render_svg(fl: Floor, boss_stairs: bool) -> str:
     n = fl.grid
     W = max(PAD * 2 + CELL * n, 800)
     key_lines = len(fl.borough_bosses) + len(fl.city_bosses) + (1 if fl.top_boss else 0)
-    H = HEADER + PAD + CELL * n + LEGEND + 18 * key_lines + PAD
+    # The legend is laid out before anything is emitted, because how many rows it
+    # flows into decides the image height.
+    legend_rows, legend_h = _legend_layout(_legend_entries(fl), W - PAD * 2)
+    H = HEADER + PAD + CELL * n + 30 + legend_h + 28 + 18 * key_lines + PAD
     o = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" '
          f'font-family="Helvetica, Arial, sans-serif">',
          f'<rect width="{W}" height="{H}" fill="#f6f2ea"/>']
@@ -966,27 +1024,32 @@ def render_svg(fl: Floor, boss_stairs: bool) -> str:
         if boss_stairs and fl.top_boss.has_stairwell:
             o.append(_stair_icon(cx + 44, cy - 46))
 
-    # Legend
+    # Legend. Entries were previously pinned to hardcoded offsets on two fixed rows,
+    # which put the top-tier circle (r=38, centred just 30px below a row whose city
+    # circle already reaches 30px down) on top of the first row's marker and label.
+    # Flowing them instead keeps every marker clear of its neighbours at any size.
     ly = oy + CELL * n + 30
-    lx = PAD
-    o.extend(_boss_marker(lx + 13, ly, "neighborhood", ""))
-    o.append(_text(lx + 32, ly + 4, "Neighborhood boss", size=11))
-    o.extend(_boss_marker(lx + 170, ly, "borough", ""))
-    o.append(_text(lx + 198, ly + 4, "Borough boss", size=11))
-    o.extend(_boss_marker(lx + 320, ly, "city", ""))
-    o.append(_text(lx + 356, ly + 4, "City boss", size=11))
-    o.append(_stair_icon(lx + 440, ly - 8))
-    o.append(_text(lx + 462, ly + 4, "Stairwell", size=11))
-    o.append(_stair_icon(lx + 540, ly - 8, hidden=True))
-    o.append(_text(lx + 562, ly + 4, "Hidden stairwell", size=11))
-    o.append(f'<rect x="{lx+670}" y="{ly-9}" width="18" height="18" fill="none" stroke="#c0392b" stroke-width="3"/>')
-    o.append(_text(lx + 694, ly + 4, "Entry", size=11))
-    ly2 = ly + 30
-    o.extend(_boss_marker(lx + 13, ly2, "top", ""))
-    o.append(_text(lx + 32, ly2 + 4, f"{fl.top_tier_name or 'Top-tier'} boss", size=11))
+    y = prev_half = 0.0
+    for i, row in enumerate(legend_rows):
+        half = max(_legend_half(k, d) for k, d, _ in row)
+        y = ly + half if i == 0 else y + prev_half + LEGEND_ROW_GAP + half
+        x = float(PAD)
+        for kind, detail, label in row:
+            h = _legend_half(kind, detail)
+            if kind == "boss":
+                o.extend(_boss_marker(x + h, y, detail, ""))
+            elif kind == "stair":
+                o.append(_stair_icon(x + h - 7.5, y - 7, hidden=detail))
+            else:
+                o.append(f'<rect x="{x}" y="{y-9}" width="18" height="18" fill="none" '
+                         f'stroke="#c0392b" stroke-width="3"/>')
+            o.append(_text(x + 2 * h + 8, y + 4, label, size=11))
+            x += _legend_width((kind, detail, label))
+        prev_half = half
 
     # Boss key
-    ky = ly2 + 40
+    lx = PAD
+    ky = y + prev_half + 28
     if fl.top_boss:
         o.append(_text(lx, ky, f"{fl.top_tier_name} boss: {fl.top_boss.name} (L{fl.top_boss.level})",
                        size=12, weight="bold"))
