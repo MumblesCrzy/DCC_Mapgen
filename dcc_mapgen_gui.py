@@ -47,10 +47,19 @@ FLOOR_OPTIONS = {
     11: set(),
 }
 
+# Names as this generator's own module docstring gives them. Floors 1 and 2 name
+# themselves per seed ("The Gilded Neighborhood"), so they are labelled by what they
+# lay out instead.
 FLOOR_LABELS = {
-    1: "1 - The Crawl", 2: "2 - The Scavenger Hunt", 3: "3 - The Over City",
-    4: "4 - The Iron Tangle", 5: "5 - The Hunting Grounds", 6: "6 - Apocalypse",
-    8: "8 - Ghosts of Earth", 9: "9 - The Siege", 10: "10 - The Faction Wars",
+    1: "1 - City grid",
+    2: "2 - City grid, deeper",
+    3: "3 - The Over City",
+    4: "4 - The Iron Tangle",
+    5: "5 - The Bubbles",
+    6: "6 - The Hunting Grounds",
+    8: "8 - Ghosts of Earth",
+    9: "9 - Faction Wars",
+    10: "10 - Don't Come In Last",
     11: "11 - A Parade of Horribles",
 }
 
@@ -398,7 +407,7 @@ class App(tk.Tk):
         ttk.Combobox(f, textvariable=self.region, state="readonly",
                      values=["(random)"] + list(mg.FOLKLORE)).pack(fill="x")
 
-        f = self._opt_frame("floor9", "The siege")
+        f = self._opt_frame("floor9", "Factions")
         ttk.Label(f, text="Warlord names").pack(anchor="w")
         self.warlords = tk.StringVar(value="canon")
         ttk.Combobox(f, textvariable=self.warlords, state="readonly",
@@ -446,7 +455,10 @@ class App(tk.Tk):
         lbl.pack(side="left", padx=(4, 0))
 
     def _floor_num(self):
-        return next(n for n, lbl in FLOOR_LABELS.items() if lbl == self.floor.get())
+        # The combobox is readonly and filled from FLOOR_LABELS, so a miss should be
+        # impossible; falling back beats letting StopIteration out of a Tk callback.
+        label = self.floor.get()
+        return next((n for n, lbl in FLOOR_LABELS.items() if lbl == label), 1)
 
     def _sync_floor(self):
         """Keep the size list and the visible options honest about the chosen floor."""
