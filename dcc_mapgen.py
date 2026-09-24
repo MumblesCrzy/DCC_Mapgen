@@ -72,8 +72,17 @@ import argparse
 import random
 import re
 import sys
+import zlib
 from dataclasses import dataclass, field
 from typing import List, Optional, Tuple
+
+
+class MapgenError(Exception):
+    """A bad option combination or a missing optional dependency.
+
+    Carries a message meant to be shown to a person as-is. The CLI turns it into a
+    sys.exit; a GUI shows it in a dialog. Generation code raises this instead of
+    calling sys.exit directly so it stays usable outside a terminal."""
 
 # ---------------------------------------------------------------------------
 # Floor tuning
@@ -473,8 +482,10 @@ class Generator:
         # A handful of random encounters happen in transit, not inside a fixed room.
         edges = {tuple(sorted((r.id, other))) for r in rooms for other in r.connects_to}
         encounter_ct = min(1 if self.size == "small" else 2, len(edges))
+        # sorted(), not list(): a set of string tuples iterates in hash order, which varies
+        # per process, so sampling the raw set made --seed give a different map every run.
         corridor_encounters = [(a, b, self.rng.choice(RANDOM_ENCOUNTERS))
-                                for a, b in self.rng.sample(list(edges), encounter_ct)]
+                                for a, b in self.rng.sample(sorted(edges), encounter_ct)]
 
         return rooms, corridor_encounters
 
@@ -827,7 +838,7 @@ def _svg_to_png(svg: str, path: str) -> None:
     try:
         import resvg_py  # type: ignore
     except ImportError:
-        sys.exit("PNG output needs resvg-py (pip install resvg-py); or use a .svg path.")
+        raise MapgenError("PNG output needs resvg-py (pip install resvg-py); or use a .svg path.")
     png_bytes = bytes(resvg_py.svg_to_bytes(svg_string=svg))
     with open(path, "wb") as f:
         f.write(png_bytes)
@@ -1106,45 +1117,61 @@ def render_room_svg(nb: Neighborhood, fl: Floor) -> str:
     o.append("</svg>")
     return "\n".join(o)
 
-def write_image(fl, path: str, boss_stairs: bool) -> None:
+def floor_svg(fl, boss_stairs: bool) -> str:
+    """The main map for any floor, as SVG source."""
     if isinstance(fl, Floor11):
-        svg = render11_svg(fl)
-    elif isinstance(fl, Floor9):
-        svg = render9_svg(fl)
-    elif isinstance(fl, Floor8):
-        svg = render8_svg(fl)
-    elif isinstance(fl, Floor6):
-        svg = render6_svg(fl)
-    elif isinstance(fl, Floor5):
-        svg = render5_svg(fl)
-    elif isinstance(fl, Floor4):
-        svg = render4_svg(fl)
-    elif isinstance(fl, Floor3):
-        svg = render3_svg(fl)
-    else:
-        svg = render_svg(fl, boss_stairs)
+        return render11_svg(fl)
+    if isinstance(fl, Floor9):
+        return render9_svg(fl)
+    if isinstance(fl, Floor8):
+        return render8_svg(fl)
+    if isinstance(fl, Floor6):
+        return render6_svg(fl)
+    if isinstance(fl, Floor5):
+        return render5_svg(fl)
+    if isinstance(fl, Floor4):
+        return render4_svg(fl)
+    if isinstance(fl, Floor3):
+        return render3_svg(fl)
+    return render_svg(fl, boss_stairs)
+
+def floor_svgs(fl, boss_stairs: bool = True) -> List[Tuple[str, str]]:
+    """Every map a floor produces, as (filename suffix, SVG source) pairs, in the
+    order they should be shown. The main map's suffix is "" and it comes first;
+    floors 1-2 add one room map per neighborhood, floor 10 is heat maps only
+    (it has no overview map)."""
+    if isinstance(fl, Floor10):
+        return [(f"_heat{h.number}", render10_heat_svg(fl, h)) for h in fl.heats]
+    out = [("", floor_svg(fl, boss_stairs))]
+    if isinstance(fl, Floor):
+        out += [(f"_room_{nb.label}", render_room_svg(nb, fl)) for nb in fl.neighborhoods]
+    return out
+
+def _write_svg(svg: str, path: str) -> None:
     if path.lower().endswith(".png"):
         _svg_to_png(svg, path)
     else:
         with open(path, "w", encoding="utf-8") as f:
             f.write(svg)
 
-def write_images(fl: Floor, path: str, boss_stairs: bool) -> List[str]:
-    """Main map at `path`, plus one section map per neighborhood (its room graph)."""
+def write_image(fl, path: str, boss_stairs: bool) -> None:
+    _write_svg(floor_svg(fl, boss_stairs), path)
+
+def save_svgs(svgs: List[Tuple[str, str]], path: str) -> List[str]:
+    """Write already-rendered (suffix, SVG) pairs, named off `path`, and return the
+    paths written. A .png path converts each one; anything else is saved as SVG."""
     import os
-    write_image(fl, path, boss_stairs)
-    out = [path]
     root, ext = os.path.splitext(path)
-    for nb in fl.neighborhoods:
-        p = f"{root}_room_{nb.label}{ext}"
-        svg = render_room_svg(nb, fl)
-        if ext.lower() == ".png":
-            _svg_to_png(svg, p)
-        else:
-            with open(p, "w", encoding="utf-8") as f:
-                f.write(svg)
+    out = []
+    for suffix, svg in svgs:
+        p = path if not suffix else f"{root}{suffix}{ext}"
+        _write_svg(svg, p)
         out.append(p)
     return out
+
+def write_images(fl, path: str, boss_stairs: bool = True) -> List[str]:
+    """Render and write every map for `fl`, named off `path`."""
+    return save_svgs(floor_svgs(fl, boss_stairs), path)
 
 # ===========================================================================
 # FLOOR 3 — THE OVER CITY
@@ -3275,7 +3302,9 @@ def render9_svg(fl: Floor9) -> str:
     # stair chambers in the forest band
     for slot, sp in fl.stairs:
         i = slot - 1
-        ang = math.radians(-90 + (i + 0.2 + 0.6 * ((hash(sp) % 100) / 100)) * 360 / n)
+        # crc32, not hash(): string hashing is salted per process, so hash() moved these
+        # stair icons to new angles on every run of the same seed.
+        ang = math.radians(-90 + (i + 0.2 + 0.6 * ((zlib.crc32(sp.encode("utf-8")) % 100) / 100)) * 360 / n)
         rr = r_forest + (R - r_forest) * 0.5
         sx, sy = cx + rr * math.cos(ang), cy + rr * math.sin(ang)
         o.append(_stair_icon(sx - 7, sy - 7))
@@ -3536,21 +3565,6 @@ def render10_heat_svg(fl: Floor10, h: Heat) -> str:
     return "\n".join(o)
 
 
-def write_images10(fl: Floor10, path: str) -> List[str]:
-    import os
-    root, ext = os.path.splitext(path)
-    out = []
-    for h in fl.heats:
-        p = f"{root}_heat{h.number}{ext}"
-        svg = render10_heat_svg(fl, h)
-        if ext.lower() == ".png":
-            _svg_to_png(svg, p)
-        else:
-            with open(p, "w", encoding="utf-8") as f:
-                f.write(svg)
-        out.append(p)
-    return out
-
 
 # ===========================================================================
 # FLOOR 11 — A PARADE OF HORRIBLES
@@ -3807,6 +3821,119 @@ def render_rooms_only(nb: Neighborhood) -> str:
 # CLI
 # ---------------------------------------------------------------------------
 
+# ===========================================================================
+# GENERATION API
+# The CLI and the GUI both go through generate(); it validates options, builds the
+# floor, and returns the Markdown and map SVGs in memory without writing anything
+# or printing. Callers decide what to do with the result.
+# ===========================================================================
+
+FLOORS = (1, 2, 3, 4, 5, 6, 8, 9, 10, 11)
+
+
+@dataclass
+class GenResult:
+    floor: object                   # the FloorN dataclass for the floor generated
+    number: int                     # which floor was asked for
+    size: str
+    seed: int
+    markdown: str
+    svgs: List[Tuple[str, str]]     # (filename suffix, SVG source); "" is the main map
+
+    def basename(self) -> str:
+        """The stem the CLI names saved files with."""
+        return f"floor{self.number}_{self.size}_seed{self.seed}"
+
+
+def generate(floor: int = 1, size: str = "medium", seed: Optional[int] = None, *,
+             scaling: str = "distance", days: Optional[int] = None,
+             boss_stairs: bool = True, stair_chance: float = 1.0,
+             borough_boss_rate: float = 1.0, region: Optional[str] = None,
+             warlords: str = "canon", wildcard: bool = False,
+             winner: Optional[str] = None, runner_up: Optional[str] = None,
+             vehicle: Optional[str] = None, party: int = 2,
+             images: bool = True) -> GenResult:
+    """Build one floor and render it. Raises MapgenError on a bad option combination.
+
+    Pass images=False to skip SVG rendering when only the Markdown is wanted -- on the
+    biggest floor 1-2 sizes that is hundreds of room maps and by far the slow part."""
+    if floor not in FLOORS:
+        raise MapgenError(f"floor must be one of {', '.join(map(str, FLOORS))} (got {floor})")
+    if size not in SIZE_CFG:
+        raise MapgenError(f"size must be one of {', '.join(SIZE_CFG)} (got {size!r})")
+    if size in BIG_SIZES and floor not in (1, 2):
+        raise MapgenError(f"size {size} is floor 1-2 only (got floor {floor})")
+    if not 0.0 <= stair_chance <= 1.0:
+        raise MapgenError("stair chance must be between 0 and 1")
+    if not 0.0 <= borough_boss_rate <= 1.0:
+        raise MapgenError("borough boss rate must be between 0 and 1")
+
+    if seed is None:
+        seed = random.randrange(1_000_000)
+
+    if floor == 11:
+        fl = Generator11(size, seed).build()
+        text = render11(fl)
+    elif floor == 10:
+        fl = Generator10(size, seed, vehicle, party).build()
+        text = render10(fl)
+    elif floor == 9:
+        fl = Generator9(size, seed, days, warlords, wildcard, winner, runner_up).build()
+        text = render9(fl)
+    elif floor == 8:
+        fl = Generator8(size, seed, days, region).build()
+        text = render8(fl)
+    elif floor == 6:
+        fl = Generator6(size, scaling, seed, days).build()
+        text = render6(fl)
+    elif floor == 5:
+        fl = Generator5(size, seed, days).build()
+        text = render5(fl)
+    elif floor == 4:
+        fl = Generator4(size, seed, days).build()
+        text = render4(fl)
+    elif floor == 3:
+        fl = Generator3(size, scaling, seed, days).build()
+        text = render3(fl)
+    else:
+        fl = Generator(floor, size, scaling, seed, days, boss_stairs,
+                       stair_chance, borough_boss_rate).build()
+        text = render(fl)
+
+    svgs = floor_svgs(fl, boss_stairs) if images else []
+    return GenResult(floor=fl, number=floor, size=size, seed=seed, markdown=text, svgs=svgs)
+
+
+def regenerate_rooms(path: str, label: Optional[str] = None, floor: int = 1, *,
+                     size: str = "medium", scaling: str = "distance",
+                     seed: Optional[int] = None, days: Optional[int] = None,
+                     boss_stairs: bool = True) -> Tuple[Neighborhood, GenResult]:
+    """Re-roll just the room detail of one already-generated floor 1-2 neighborhood,
+    parsed back out of a Markdown file this script wrote. Returns the neighborhood
+    alongside a GenResult carrying its room text and map."""
+    if floor not in (1, 2):
+        raise MapgenError("room regeneration only supports floor 1 or 2 neighborhoods")
+    if seed is None:
+        seed = random.randrange(1_000_000)
+    try:
+        with open(path, encoding="utf-8") as f:
+            raw = f.read()
+    except OSError as e:
+        raise MapgenError(f"could not read {path}: {e}")
+
+    block = _extract_neighborhood_block(raw, label)
+    nb = parse_neighborhood_block(block)
+    gen = Generator(floor, size, scaling, seed, days, boss_stairs)
+    nb.rooms, nb.corridor_encounters = gen.make_rooms(nb, MORDECAI_FORMS.get(str(floor), "a local guildmaster"))
+
+    import types
+    fake_fl = types.SimpleNamespace(number=floor, seed=seed)
+    result = GenResult(floor=fake_fl, number=floor, size=size, seed=seed,
+                       markdown=render_rooms_only(nb),
+                       svgs=[("", render_room_svg(nb, fake_fl))])
+    return nb, result
+
+
 def main(argv=None):
     # Some Windows consoles default to a legacy codepage (cp1252 etc.) that can't encode
     # the arrows/en-dashes used in the output; force UTF-8 on stdout/stderr so printing to
@@ -3859,108 +3986,66 @@ def main(argv=None):
                    help="--rooms-for: which neighborhood letter to use if FILE has more than one (default: the first found)")
     a = p.parse_args(argv)
 
-    if a.size in BIG_SIZES and a.floor not in (1, 2):
-        sys.exit(f"--size {a.size} is floor 1-2 only (got --floor {a.floor})")
-    if not 0.0 <= a.stair_chance <= 1.0:
-        sys.exit("--stair-chance must be between 0 and 1")
-    if not 0.0 <= a.borough_boss_rate <= 1.0:
-        sys.exit("--borough-boss-rate must be between 0 and 1")
+    try:
+        _run(a)
+    except MapgenError as e:
+        sys.exit(str(e))
 
-    seed = a.seed if a.seed is not None else random.randrange(1_000_000)
+
+def _run(a) -> None:
+    """The CLI body, split out so every MapgenError lands in one place."""
+    import os
 
     if a.rooms_for:
-        if a.floor not in (1, 2):
-            sys.exit("--rooms-for only supports floor 1 or 2 neighborhoods (use --floor 1 or --floor 2)")
-        with open(a.rooms_for, encoding="utf-8") as f:
-            raw = f.read()
-        block = _extract_neighborhood_block(raw, a.rooms_for_label)
-        nb = parse_neighborhood_block(block)
-        gen = Generator(a.floor, a.size, a.scaling, seed, a.days, not a.no_boss_stairs)
-        guildmaster_form = MORDECAI_FORMS.get(str(a.floor), "a local guildmaster")
-        nb.rooms, nb.corridor_encounters = gen.make_rooms(nb, guildmaster_form)
+        seed = a.seed if a.seed is not None else random.randrange(1_000_000)
+        nb, res = regenerate_rooms(a.rooms_for, a.rooms_for_label, a.floor, size=a.size,
+                                   scaling=a.scaling, seed=seed, days=a.days,
+                                   boss_stairs=not a.no_boss_stairs)
         print(f"parsed {nb.label}. {nb.name} -- mob {nb.mob.name} L{nb.level_range[0]}-{nb.level_range[1]}, "
               f"boss {nb.boss.name} L{nb.boss.level}, safe_rooms={nb.safe_rooms}, "
               f"hidden_stairwells={len(nb.hidden_stairs)}, tutorial_guild={nb.tutorial_guild}", file=sys.stderr)
 
-        rooms_text = render_rooms_only(nb)
         if a.out:
             with open(a.out, "w", encoding="utf-8") as f:
-                f.write(rooms_text + "\n")
-            print(f"wrote {a.out} (seed {seed})", file=sys.stderr)
+                f.write(res.markdown + "\n")
+            print(f"wrote {a.out} (seed {res.seed})", file=sys.stderr)
         else:
-            print(rooms_text)
+            print(res.markdown)
 
         if a.image:
-            import types
-            fake_fl = types.SimpleNamespace(number=a.floor, seed=seed)
-            svg = render_room_svg(nb, fake_fl)
-            if a.image.lower().endswith(".png"):
-                _svg_to_png(svg, a.image)
-            else:
-                with open(a.image, "w", encoding="utf-8") as f:
-                    f.write(svg)
+            _write_svg(res.svgs[0][1], a.image)
             print(f"wrote {a.image}", file=sys.stderr)
         return
 
-    if a.floor == 11:
-        fl = Generator11(a.size, seed).build()
-        text = render11(fl)
-    elif a.floor == 10:
-        fl = Generator10(a.size, seed, a.vehicle, a.party).build()
-        text = render10(fl)
-    elif a.floor == 9:
-        fl = Generator9(a.size, seed, a.days, a.warlords, a.wildcard, a.winner, a.runner_up).build()
-        text = render9(fl)
-    elif a.floor == 8:
-        fl = Generator8(a.size, seed, a.days, a.region).build()
-        text = render8(fl)
-    elif a.floor == 6:
-        fl = Generator6(a.size, a.scaling, seed, a.days).build()
-        text = render6(fl)
-    elif a.floor == 5:
-        fl = Generator5(a.size, seed, a.days).build()
-        text = render5(fl)
-    elif a.floor == 4:
-        fl = Generator4(a.size, seed, a.days).build()
-        text = render4(fl)
-    elif a.floor == 3:
-        fl = Generator3(a.size, a.scaling, seed, a.days).build()
-        text = render3(fl)
-    else:
-        gen = Generator(a.floor, a.size, a.scaling, seed, a.days, not a.no_boss_stairs,
-                        a.stair_chance, a.borough_boss_rate)
-        fl = gen.build()
-        text = render(fl)
+    res = generate(a.floor, a.size, a.seed, scaling=a.scaling, days=a.days,
+                   boss_stairs=not a.no_boss_stairs, stair_chance=a.stair_chance,
+                   borough_boss_rate=a.borough_boss_rate, region=a.region,
+                   warlords=a.warlords, wildcard=a.wildcard, winner=a.winner,
+                   runner_up=a.runner_up, vehicle=a.vehicle, party=a.party,
+                   images=bool(a.image or a.save is not None))
 
+    out, image = a.out, a.image
     if a.save is not None:
-        import os
         os.makedirs(a.save, exist_ok=True)
-        base = os.path.join(a.save, f"floor{a.floor}_{a.size}_seed{seed}")
+        base = os.path.join(a.save, res.basename())
         try:
             import resvg_py  # type: ignore  # noqa: F401
-            img = base + ".png"
+            ext = ".png"
         except ImportError:
-            img = base + ".svg"
-        a.out = a.out or base + ".md"
-        a.image = a.image or img
+            ext = ".svg"
+        out = out or base + ".md"
+        image = image or base + ext
 
-    if a.image:
-        if isinstance(fl, Floor10):
-            for pth in write_images10(fl, a.image):
-                print(f"wrote {pth}", file=sys.stderr)
-        elif isinstance(fl, Floor):
-            for pth in write_images(fl, a.image, not a.no_boss_stairs):
-                print(f"wrote {pth}", file=sys.stderr)
-        else:
-            write_image(fl, a.image, not a.no_boss_stairs)
-            print(f"wrote {a.image}", file=sys.stderr)
+    if image:
+        for pth in save_svgs(res.svgs, image):
+            print(f"wrote {pth}", file=sys.stderr)
 
-    if a.out:
-        with open(a.out, "w", encoding="utf-8") as f:
-            f.write(text)
-        print(f"wrote {a.out} (seed {seed})", file=sys.stderr)
+    if out:
+        with open(out, "w", encoding="utf-8") as f:
+            f.write(res.markdown)
+        print(f"wrote {out} (seed {res.seed})", file=sys.stderr)
     else:
-        print(text)
+        print(res.markdown)
 
 def interactive_mode() -> None:
     """Friendly prompt-driven flow for the standalone .exe: double-clicking it from
