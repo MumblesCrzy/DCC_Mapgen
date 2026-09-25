@@ -264,41 +264,41 @@
  ],
  "TEAM_STATUS": {
   "steady": [
-   "holding a safe room in neighborhood {label}",
-   "reaches the stairwell in {label} and takes it",
-   "still arguing about which stairwell to take, somewhere near {label}",
-   "found farming the same respawn in {label}, level twelve and bored",
-   "refuses to leave {label}; the safe room is theirs now",
-   "camped at the {label} stairwell, charging a toll to use it",
-   "moving one neighborhood a day, methodical about it, currently in {label}",
-   "holed up in {label} waiting out a boss they have no intention of fighting"
+   "holding a safe room {where}",
+   "reaches a stairwell {where} and takes it",
+   "still arguing about which way to go, somewhere {where}",
+   "found farming the same respawn {where}, level twelve and bored",
+   "refuses to move on from {where}; the ground is theirs now",
+   "camped on a stairwell {where}, charging a toll to use it",
+   "moving steadily, methodical about it, currently {where}",
+   "holed up {where}, waiting out something they have no intention of fighting"
   ],
   "thriving": [
-   "trading loot at the {label} safe-room door",
-   "thriving near {label}, having adopted the local mob as pets",
-   "throws in with another team in {label}; both rosters now count as one",
-   "sponsored mid-fight near {label} and hasn't shut up about it since",
-   "clears a boss chamber in {label} well ahead of schedule",
-   "running a working shop out of the {label} safe room, and getting rich on it",
-   "two of them hit a class upgrade in {label} on the same run"
+   "trading loot out of a safe room {where}",
+   "thriving {where}, having adopted something local as a pet",
+   "throws in with another team {where}; both rosters now count as one",
+   "sponsored mid-fight {where} and hasn't shut up about it since",
+   "clears a boss well ahead of schedule {where}",
+   "running a working shop {where}, and getting rich on it",
+   "two of them hit a class upgrade {where} on the same run"
   ],
   "costly": [
-   "down to half their number, holed up in {label}",
-   "loses their healer to a trapped loot box in {label}",
-   "breaks for the stairwell in {label} and leaves two behind",
-   "reduced to one survivor, still moving through {label}",
-   "comes out of {label} lighter, having been caught between two boss chambers",
-   "burns every consumable they own getting clear of {label}",
-   "loses their stockpile to a mimic in {label} and starts over"
+   "down to half their number, holed up {where}",
+   "loses their healer to a trapped loot box {where}",
+   "breaks and runs {where}, leaving two behind",
+   "reduced to one survivor, still moving {where}",
+   "comes away from {where} lighter, having been caught in the open",
+   "burns every consumable they own getting clear of {where}",
+   "loses their stockpile to a mimic {where} and starts over"
   ],
   "fatal": [
-   "wiped out by the neighborhood boss in {label}, per the death feed",
-   "picked off one at a time crossing {label}",
-   "goes quiet near {label}; the feed never names them again",
-   "caught between two boss chambers in {label} with nowhere left to go",
-   "loses the last of them to a trapped loot box in {label}",
-   "killed to a crawler over a safe room in {label} by another team",
-   "takes a stairwell in {label} into something worse and does not come back"
+   "wiped out by a boss {where}, per the death feed",
+   "picked off one at a time crossing {where}",
+   "goes quiet {where}; the feed never names them again",
+   "caught in the open {where} with nowhere left to go",
+   "loses the last of them to a trapped loot box {where}",
+   "killed to a crawler over a safe room {where} by another team",
+   "takes a stairwell {where} into something worse and does not come back"
   ]
  },
  "COLLAPSE_NOTES": [
@@ -679,7 +679,7 @@
   },
   {
    "label": "friendly",
-   "reaction": "trades at fair terms and passes on what they know about the neighborhood, short of fighting anyone else's fight"
+   "reaction": "trades at fair terms and passes on what they know about the ground ahead, short of fighting anyone else's fight"
   },
   {
    "label": "allied",
@@ -690,5 +690,14 @@
   "What's Left of {name}",
   "The Last of {name}",
   "The {name} Remnant"
+ ],
+ "TEAM_PLACE_GENERIC": [
+  "near the entry",
+  "deep in the floor",
+  "off the main route",
+  "out at the edge of the map",
+  "a long way from the stairs",
+  "somewhere the party hasn't been yet",
+  "close to the boss ground"
  ]
 }

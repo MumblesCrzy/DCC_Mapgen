@@ -20,6 +20,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -151,8 +152,10 @@ class CrawlerTeamTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        # Through generate(), not Generator(...).build(): teams are dealt after the
+        # floor is built, on their own stream, so a raw build has no roster on it.
         cls.rosters = {
-            size: [mg.Generator(1, size, "distance", seed, None, True).build()
+            size: [mg.generate(1, size, seed, images=False).floor
                    for seed in range(count)]
             for size, count in cls.SIZES.items()}
 
@@ -219,6 +222,154 @@ class CrawlerTeamTest(unittest.TestCase):
                 for fl in self._rosters(size):
                     for t in fl.other_crawlers:
                         self.assertNotIn("{", t.status, f"seed {fl.seed}: {t.status!r}")
+
+
+class CampaignTest(unittest.TestCase):
+    """Teams are followed across the floors of one run.
+
+    A team that lives keeps who it is and where it stands with the party; only its
+    fate is dealt again. A team that dies leaves the floor but stays on the record."""
+
+    @staticmethod
+    def _run_campaign(size="medium", floors=mg.FLOORS, base_seed=1000):
+        roster = None
+        per_floor = {}
+        for f in floors:
+            res = mg.generate(f, size, base_seed + f, images=False, roster=roster)
+            roster, per_floor[f] = res.roster, res.floor.other_crawlers
+        return roster, per_floor
+
+    def test_survivors_carry_and_the_dead_do_not(self):
+        roster, per_floor = self._run_campaign()
+        floors = list(per_floor)
+        for prev, nxt in zip(floors, floors[1:]):
+            alive = {t.name for t in per_floor[prev] if t.outcome != "fatal"}
+            present = {t.name for t in per_floor[nxt]}
+            dead = {t.name for t in per_floor[prev] if t.outcome == "fatal"}
+            self.assertTrue(alive <= present,
+                            f"floor {prev} survivors missing from {nxt}: {alive - present}")
+            self.assertFalse(dead & present,
+                             f"floor {nxt} fields teams that died on {prev}: {dead & present}")
+
+    def test_identity_survives_but_the_fate_is_redealt(self):
+        roster, per_floor = self._run_campaign()
+        redealt = 0
+        for team in roster.teams:
+            if len(team.history) < 2:
+                continue
+            statuses = [h["status"] for h in team.history]
+            self.assertEqual(len(set(statuses)), len(statuses),
+                             f"{team.name} repeated a status across floors")
+            redealt += 1
+        self.assertGreater(redealt, 0, "no team lived long enough to be redealt")
+
+    def test_a_dead_team_stays_on_the_record(self):
+        roster, _ = self._run_campaign()
+        dead = [t for t in roster.teams if not t.alive]
+        self.assertTrue(dead, "a full campaign should have lost somebody")
+        for t in dead:
+            self.assertIsNotNone(t.died_on)
+            self.assertIn(t, roster.teams)
+            self.assertNotIn(t, roster.active())
+
+    def test_a_name_is_never_reused(self):
+        """Including by a later team taking a dead one's place name."""
+        roster, _ = self._run_campaign(size="large")
+        names = [t.name for t in roster.teams]
+        surnames = [t.surname for t in roster.teams if t.surname]
+        self.assertEqual(len(set(names)), len(names), f"repeated name in {names}")
+        self.assertEqual(len(set(surnames)), len(surnames),
+                         f"a place name came back under a new form: {surnames}")
+
+    def test_standing_persists_and_drives_the_reaction(self):
+        roster, _ = self._run_campaign(floors=(1, 2))
+        team = roster.active()[0]
+        mg.set_standing(roster, team.name, "allied")
+        res = mg.generate(3, "medium", 7, images=False, roster=roster)
+        carried = next(t for t in res.floor.other_crawlers if t.name == team.name)
+        self.assertEqual(carried.disposition, "allied")
+        self.assertIn("fight alongside", carried.reaction)
+
+    def test_standing_accepts_a_partial_name_but_not_an_ambiguous_one(self):
+        roster, _ = self._run_campaign(floors=(1,), size="large")
+        team = roster.teams[0]
+        word = team.surname.split()[0]
+        mg.set_standing(roster, word, "owed a favour")
+        self.assertEqual(team.disposition, "owed a favour")
+        # An invented standing is kept as written, with its own fallback reaction.
+        self.assertIn("owed a favour", team.reaction)
+        with self.assertRaises(mg.MapgenError):
+            mg.set_standing(roster, "no such team", "allied")
+
+    def test_roster_survives_a_round_trip_through_disk(self):
+        roster, _ = self._run_campaign(floors=(1, 2, 3))
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "camp.json")
+            mg.save_roster(roster, path)
+            again = mg.load_roster(path)
+        self.assertEqual([_t(t) for t in again.teams], [_t(t) for t in roster.teams])
+        # and it keeps working as a campaign afterwards
+        res = mg.generate(4, "medium", 9, images=False, roster=again)
+        self.assertTrue(res.floor.other_crawlers)
+
+    def test_missing_roster_file_starts_an_empty_campaign(self):
+        with tempfile.TemporaryDirectory() as d:
+            roster = mg.load_roster(os.path.join(d, "not-here.json"))
+        self.assertEqual(roster.teams, [])
+
+    def test_unreadable_roster_is_reported_not_crashed_on(self):
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "bad.json")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write("{not json")
+            with self.assertRaises(mg.MapgenError):
+                mg.load_roster(path)
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump({"version": 99, "teams": []}, f)
+            with self.assertRaises(mg.MapgenError):
+                mg.load_roster(path)
+
+    def test_every_floor_reports_a_roster(self):
+        """Teams reach all eleven floors, not just the two that always had them."""
+        for f in mg.FLOORS:
+            with self.subTest(floor=f):
+                res = mg.generate(f, "medium", 21, images=False)
+                self.assertTrue(res.floor.other_crawlers, f"floor {f} fielded no teams")
+                self.assertIn("## Other Crawlers", res.markdown)
+
+    def test_floors_without_a_countdown_leave_reports_undated(self):
+        for f, dated in ((1, True), (9, True), (10, False), (11, False)):
+            with self.subTest(floor=f):
+                res = mg.generate(f, "medium", 22, images=False)
+                days = [t.day for t in res.floor.other_crawlers]
+                if dated:
+                    self.assertTrue(all(d is not None for d in days))
+                else:
+                    self.assertTrue(all(d is None for d in days),
+                                    f"floor {f} has no day count to date against")
+
+    def test_a_campaign_cannot_change_the_floor_itself(self):
+        """Teams are dealt on their own rng stream, so carrying a roster in gives
+        the same map and the same everything-else as generating standalone. Without
+        that, every change to the team logic would shift unrelated rolls."""
+        roster, _ = self._run_campaign(size="large", floors=(1, 2, 3), base_seed=900)
+        plain = mg.generate(4, "large", 555)
+        in_campaign = mg.generate(4, "large", 555, roster=roster)
+        self.assertEqual([s for _, s in plain.svgs], [s for _, s in in_campaign.svgs],
+                         "carrying a campaign changed the floor's maps")
+        names = {t.name for t in plain.floor.other_crawlers}
+        carried = {t.name for t in in_campaign.floor.other_crawlers}
+        self.assertNotEqual(names, carried, "the campaign brought no teams of its own")
+
+    def test_generating_without_a_campaign_still_works(self):
+        res = mg.generate(1, "medium", 4242, images=False)
+        self.assertTrue(res.floor.other_crawlers)
+        self.assertIsNotNone(res.roster)
+
+
+def _t(team):
+    """A team reduced to comparable data, for round-trip checks."""
+    return {f: getattr(team, f) for f in mg._TEAM_FIELDS}
 
 
 class OptionValidationTest(unittest.TestCase):

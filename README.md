@@ -15,6 +15,7 @@ A procedural floor/map generator in the style of the *Dungeon Crawler Carl* book
 - **Floor 9** (Faction Wars) — the nine-slice pie around Larracos, warlords, stance paths.
 - **Floor 10** (Don't Come In Last) — seven-heat race season, garage/vehicle/upgrades.
 - **Floor 11** (A Parade of Horribles) — parade route, judges, arena boss.
+- **Campaigns** — other crawler teams carry from floor to floor, keeping who they are and where they stand with the party, until their luck runs out. See [Campaigns](#campaigns).
 - A **desktop app** (`dcc_mapgen_gui.py`) wrapping all of the above: pick a floor and size, generate, and read the write-up and browse every map without leaving the window. See [Desktop app](#desktop-app).
 - Every floor supports `--seed` for reproducible maps — byte-for-byte, and [tested](#tests) as such — and `--image`/`--save` for SVG or PNG output (PNG needs the optional `resvg-py` package).
 - `--rooms-for` can (re)generate just the room-level detail for one neighborhood from a floor you already generated and are playing, without touching the rest of the data.
@@ -71,6 +72,8 @@ same `floorN_size_seedS.md` plus map files that `--save` produces on the command
   re-rolled or tweaked without hunting for it.
 - **File → Re-roll rooms from a saved floor** is `--rooms-for` in the GUI: point it at a
   floor 1–2 Markdown file this app wrote and re-roll one neighborhood's rooms.
+- The **Campaign** tab carries crawler teams between floors and is where you change
+  where a team stands with the party. See [Campaigns](#campaigns).
 
 The inline preview uses `resvg-py` (`pip install -r requirements.txt`). Without it the app
 still generates and saves everything — maps just save as SVG, and **Open in browser**
@@ -79,6 +82,44 @@ shows the map instead of the built-in preview.
 `python dcc_mapgen_gui.py --self-test` (or `python gui_smoke_test.py`) drives the app
 through a generate and checks the write-up, the map list and the rendered preview all
 arrive — this is what CI runs against the packaged builds.
+
+## Campaigns
+
+Every floor reports the other crawler teams sharing it. A campaign follows those
+teams from floor to floor, so the group the party traded with on Floor 1 is still
+out there on Floor 6 — or died on Floor 4 and is remembered for it.
+
+```
+python dcc_mapgen.py --floor 1 --size medium --campaign mycrawl.json
+python dcc_mapgen.py --floor 2 --size medium --campaign mycrawl.json
+```
+
+The file is created on first use, so the same flag starts a campaign and continues
+one. Every team still alive comes onto the next floor keeping its name, who they
+were before the Collapse, and where it stands with the party; only its fate is
+dealt again. A team whose fate comes up fatal leaves the floor but stays on the
+roster, with the floor it died on.
+
+Standing is the part the party changes in play. Befriend the group that attacked
+them on Floor 2, or fall out with an ally:
+
+```
+python dcc_mapgen.py --floor 3 --campaign mycrawl.json --standing "Thistle=allied"
+```
+
+A unique partial name is enough. The five standings that come with reaction text are
+`hostile`, `territorial`, `wary`, `friendly` and `allied`, but any wording is
+accepted — a table that decides a group is "owed a favour" can write that.
+
+In the desktop app this is the **Campaign** tab: open or start a roster, and every
+floor generated afterwards carries it. The table lists everyone met so far, the dead
+greyed out with the floor that killed them, and standing is editable there.
+
+![the Campaign tab, five floors into a run](sample/gui_campaign.png)
+
+Carrying a campaign never changes the floor itself. Teams are dealt from their own
+random stream, so the same seed gives the same map and the same everything else
+whether or not a campaign is open.
 
 ## Usage
 

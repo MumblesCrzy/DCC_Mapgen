@@ -73,7 +73,7 @@ import random
 import re
 import sys
 import zlib
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import List, Optional, Tuple
 
 
@@ -257,13 +257,115 @@ class Elite:
 
 @dataclass
 class CrawlerTeam:
+    """A team of other survivors, carried across the floors of one campaign.
+
+    Identity -- the name, who they were before the Collapse, and where they stand
+    with the party -- persists. The report (status, outcome, day, place) is rerolled
+    on every floor the team lives to see.
+
+    The reaction text is deliberately *not* stored: it is looked up from the
+    disposition when rendered, so editing a team's standing in a roster file, or in
+    the app, changes what they do as well as what they are called."""
     name: str
     origin: str
-    status: str
-    day: int = 1              # which day of the countdown this report lands on
-    outcome: str = "steady"   # steady/thriving/costly/fatal -- what becomes of them
-    disposition: str = "wary"     # how they treat the party on contact
-    reaction: str = ""            # what that means in play
+    surname: str = ""              # the bare place name, kept so it is never reused
+    disposition: str = "wary"      # hostile..allied; how they take the party
+    # -- this floor's report, rerolled each floor --
+    status: str = ""
+    outcome: str = "steady"        # steady/thriving/costly/fatal
+    day: Optional[int] = None      # None on floors with no day countdown
+    floor: int = 1
+    # -- campaign record --
+    first_seen: int = 1
+    died_on: Optional[int] = None
+    history: List[dict] = field(default_factory=list)
+
+    @property
+    def alive(self) -> bool:
+        return self.died_on is None
+
+    @property
+    def reaction(self) -> str:
+        return disposition_reaction(self.disposition)
+
+
+def disposition_reaction(label: str) -> str:
+    """What a standing means in play. Unknown labels are the user's own wording,
+    so they are passed through rather than corrected."""
+    for d in TEAM_DISPOSITION:
+        if d["label"] == label:
+            return d["reaction"]
+    return f"treats the party as {label}"
+
+
+def disposition_labels() -> List[str]:
+    return [d["label"] for d in TEAM_DISPOSITION]
+
+
+@dataclass
+class CampaignRoster:
+    """Teams followed across a run of floors, including the ones that did not make it.
+
+    The dead are kept: a campaign wants to remember who died on floor 4, and floor
+    11 parades crawlers who already died."""
+    teams: List[CrawlerTeam] = field(default_factory=list)
+
+    def active(self) -> List["CrawlerTeam"]:
+        return [t for t in self.teams if t.alive]
+
+    def to_dict(self) -> dict:
+        return {"version": ROSTER_VERSION,
+                "teams": [_team_to_dict(t) for t in self.teams]}
+
+    @classmethod
+    def from_dict(cls, raw: dict) -> "CampaignRoster":
+        version = raw.get("version")
+        if version not in (None, ROSTER_VERSION):
+            raise MapgenError(
+                f"campaign roster is version {version}, this build reads "
+                f"version {ROSTER_VERSION}")
+        return cls(teams=[_team_from_dict(t) for t in raw.get("teams", [])])
+
+
+ROSTER_VERSION = 1
+_TEAM_FIELDS = ("name", "origin", "surname", "disposition", "status", "outcome",
+                "day", "floor", "first_seen", "died_on", "history")
+
+
+def _team_to_dict(t: CrawlerTeam) -> dict:
+    return {f: getattr(t, f) for f in _TEAM_FIELDS}
+
+
+def _team_from_dict(raw: dict) -> CrawlerTeam:
+    if not raw.get("name"):
+        raise MapgenError("a team in the campaign roster has no name")
+    known = {k: v for k, v in raw.items() if k in _TEAM_FIELDS}
+    known.setdefault("origin", "an unrecorded group")
+    return CrawlerTeam(**known)
+
+
+def load_roster(path: str) -> CampaignRoster:
+    """Read a campaign roster, or hand back an empty one if it isn't there yet --
+    the first floor of a campaign has nothing to carry."""
+    if not os.path.exists(path):
+        return CampaignRoster()
+    try:
+        with open(path, encoding="utf-8") as f:
+            raw = json.load(f)
+    except json.JSONDecodeError as e:
+        raise MapgenError(f"campaign roster {path} is not valid JSON: {e}")
+    except OSError as e:
+        raise MapgenError(f"could not read campaign roster {path}: {e}")
+    return CampaignRoster.from_dict(raw)
+
+
+def save_roster(roster: CampaignRoster, path: str) -> None:
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(roster.to_dict(), f, indent=2, ensure_ascii=False)
+            f.write("\n")
+    except OSError as e:
+        raise MapgenError(f"could not write campaign roster {path}: {e}")
 
 @dataclass
 class Room:
@@ -597,60 +699,6 @@ class Generator:
             plot_armor=self.rng.choice(PLOT_ARMOR),
             settlement=elite_host.name, region=floor_name)
 
-        team_count = {"small": 1, "medium": 2, "large": 3, "huge": 4, "giant": 5,
-                     "massive": 6, "continent": 7}[self.size]
-        # Draw without replacement: with independent picks a floor could field
-        # three separate groups all called Team Meadow Lark, and repeat a status
-        # just as easily -- the largest sizes want seven of each.
-        surnames = self._distinct(TEAM_SURNAME, team_count)
-        origins = self._distinct(TEAM_ORIGIN, team_count)
-
-        # Deal one outcome per team by walking the kinds in order from a random
-        # start, so a roster gets a spread of fates rather than however many
-        # deaths independent rolls happen to produce. At seven teams that is at
-        # most two fatal; at one team, any single kind is equally likely.
-        kinds = list(TEAM_STATUS)
-        start = self.rng.randrange(len(kinds))
-        outcomes = [kinds[(start + i) % len(kinds)] for i in range(team_count)]
-        self.rng.shuffle(outcomes)
-        # Drawn per kind so two teams sharing an outcome cannot share its wording.
-        # Walk `kinds`, not set(outcomes): this draws from the rng, and a set of
-        # strings iterates in per-process hash order, which would make the whole
-        # roster depend on it.
-        pools = {k: iter(self._distinct(TEAM_STATUS[k], outcomes.count(k)))
-                 for k in kinds if k in outcomes}
-        # Spread across the hostile..allied scale for the same reason.
-        dispositions = self._distinct(TEAM_DISPOSITION, team_count)
-
-        # A name that says the team has been cut down only goes to one that has
-        # been: about half the teams whose outcome cost them something. Forms are
-        # spread as well, or a seven-team floor reads as three sets of Irregulars
-        # even once the names behind them are all different.
-        hurt = [i for i, o in enumerate(outcomes) if o in ("costly", "fatal")]
-        diminished = set(self.rng.sample(hurt, len(hurt) // 2)) if hurt else set()
-        dim_forms = iter(self._distinct(TEAM_NAME_FORM_DIMINISHED, len(diminished)))
-        neutral_forms = iter(self._distinct(TEAM_NAME_FORM, team_count - len(diminished)))
-
-        other_crawlers = []
-        for i, (surname, origin, outcome, disp) in enumerate(
-                zip(surnames, origins, outcomes, dispositions)):
-            form = next(dim_forms) if i in diminished else next(neutral_forms)
-            # One team per slice of the countdown, jittered inside its slice, rather
-            # than an independent roll each: rolling freely piles half the roster
-            # onto the same day often enough to spoil the section as a timeline.
-            lo = 1 + (i * days) // team_count
-            hi = max(lo, ((i + 1) * days) // team_count)
-            label = self.rng.choice(nbhds).label
-            other_crawlers.append(CrawlerTeam(
-                name=form.format(name=surname),
-                origin=origin,
-                status=next(pools[outcome]).format(label=label),
-                day=self.rng.randint(lo, hi),
-                outcome=outcome,
-                disposition=disp["label"],
-                reaction=disp["reaction"]))
-        # Chronological, so the section reads as a timeline the DM can run down.
-        other_crawlers.sort(key=lambda ct: ct.day)
 
         return Floor(
             number=self.floor, size=self.size, name=floor_name, days=days,
@@ -659,7 +707,7 @@ class Generator:
             borough_bosses=borough_bosses, city_bosses=city_bosses,
             top_boss=top_boss, top_tier_name=top_tier_name,
             scaling=self.scaling, seed=self.seed,
-            elite=elite, other_crawlers=other_crawlers,
+            elite=elite,
             collapse_note=self.rng.choice(COLLAPSE_NOTES),
             guildmaster_form=guildmaster_form,
             guildmaster_blurb=self.rng.choice(TUTORIAL_GUILD_BLURB),
@@ -668,6 +716,50 @@ class Generator:
 # ---------------------------------------------------------------------------
 # Rendering
 # ---------------------------------------------------------------------------
+
+def crawler_section(fl) -> List[str]:
+    """The Other Crawlers section, identical on every floor that has a roster.
+
+    Returns no lines at all when there are no teams, so a floor generated outside a
+    campaign reads exactly as it did before there was one."""
+    teams = getattr(fl, "other_crawlers", None)
+    if not teams:
+        return []
+    days = getattr(fl, "days", None)
+    o = ["## Other Crawlers", ""]
+    if days:
+        o.append(f"Other survivors sharing this floor. Each report is dated to a day of "
+                 f"the {days}-day countdown — it is what the death feed and the rumor "
+                 f"mill carry on that day, not something already true when the party "
+                 f"arrives.")
+    else:
+        o.append("Other survivors sharing this floor, as the death feed and the rumor "
+                 "mill have them. This floor runs too short to date them to a day.")
+    o.append("")
+    for ct in teams:
+        lead = f"Day {ct.day} — {ct.name}" if ct.day else ct.name
+        carried = "" if ct.first_seen == ct.floor else f" — met on floor {ct.first_seen}"
+        o.append(f"- **{lead}** (*{ct.disposition}*{carried}) — formed from "
+                 f"{ct.origin}; {ct.status}.")
+    o.append("")
+    # The reactions are listed once rather than per team: with more teams than
+    # points on the scale they repeat, and the same two sentences under every
+    # entry buries the part that differs.
+    o.append("How they take the party on contact:")
+    o.append("")
+    seen = []
+    for ct in teams:
+        if ct.disposition not in seen:
+            seen.append(ct.disposition)
+    for label in disposition_labels():
+        if label in seen:
+            o.append(f"- ***{label}*** — {disposition_reaction(label)}.")
+    for label in seen:                       # standings the user invented themselves
+        if label not in disposition_labels():
+            o.append(f"- ***{label}*** — {disposition_reaction(label)}.")
+    o.append("")
+    return o
+
 
 def render_grid(fl: Floor) -> str:
     n = fl.grid
@@ -867,25 +959,7 @@ def render(fl: Floor) -> str:
              f"storyline plays out across {fl.elite.region}. {fl.elite.plot_armor}")
     o.append("")
 
-    o.append("## Other Crawlers")
-    o.append("")
-    o.append(f"Other survivors sharing this floor. Each report is dated to a day of the "
-             f"{fl.days}-day countdown — it is what the death feed and the rumor mill carry "
-             f"on that day, not something already true when the party arrives.")
-    o.append("")
-    for ct in fl.other_crawlers:
-        o.append(f"- **Day {ct.day} — {ct.name}** (*{ct.disposition}*) — formed from "
-                 f"{ct.origin}; {ct.status}.")
-    o.append("")
-    # The reactions are listed once rather than per team: with more teams than
-    # points on the scale they repeat, and the same two sentences under every
-    # entry buries the part that differs.
-    o.append("How they take the party on contact, up to and including their day:")
-    o.append("")
-    for disp in TEAM_DISPOSITION:
-        if any(ct.disposition == disp["label"] for ct in fl.other_crawlers):
-            o.append(f"- ***{disp['label']}*** — {disp['reaction']}.")
-    o.append("")
+    o.extend(crawler_section(fl))
 
     o.append("## Loot Boxes")
     o.append("")
@@ -1408,6 +1482,7 @@ class Floor3:
     scaling: str
     seed: int
     number: int = 3
+    other_crawlers: List[CrawlerTeam] = field(default_factory=list)
 
 class Generator3:
     def __init__(self, size, scaling, seed, days):
@@ -1701,6 +1776,7 @@ def render3(fl: Floor3) -> str:
         o.append(f"- **Loot theme:** {reg.loot}")
         o.append(f"- **Notable feature:** {reg.feature}")
         o.append("")
+    o.extend(crawler_section(fl))
     return "\n".join(o)
 
 def render3_svg(fl: Floor3) -> str:
@@ -1850,6 +1926,7 @@ class Floor4:
     story: List[str]
     seed: int
     number: int = 4
+    other_crawlers: List[CrawlerTeam] = field(default_factory=list)
 
 
 class Generator4:
@@ -2051,6 +2128,7 @@ def render4(fl: Floor4) -> str:
         o.append(f"- **Crew:** {t.crew.name}. {t.crew.quirk}")
         o.append(f"  - *{t.crew.description}*")
         o.append("")
+    o.extend(crawler_section(fl))
     return "\n".join(o)
 
 
@@ -2249,6 +2327,7 @@ class Floor5:
     suggested_start: str
     seed: int
     number: int = 5
+    other_crawlers: List[CrawlerTeam] = field(default_factory=list)
 
 
 class Generator5:
@@ -2391,6 +2470,7 @@ def render5(fl: Floor5) -> str:
     for q in fl.quadrants:
         o.append(f"- **{q.name}:** {q.castle.difficulty}. {q.castle.difficulty_note}")
     o.append(f"- **Suggested starting quadrant:** {fl.suggested_start} (the easiest castle). Your call.")
+    o.extend(crawler_section(fl))
     return "\n".join(o)
 
 
@@ -2741,6 +2821,7 @@ def render6(fl: Floor6) -> str:
         o.append(f"- **Loot theme:** {reg.loot}")
         o.append(f"- **Notable feature:** {reg.feature}")
         o.append("")
+    o.extend(crawler_section(fl))
     return "\n".join(o)
 
 
@@ -2936,6 +3017,7 @@ class Floor8:
     loot_cards: list
     seed: int
     number: int = 8
+    other_crawlers: List[CrawlerTeam] = field(default_factory=list)
 
 
 class Generator8:
@@ -3087,6 +3169,7 @@ def render8(fl: Floor8) -> str:
     o.append("")
     for name, kind, effect in fl.loot_cards:
         o.append(f"- **{name}** [{kind}] — {effect}")
+    o.extend(crawler_section(fl))
     return "\n".join(o)
 
 
@@ -3213,6 +3296,7 @@ class Floor9:
     warlord_mode: str
     seed: int
     number: int = 9
+    other_crawlers: List[CrawlerTeam] = field(default_factory=list)
 
 
 class Generator9:
@@ -3403,6 +3487,7 @@ def render9(fl: Floor9) -> str:
     o.append("- **How the party can change it:**")
     for cr in fl.criteria:
         o.append(f"  - {cr}")
+    o.extend(crawler_section(fl))
     return "\n".join(o)
 
 
@@ -3526,6 +3611,7 @@ class Floor10:
     audience: List[str]
     seed: int
     number: int = 10
+    other_crawlers: List[CrawlerTeam] = field(default_factory=list)
 
 
 class Generator10:
@@ -3659,6 +3745,7 @@ def render10(fl: Floor10) -> str:
     for h in fl.heats:
         o.append(f"| {h.number} | {h.projected_party}{'st' if h.projected_party == 1 else 'nd' if h.projected_party == 2 else 'rd' if h.projected_party == 3 else 'th'} "
                  f"| {h.projected_last} | {h.req_tag} @ {h.req_tier} |")
+    o.extend(crawler_section(fl))
     return "\n".join(o)
 
 
@@ -3738,6 +3825,7 @@ class Floor11:
     arena_mobs: List[str]
     seed: int
     number: int = 11
+    other_crawlers: List[CrawlerTeam] = field(default_factory=list)
 
 
 class Generator11:
@@ -3817,6 +3905,7 @@ def render11(fl: Floor11) -> str:
     for m in fl.arena_mobs:
         o.append(f"  - {m}")
     o.append("- **Order of battle (suggested):** mobs first as the gates close; former crawlers when the boss is engaged; the boss's own waves per its mechanic.")
+    o.extend(crawler_section(fl))
     return "\n".join(o)
 
 
@@ -3968,6 +4057,176 @@ def render_rooms_only(nb: Neighborhood) -> str:
 
 FLOORS = (1, 2, 3, 4, 5, 6, 8, 9, 10, 11)
 
+# How many other teams a floor carries at its size. Survivors always come along,
+# so this is a floor's target, not a cap: a campaign that keeps everyone alive
+# simply stops meeting new people.
+TEAM_COUNT = {"small": 1, "medium": 2, "large": 3, "huge": 4,
+              "giant": 5, "massive": 6, "continent": 7}
+
+
+def _render_floor(fl, floor: int) -> str:
+    """Markdown for a built floor. Kept beside the build dispatch so the two lists
+    of floors cannot drift apart."""
+    renderers = {3: render3, 4: render4, 5: render5, 6: render6, 8: render8,
+                 9: render9, 10: render10, 11: render11}
+    return renderers.get(floor, render)(fl)
+
+
+def _team_rng(seed: int, floor: int) -> random.Random:
+    """A stream of its own, so the roster is reproducible from the floor seed
+    without team changes shifting every later roll on the floor itself."""
+    return random.Random(f"crawlers|{seed}|{floor}")
+
+
+def _pick_distinct(rng, bank, k: int) -> list:
+    """k picks with no repeats, topping up with repeats only if the bank is short."""
+    if k <= 0:
+        return []
+    if k <= len(bank):
+        return rng.sample(bank, k)
+    return rng.sample(bank, len(bank)) + [rng.choice(bank) for _ in range(k - len(bank))]
+
+
+def _where_phrases(rng, fl, count: int) -> List[str]:
+    """A place phrase per team, in whatever terms the floor has to offer.
+
+    Floors 1-2 can name a neighborhood; the rest have no comparable grid yet, so
+    they get deliberately vague phrasing until each floor learns to name its own
+    ground."""
+    nbhds = getattr(fl, "neighborhoods", None)
+    if nbhds:
+        return [f"in neighborhood {nb.label}" for nb in _pick_distinct(rng, nbhds, count)]
+    return _pick_distinct(rng, TEAM_PLACE_GENERIC, count)
+
+
+def _fresh_teams(rng, count: int, floor: int, taken_surnames, taken_origins) -> List[CrawlerTeam]:
+    """New groups met on this floor, avoiding any name already on the roster."""
+    origins = [o for o in TEAM_ORIGIN if o not in taken_origins] or list(TEAM_ORIGIN)
+    # Surnames are excluded by the bare place name rather than the rendered one, or
+    # "The Dry Gulch Holdouts" dying on floor 4 leaves "The Dry Gulch Crew" free to
+    # turn up on floor 6 looking like the same people.
+    free = [n for n in TEAM_SURNAME if n not in taken_surnames] or list(TEAM_SURNAME)
+    out = []
+    for surname, origin in zip(_pick_distinct(rng, free, count),
+                              _pick_distinct(rng, origins, count)):
+        # The form is chosen later, once outcomes are known, so that a diminished
+        # name lands only on a team that lost something.
+        out.append(CrawlerTeam(name=f"Team {surname}", surname=surname, origin=origin,
+                               first_seen=floor, floor=floor))
+        taken_surnames.add(surname)
+    return out
+
+
+def build_crawler_teams(fl, size: str, seed: int, floor: int,
+                        roster: Optional[CampaignRoster] = None) -> CampaignRoster:
+    """Deal this floor's roster of other survivors and return the updated campaign.
+
+    Every team still alive carries over with its name, origin and standing intact;
+    the floor tops the roster up to its size's target with groups newly met. Each
+    active team then gets a fresh outcome, status, place and day -- a team that was
+    thriving on floor 1 is dealt again on floor 2.
+    """
+    rng = _team_rng(seed, floor)
+    roster = roster or CampaignRoster()
+    days = getattr(fl, "days", None)
+
+    active = roster.active()
+    for t in active:
+        t.floor = floor
+    taken_surnames = {t.surname for t in roster.teams if t.surname}
+    taken_origins = {t.origin for t in roster.teams}
+    need = max(0, TEAM_COUNT[size] - len(active))
+    fresh = _fresh_teams(rng, need, floor, taken_surnames, taken_origins)
+    roster.teams.extend(fresh)
+    active = active + fresh
+    n = len(active)
+    if not n:
+        return roster
+
+    # Deal outcomes by walking the kinds from a random start so a floor gets a
+    # spread of fates rather than however many deaths independent rolls produce.
+    kinds = list(TEAM_STATUS)
+    start = rng.randrange(len(kinds))
+    outcomes = [kinds[(start + i) % len(kinds)] for i in range(n)]
+    rng.shuffle(outcomes)
+    # Walk `kinds`, not set(outcomes): this draws from the rng, and a set of
+    # strings iterates in per-process hash order.
+    pools = {k: iter(_pick_distinct(rng, TEAM_STATUS[k], outcomes.count(k)))
+             for k in kinds if k in outcomes}
+    wheres = _where_phrases(rng, fl, n)
+
+    # Standings are only dealt to teams that do not have one yet: a carried team
+    # keeps where it stands with the party, including wherever the party moved it.
+    newcomers = [i for i, t in enumerate(active) if t.first_seen == floor]
+    spread = _pick_distinct(rng, TEAM_DISPOSITION, len(newcomers))
+    for i, disp in zip(newcomers, spread):
+        active[i].disposition = disp["label"]
+
+    # A name that says the team was cut down goes only to one that was, and only
+    # to a team meeting the party for the first time -- renaming a group the party
+    # already knows would lose the thread.
+    hurt = [i for i in newcomers if outcomes[i] in ("costly", "fatal")]
+    diminished = set(rng.sample(hurt, len(hurt) // 2)) if hurt else set()
+    dim_forms = iter(_pick_distinct(rng, TEAM_NAME_FORM_DIMINISHED, len(diminished)))
+    neutral = iter(_pick_distinct(rng, TEAM_NAME_FORM,
+                                  len(newcomers) - len(diminished)))
+
+    for i, team in enumerate(active):
+        team.outcome = outcomes[i]
+        team.status = next(pools[outcomes[i]]).format(where=wheres[i])
+        if days:
+            # One team per slice of the countdown, jittered inside its slice:
+            # rolling each freely piles half the roster onto the same day.
+            lo = 1 + (i * days) // n
+            team.day = rng.randint(lo, max(lo, ((i + 1) * days) // n))
+        else:
+            team.day = None                 # floors 10 and 11 have no day count
+        if i in newcomers:
+            form = next(dim_forms) if i in diminished else next(neutral)
+            team.name = form.format(name=team.surname)
+        if team.outcome == "fatal":
+            team.died_on = floor
+        team.history.append({"floor": floor, "day": team.day,
+                             "outcome": team.outcome, "status": team.status})
+
+    return roster
+
+
+def set_standing(roster: CampaignRoster, name: str, standing: str) -> CrawlerTeam:
+    """Move a team's standing with the party, matching its name case-insensitively
+    and allowing a unique partial, so a DM does not have to retype
+    "What's Left of Juniper Flats" exactly. Raises MapgenError if it is unclear."""
+    if roster is None or not roster.teams:
+        raise MapgenError(f"no teams on the roster yet, so {name!r} cannot be found")
+    wanted = name.strip().lower()
+    exact = [t for t in roster.teams if t.name.lower() == wanted]
+    matches = exact or [t for t in roster.teams if wanted in t.name.lower()]
+    if not matches:
+        known = ", ".join(t.name for t in roster.teams)
+        raise MapgenError(f"no team named {name!r} on the roster. Known: {known}")
+    if len(matches) > 1:
+        raise MapgenError(f"{name!r} matches more than one team: "
+                          + ", ".join(t.name for t in matches))
+    matches[0].disposition = standing
+    return matches[0]
+
+
+def _set_standing(roster: CampaignRoster, name: str, standing: str) -> str:
+    team = set_standing(roster, name, standing)
+    note = "" if standing in disposition_labels() else " (no reaction text for that one)"
+    return f"{team.name} now stands {standing} with the party{note}"
+
+
+def floor_teams(roster: CampaignRoster, floor: int) -> List[CrawlerTeam]:
+    """The teams reported on one floor, in the order they should be read.
+
+    Snapshots, not the roster's own objects: the roster goes on being dealt on
+    later floors, and a result handed back for floor 1 should still describe floor
+    1 after floor 2 has been generated from the same campaign."""
+    teams = [t for t in roster.teams if t.floor == floor and t.history]
+    teams.sort(key=lambda t: (t.day is None, t.day or 0, t.name))
+    return [replace(t, history=list(t.history)) for t in teams]
+
 
 @dataclass
 class GenResult:
@@ -3977,6 +4236,7 @@ class GenResult:
     seed: int
     markdown: str
     svgs: List[Tuple[str, str]]     # (filename suffix, SVG source); "" is the main map
+    roster: Optional["CampaignRoster"] = None   # the campaign, updated by this floor
 
     def basename(self) -> str:
         """The stem the CLI names saved files with."""
@@ -3990,11 +4250,16 @@ def generate(floor: int = 1, size: str = "medium", seed: Optional[int] = None, *
              warlords: str = "canon", wildcard: bool = False,
              winner: Optional[str] = None, runner_up: Optional[str] = None,
              vehicle: Optional[str] = None, party: int = 2,
-             images: bool = True) -> GenResult:
+             images: bool = True,
+             roster: Optional[CampaignRoster] = None) -> GenResult:
     """Build one floor and render it. Raises MapgenError on a bad option combination.
 
     Pass images=False to skip SVG rendering when only the Markdown is wanted -- on the
-    biggest floor 1-2 sizes that is hundreds of room maps and by far the slow part."""
+    biggest floor 1-2 sizes that is hundreds of room maps and by far the slow part.
+
+    Pass a roster to continue a campaign: teams still alive carry onto this floor with
+    their name, origin and standing intact, and are dealt a fresh fate here. The roster
+    that comes back on the result has been updated and is the one to save."""
     if floor not in FLOORS:
         raise MapgenError(f"floor must be one of {', '.join(map(str, FLOORS))} (got {floor})")
     if size not in SIZE_CFG:
@@ -4011,35 +4276,34 @@ def generate(floor: int = 1, size: str = "medium", seed: Optional[int] = None, *
 
     if floor == 11:
         fl = Generator11(size, seed).build()
-        text = render11(fl)
     elif floor == 10:
         fl = Generator10(size, seed, vehicle, party).build()
-        text = render10(fl)
     elif floor == 9:
         fl = Generator9(size, seed, days, warlords, wildcard, winner, runner_up).build()
-        text = render9(fl)
     elif floor == 8:
         fl = Generator8(size, seed, days, region).build()
-        text = render8(fl)
     elif floor == 6:
         fl = Generator6(size, scaling, seed, days).build()
-        text = render6(fl)
     elif floor == 5:
         fl = Generator5(size, seed, days).build()
-        text = render5(fl)
     elif floor == 4:
         fl = Generator4(size, seed, days).build()
-        text = render4(fl)
     elif floor == 3:
         fl = Generator3(size, scaling, seed, days).build()
-        text = render3(fl)
     else:
         fl = Generator(floor, size, scaling, seed, days, boss_stairs,
                        stair_chance, borough_boss_rate).build()
-        text = render(fl)
+
+    # Other crawlers are dealt on their own rng stream, after the floor is
+    # built, so every floor can carry a campaign roster through one code path
+    # and changing how teams are dealt cannot shift the floor's own rolls.
+    roster = build_crawler_teams(fl, size, seed, floor, roster)
+    fl.other_crawlers = floor_teams(roster, floor)
+    text = _render_floor(fl, floor)
 
     svgs = floor_svgs(fl, boss_stairs) if images else []
-    return GenResult(floor=fl, number=floor, size=size, seed=seed, markdown=text, svgs=svgs)
+    return GenResult(floor=fl, number=floor, size=size, seed=seed, markdown=text,
+                     svgs=svgs, roster=roster)
 
 
 def regenerate_rooms(path: str, label: Optional[str] = None, floor: int = 1, *,
@@ -4116,6 +4380,16 @@ def main(argv=None):
     p.add_argument("--save", nargs="?", const=".", default=None, metavar="DIR",
                    help="write both floorN_size_seedS.md and .png (falls back to .svg without resvg-py) "
                         "into DIR (default: current directory)")
+    p.add_argument("--campaign", type=str, default=None, metavar="FILE",
+                   help="carry other crawler teams between floors: teams still alive in FILE "
+                        "come onto this floor with their name and standing intact and are dealt "
+                        "a fresh fate, then FILE is rewritten. Created if it does not exist, so "
+                        "the same flag starts a campaign and continues one")
+    p.add_argument("--standing", action="append", default=None, metavar='"NAME=STANDING"',
+                   help="set where a team stands with the party before generating, e.g. "
+                        '--standing "Team Thistle=allied" (repeatable). Needs --campaign. '
+                        "Any wording is accepted; " + "/".join(disposition_labels()) +
+                        " come with reaction text")
     p.add_argument("--rooms-for", type=str, default=None, metavar="FILE",
                    help="skip normal generation; parse one '### X. Name' neighborhood block from FILE "
                         "(as produced by this script, floor 1/2 only) and (re)generate just its room "
@@ -4155,12 +4429,29 @@ def _run(a) -> None:
             print(f"wrote {a.image}", file=sys.stderr)
         return
 
+    if a.standing and not a.campaign:
+        raise MapgenError("--standing needs --campaign: there is nowhere to record a "
+                          "standing without a campaign roster")
+    roster = load_roster(a.campaign) if a.campaign else None
+    for change in a.standing or []:
+        name, _, standing = change.partition("=")
+        if not standing:
+            raise MapgenError(f'--standing wants "NAME=STANDING", got {change!r}')
+        print(_set_standing(roster, name.strip(), standing.strip()), file=sys.stderr)
+
     res = generate(a.floor, a.size, a.seed, scaling=a.scaling, days=a.days,
                    boss_stairs=not a.no_boss_stairs, stair_chance=a.stair_chance,
                    borough_boss_rate=a.borough_boss_rate, region=a.region,
                    warlords=a.warlords, wildcard=a.wildcard, winner=a.winner,
                    runner_up=a.runner_up, vehicle=a.vehicle, party=a.party,
-                   images=bool(a.image or a.save is not None))
+                   images=bool(a.image or a.save is not None), roster=roster)
+
+    if a.campaign:
+        save_roster(res.roster, a.campaign)
+        alive = len(res.roster.active())
+        carried = sum(1 for t in res.floor.other_crawlers if t.first_seen != t.floor)
+        print(f"campaign {a.campaign}: {carried} team(s) carried in, "
+              f"{alive} alive of {len(res.roster.teams)} met so far", file=sys.stderr)
 
     out, image = a.out, a.image
     if a.save is not None:

@@ -264,6 +264,174 @@ class MapView(ttk.Frame):
         webbrowser.open("file://" + path.replace("\\", "/"))
 
 
+class CampaignView(ttk.Frame):
+    """The roster of other crawler teams followed across a run of floors.
+
+    Open a campaign file and teams still alive carry onto each floor generated
+    after it, keeping their name, origin and standing. Standing is the part the
+    party changes in play -- befriend the group that attacked them on floor 2 --
+    so it is editable here, and takes effect on the next floor generated."""
+
+    COLUMNS = (("name", "Team", 230), ("standing", "Standing", 90),
+               ("met", "Met", 45), ("seen", "Last seen", 70),
+               ("fate", "Last report", 260))
+
+    def __init__(self, master, app):
+        super().__init__(master)
+        self.app = app
+
+        bar = ttk.Frame(self)
+        bar.pack(fill="x", padx=PAD, pady=(PAD, 0))
+        ttk.Button(bar, text="Open campaign...", command=self.open).pack(side="left")
+        ttk.Button(bar, text="New campaign...", command=self.new).pack(side="left", padx=(4, 0))
+        self.close_btn = ttk.Button(bar, text="Close", command=self.close, state="disabled")
+        self.close_btn.pack(side="left", padx=(4, 0))
+        self.path_lbl = ttk.Label(bar, text="No campaign open", foreground="#666")
+        self.path_lbl.pack(side="left", padx=(PAD, 0))
+
+        wrap = ttk.Frame(self)
+        wrap.pack(fill="both", expand=True, padx=PAD, pady=PAD)
+        self.tree = ttk.Treeview(wrap, columns=[c[0] for c in self.COLUMNS],
+                                 show="headings", selectmode="browse")
+        for key, title, width in self.COLUMNS:
+            self.tree.heading(key, text=title)
+            self.tree.column(key, width=width, stretch=(key == "fate"))
+        vs = ttk.Scrollbar(wrap, orient="vertical", command=self.tree.yview)
+        self.tree.configure(yscrollcommand=vs.set)
+        self.tree.pack(side="left", fill="both", expand=True)
+        vs.pack(side="right", fill="y")
+        self.tree.tag_configure("dead", foreground="#999")
+        self.tree.bind("<<TreeviewSelect>>", lambda e: self._on_select())
+
+        edit = ttk.Labelframe(self, text="Where they stand with the party", padding=PAD)
+        edit.pack(fill="x", padx=PAD, pady=(0, PAD))
+        self.sel_lbl = ttk.Label(edit, text="Select a team above.", foreground="#666")
+        self.sel_lbl.pack(anchor="w")
+        row = ttk.Frame(edit)
+        row.pack(fill="x", pady=(6, 0))
+        self.standing = tk.StringVar()
+        # Not readonly: a table can decide a group is "owed a favour" or "blood
+        # feud", and the generator takes any wording -- the listed five are just
+        # the ones that come with reaction text.
+        self.standing_cb = ttk.Combobox(row, textvariable=self.standing,
+                                        values=mg.disposition_labels(), state="disabled")
+        self.standing_cb.pack(side="left", fill="x", expand=True)
+        self.apply_btn = ttk.Button(row, text="Set", command=self.apply, state="disabled")
+        self.apply_btn.pack(side="left", padx=(4, 0))
+        self.standing_cb.bind("<Return>", lambda e: self.apply())
+        ttk.Label(edit, text="Takes effect on the next floor you generate.",
+                  foreground="#666", font=("Segoe UI", 8)).pack(anchor="w", pady=(4, 0))
+
+        self.refresh()
+
+    # -- campaign file ------------------------------------------------------
+
+    def open(self):
+        path = filedialog.askopenfilename(
+            parent=self, title="Open a campaign roster",
+            filetypes=[("Campaign roster", "*.json"), ("All files", "*.*")])
+        if path:
+            self._load(path)
+
+    def new(self):
+        path = filedialog.asksaveasfilename(
+            parent=self, title="Start a campaign roster", defaultextension=".json",
+            initialfile="campaign.json",
+            filetypes=[("Campaign roster", "*.json"), ("All files", "*.*")])
+        if not path:
+            return
+        try:
+            mg.save_roster(mg.CampaignRoster(), path)
+        except mg.MapgenError as e:
+            messagebox.showerror("Could not start a campaign", str(e), parent=self)
+            return
+        self._load(path)
+
+    def _load(self, path):
+        try:
+            roster = mg.load_roster(path)
+        except mg.MapgenError as e:
+            messagebox.showerror("Could not open that campaign", str(e), parent=self)
+            return
+        self.app.roster = roster
+        self.app.campaign_path = path
+        self.refresh()
+        alive = len(roster.active())
+        self.app._set_status(f"Campaign {os.path.basename(path)} - {alive} team(s) alive "
+                             f"of {len(roster.teams)} met")
+
+    def close(self):
+        """Stop carrying teams forward. The file is left exactly as it is."""
+        self.app.roster = None
+        self.app.campaign_path = None
+        self.refresh()
+        self.app._set_status("Campaign closed; floors generate standalone again")
+
+    # -- roster table -------------------------------------------------------
+
+    def refresh(self):
+        self.tree.delete(*self.tree.get_children())
+        path = self.app.campaign_path
+        roster = self.app.roster
+        self.close_btn.configure(state="normal" if path else "disabled")
+        self.path_lbl.configure(
+            text=os.path.basename(path) if path else "No campaign open",
+            foreground="#222" if path else "#666")
+        if not roster or not roster.teams:
+            self._select(None)
+            return
+        for t in roster.teams:
+            fate = t.status or "not yet reported"
+            seen = f"floor {t.floor}" if t.history else "-"
+            if not t.alive:
+                fate = f"died on floor {t.died_on} - {fate}"
+            self.tree.insert("", "end", iid=t.name,
+                             values=(t.name, t.disposition, t.first_seen, seen, fate),
+                             tags=() if t.alive else ("dead",))
+        self._select(None)
+
+    def _team(self, name):
+        roster = self.app.roster
+        return next((t for t in roster.teams if t.name == name), None) if roster else None
+
+    def _on_select(self):
+        sel = self.tree.selection()
+        self._select(self._team(sel[0]) if sel else None)
+
+    def _select(self, team):
+        self._selected = team
+        if team is None:
+            self.sel_lbl.configure(text="Select a team above.", foreground="#666")
+            self.standing.set("")
+            self.standing_cb.configure(state="disabled")
+            self.apply_btn.configure(state="disabled")
+            return
+        note = "" if team.alive else f"  (died on floor {team.died_on})"
+        self.sel_lbl.configure(text=f"{team.name} - formed from {team.origin}{note}",
+                               foreground="#222")
+        self.standing.set(team.disposition)
+        self.standing_cb.configure(state="normal")
+        self.apply_btn.configure(state="normal")
+
+    def apply(self):
+        team = getattr(self, "_selected", None)
+        standing = self.standing.get().strip()
+        if not team or not standing:
+            return
+        team.disposition = standing
+        if self.app.campaign_path:
+            try:
+                mg.save_roster(self.app.roster, self.app.campaign_path)
+            except mg.MapgenError as e:
+                messagebox.showerror("Could not save the campaign", str(e), parent=self)
+                return
+        self.refresh()
+        self.tree.selection_set(team.name)
+        known = standing in mg.disposition_labels()
+        self.app._set_status(f"{team.name} now stands {standing} with the party"
+                             + ("" if known else " (no reaction text for that one)"))
+
+
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -271,6 +439,8 @@ class App(tk.Tk):
         self.geometry("1280x820")
         self.minsize(980, 620)
         self.result = None
+        self.roster = None            # the campaign being carried, when one is open
+        self.campaign_path = None
         self._resting = "Ready"      # status line to fall back to once a render finishes
 
         # tkinter is not thread-safe, so worker threads never touch a widget: they
@@ -301,6 +471,8 @@ class App(tk.Tk):
         self.text.configure(yscrollcommand=tvs.set)
         tvs.pack(side="right", fill="y")
         self.text.pack(side="left", fill="both", expand=True)
+        self.campaign_tab = CampaignView(right, self)
+        right.add(self.campaign_tab, text="Campaign")
         self.notebook = right
 
         ttk.Label(self, textvariable=self.status, relief="sunken", anchor="w",
@@ -308,7 +480,20 @@ class App(tk.Tk):
 
         self._build_controls()
         self._sync_floor()
-        self.after(50, self._poll)
+        self._closing = False
+        self._poll_id = self.after(50, self._poll)
+
+    def destroy(self):
+        # Stop the queue poller before the widgets go, or its next tick fires
+        # against a destroyed interpreter and Tk complains about the command.
+        self._closing = True
+        if getattr(self, "_poll_id", None):
+            try:
+                self.after_cancel(self._poll_id)
+            except tk.TclError:
+                pass
+            self._poll_id = None
+        super().destroy()
 
     def post(self, fn):
         """Queue `fn` to run on the main thread. Safe to call from any thread."""
@@ -324,7 +509,8 @@ class App(tk.Tk):
                 fn()
             except Exception:                              # noqa: BLE001
                 traceback.print_exc()
-        self.after(50, self._poll)
+        if not self._closing:
+            self._poll_id = self.after(50, self._poll)
 
     def _build_menu(self):
         m = tk.Menu(self)
@@ -525,9 +711,14 @@ class App(tk.Tk):
         self.gen_btn.configure(state="disabled")
         self.status.set("Generating...")
 
+        kw["roster"] = self.roster
+        path = self.campaign_path
+
         def work():
             try:
                 res = mg.generate(**kw)
+                if path:
+                    mg.save_roster(res.roster, path)
             except mg.MapgenError as e:
                 msg = str(e)
                 self.post(lambda: self._gen_failed(msg))
@@ -553,7 +744,12 @@ class App(tk.Tk):
         self.text.delete("1.0", "end")
         self.text.insert("1.0", res.markdown)
         self.view.load(res.svgs)
-        self._set_status(f"{res.basename()} - {len(res.svgs)} map(s)")
+        if self.campaign_path:
+            self.roster = res.roster       # carry this floor's outcome to the next
+        self.campaign_tab.refresh()
+        carried = sum(1 for t in res.floor.other_crawlers if t.first_seen != t.floor)
+        note = f" - {carried} team(s) carried in" if carried else ""
+        self._set_status(f"{res.basename()} - {len(res.svgs)} map(s){note}")
 
     def _gen_failed(self, msg, crash=False):
         self.gen_btn.configure(state="normal")
