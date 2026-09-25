@@ -260,7 +260,10 @@ class CrawlerTeam:
     name: str
     origin: str
     status: str
-    day: int = 1        # which day of the countdown this report lands on
+    day: int = 1              # which day of the countdown this report lands on
+    outcome: str = "steady"   # steady/thriving/costly/fatal -- what becomes of them
+    disposition: str = "wary"     # how they treat the party on contact
+    reaction: str = ""            # what that means in play
 
 @dataclass
 class Room:
@@ -600,14 +603,38 @@ class Generator:
         # three separate groups all called Team Meadow Lark, and repeat a status
         # just as easily -- the largest sizes want seven of each.
         surnames = self._distinct(TEAM_SURNAME, team_count)
-        statuses = self._distinct(TEAM_STATUS, team_count)
         origins = self._distinct(TEAM_ORIGIN, team_count)
-        # Forms are spread too, or a seven-team floor reads as three sets of
-        # Irregulars even once the names behind them are all different.
-        forms = self._distinct(TEAM_NAME_FORM, team_count)
+
+        # Deal one outcome per team by walking the kinds in order from a random
+        # start, so a roster gets a spread of fates rather than however many
+        # deaths independent rolls happen to produce. At seven teams that is at
+        # most two fatal; at one team, any single kind is equally likely.
+        kinds = list(TEAM_STATUS)
+        start = self.rng.randrange(len(kinds))
+        outcomes = [kinds[(start + i) % len(kinds)] for i in range(team_count)]
+        self.rng.shuffle(outcomes)
+        # Drawn per kind so two teams sharing an outcome cannot share its wording.
+        # Walk `kinds`, not set(outcomes): this draws from the rng, and a set of
+        # strings iterates in per-process hash order, which would make the whole
+        # roster depend on it.
+        pools = {k: iter(self._distinct(TEAM_STATUS[k], outcomes.count(k)))
+                 for k in kinds if k in outcomes}
+        # Spread across the hostile..allied scale for the same reason.
+        dispositions = self._distinct(TEAM_DISPOSITION, team_count)
+
+        # A name that says the team has been cut down only goes to one that has
+        # been: about half the teams whose outcome cost them something. Forms are
+        # spread as well, or a seven-team floor reads as three sets of Irregulars
+        # even once the names behind them are all different.
+        hurt = [i for i, o in enumerate(outcomes) if o in ("costly", "fatal")]
+        diminished = set(self.rng.sample(hurt, len(hurt) // 2)) if hurt else set()
+        dim_forms = iter(self._distinct(TEAM_NAME_FORM_DIMINISHED, len(diminished)))
+        neutral_forms = iter(self._distinct(TEAM_NAME_FORM, team_count - len(diminished)))
+
         other_crawlers = []
-        for i, (surname, status, origin, form) in enumerate(
-                zip(surnames, statuses, origins, forms)):
+        for i, (surname, origin, outcome, disp) in enumerate(
+                zip(surnames, origins, outcomes, dispositions)):
+            form = next(dim_forms) if i in diminished else next(neutral_forms)
             # One team per slice of the countdown, jittered inside its slice, rather
             # than an independent roll each: rolling freely piles half the roster
             # onto the same day often enough to spoil the section as a timeline.
@@ -617,8 +644,11 @@ class Generator:
             other_crawlers.append(CrawlerTeam(
                 name=form.format(name=surname),
                 origin=origin,
-                status=status.format(label=label),
-                day=self.rng.randint(lo, hi)))
+                status=next(pools[outcome]).format(label=label),
+                day=self.rng.randint(lo, hi),
+                outcome=outcome,
+                disposition=disp["label"],
+                reaction=disp["reaction"]))
         # Chronological, so the section reads as a timeline the DM can run down.
         other_crawlers.sort(key=lambda ct: ct.day)
 
@@ -841,10 +871,20 @@ def render(fl: Floor) -> str:
     o.append("")
     o.append(f"Other survivors sharing this floor. Each report is dated to a day of the "
              f"{fl.days}-day countdown — it is what the death feed and the rumor mill carry "
-             f"on that day, not something already true when the party arrives:")
+             f"on that day, not something already true when the party arrives.")
     o.append("")
     for ct in fl.other_crawlers:
-        o.append(f"- **Day {ct.day} — {ct.name}** — formed from {ct.origin}; {ct.status}.")
+        o.append(f"- **Day {ct.day} — {ct.name}** (*{ct.disposition}*) — formed from "
+                 f"{ct.origin}; {ct.status}.")
+    o.append("")
+    # The reactions are listed once rather than per team: with more teams than
+    # points on the scale they repeat, and the same two sentences under every
+    # entry buries the part that differs.
+    o.append("How they take the party on contact, up to and including their day:")
+    o.append("")
+    for disp in TEAM_DISPOSITION:
+        if any(ct.disposition == disp["label"] for ct in fl.other_crawlers):
+            o.append(f"- ***{disp['label']}*** — {disp['reaction']}.")
     o.append("")
 
     o.append("## Loot Boxes")

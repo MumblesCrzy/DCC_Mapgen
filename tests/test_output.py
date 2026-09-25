@@ -137,6 +137,90 @@ class DeterminismTest(unittest.TestCase):
         self.assertGreater(len(seeds), 1, "an omitted seed should be rolled per run")
 
 
+class CrawlerTeamTest(unittest.TestCase):
+    """The floor 1-2 roster is dealt rather than rolled, so that a floor gets a
+    spread of fates and dispositions instead of whatever independent rolls produce.
+    These are the properties that spread is for; they regress silently otherwise."""
+
+    # Seeds per size, tapering as floors get dearer to build: a continent is 400
+    # neighborhoods of rooms at ~70ms, against ~0.1ms for a small one, and all
+    # that matters here is how many teams the size fields. Built once in
+    # setUpClass and shared -- rebuilding them per test method took 100 seconds.
+    SIZES = {"small": 60, "medium": 60, "large": 60, "huge": 30,
+             "giant": 20, "massive": 15, "continent": 15}
+
+    @classmethod
+    def setUpClass(cls):
+        cls.rosters = {
+            size: [mg.Generator(1, size, "distance", seed, None, True).build()
+                   for seed in range(count)]
+            for size, count in cls.SIZES.items()}
+
+    @staticmethod
+    def _diminished(name: str) -> bool:
+        return name.startswith(("What's Left of ", "The Last of ")) or name.endswith(" Remnant")
+
+    def _rosters(self, size):
+        return self.rosters[size]
+
+    def test_roster_entries_are_distinct(self):
+        """No floor fields two groups under one name, origin or status."""
+        for size in self.SIZES:
+            with self.subTest(size=size):
+                for fl in self._rosters(size):
+                    teams = fl.other_crawlers
+                    for field in ("name", "origin", "status"):
+                        values = [getattr(t, field) for t in teams]
+                        self.assertEqual(len(set(values)), len(values),
+                                         f"seed {fl.seed}: repeated {field} in {values}")
+
+    def test_not_every_team_dies(self):
+        """A roster of more than one must not be all fatalities."""
+        for size in list(self.SIZES)[1:]:   # a one-team floor can legitimately be a death
+            with self.subTest(size=size):
+                for fl in self._rosters(size):
+                    fates = [t.outcome for t in fl.other_crawlers]
+                    self.assertNotEqual(set(fates), {"fatal"},
+                                        f"seed {fl.seed}: every team on the floor dies")
+
+    def test_dispositions_span_the_scale(self):
+        """Enough teams to cover the scale should cover it, not cluster."""
+        scale = {d["label"] for d in mg.TEAM_DISPOSITION}
+        for fl in self._rosters("continent"):  # 7 teams against a 5-point scale
+            self.assertEqual({t.disposition for t in fl.other_crawlers}, scale,
+                             f"seed {fl.seed}: dispositions did not span the scale")
+
+    def test_diminished_names_only_where_earned(self):
+        """"What's Left of X" must not land on a team that lost nothing."""
+        for size in self.SIZES:
+            with self.subTest(size=size):
+                for fl in self._rosters(size):
+                    for t in fl.other_crawlers:
+                        if self._diminished(t.name):
+                            self.assertIn(t.outcome, ("costly", "fatal"),
+                                          f"seed {fl.seed}: {t.name!r} is {t.outcome}")
+
+    def test_reports_land_inside_the_countdown(self):
+        for size in self.SIZES:
+            with self.subTest(size=size):
+                for fl in self._rosters(size):
+                    for t in fl.other_crawlers:
+                        self.assertTrue(1 <= t.day <= fl.days,
+                                        f"seed {fl.seed}: day {t.day} outside 1..{fl.days}")
+
+    def test_reports_are_chronological(self):
+        for fl in self._rosters("continent"):
+            days = [t.day for t in fl.other_crawlers]
+            self.assertEqual(days, sorted(days), f"seed {fl.seed}: out of order")
+
+    def test_no_status_leaves_an_unfilled_placeholder(self):
+        for size in self.SIZES:
+            with self.subTest(size=size):
+                for fl in self._rosters(size):
+                    for t in fl.other_crawlers:
+                        self.assertNotIn("{", t.status, f"seed {fl.seed}: {t.status!r}")
+
+
 class OptionValidationTest(unittest.TestCase):
     """Bad options raise MapgenError rather than exiting or crashing."""
 

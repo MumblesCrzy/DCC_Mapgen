@@ -262,26 +262,45 @@
   "a touring cover band and their roadies",
   "a family reunion, three generations deep"
  ],
- "TEAM_STATUS": [
-  "holding a safe room in neighborhood {label}",
-  "wiped out by the neighborhood boss in {label}, per the death feed",
-  "trading loot at the {label} safe-room door",
-  "reaches the stairwell in {label} and takes it",
-  "goes quiet; last known position was neighborhood {label}",
-  "still arguing about which stairwell to take, somewhere near {label}",
-  "down to half their number, holed up in {label}",
-  "thriving near {label}, having adopted the local mob as pets",
-  "loses their healer to a trapped loot box in {label}",
-  "picked off one at a time crossing {label}",
-  "throws in with another team in {label}; both rosters now count as one",
-  "sponsored mid-fight near {label} and hasn't shut up about it since",
-  "found farming the same respawn in {label}, level twelve and bored",
-  "breaks for the stairwell in {label} and leaves two behind",
-  "refuses to leave {label}; the safe room is theirs now",
-  "reduced to one survivor, still moving through {label}",
-  "caught between two boss chambers in {label}",
-  "declared a rival team's problem after a safe-room brawl in {label}"
- ],
+ "TEAM_STATUS": {
+  "steady": [
+   "holding a safe room in neighborhood {label}",
+   "reaches the stairwell in {label} and takes it",
+   "still arguing about which stairwell to take, somewhere near {label}",
+   "found farming the same respawn in {label}, level twelve and bored",
+   "refuses to leave {label}; the safe room is theirs now",
+   "camped at the {label} stairwell, charging a toll to use it",
+   "moving one neighborhood a day, methodical about it, currently in {label}",
+   "holed up in {label} waiting out a boss they have no intention of fighting"
+  ],
+  "thriving": [
+   "trading loot at the {label} safe-room door",
+   "thriving near {label}, having adopted the local mob as pets",
+   "throws in with another team in {label}; both rosters now count as one",
+   "sponsored mid-fight near {label} and hasn't shut up about it since",
+   "clears a boss chamber in {label} well ahead of schedule",
+   "running a working shop out of the {label} safe room, and getting rich on it",
+   "two of them hit a class upgrade in {label} on the same run"
+  ],
+  "costly": [
+   "down to half their number, holed up in {label}",
+   "loses their healer to a trapped loot box in {label}",
+   "breaks for the stairwell in {label} and leaves two behind",
+   "reduced to one survivor, still moving through {label}",
+   "comes out of {label} lighter, having been caught between two boss chambers",
+   "burns every consumable they own getting clear of {label}",
+   "loses their stockpile to a mimic in {label} and starts over"
+  ],
+  "fatal": [
+   "wiped out by the neighborhood boss in {label}, per the death feed",
+   "picked off one at a time crossing {label}",
+   "goes quiet near {label}; the feed never names them again",
+   "caught between two boss chambers in {label} with nowhere left to go",
+   "loses the last of them to a trapped loot box in {label}",
+   "killed to a crawler over a safe room in {label} by another team",
+   "takes a stairwell in {label} into something worse and does not come back"
+  ]
+ },
  "COLLAPSE_NOTES": [
   "Days ago, every structure on Earth larger than a shed folded downward into the ground in perfect unison — the Collapse. Anyone caught inside a falling building died instantly; anyone caught outside, in a basement, or in the open woke to find the wreckage gone and a dungeon in its place.",
   "The Collapse took every building on the planet at once, without warning, and without survivors inside them. What's left of humanity entered the dungeon that swallowed the wreckage, because the alternative — the open, monster-infested surface — was worse.",
@@ -643,7 +662,33 @@
   "The {name} Crew",
   "The {name} Holdouts",
   "The {name} Irregulars",
-  "{name} Collective",
-  "What's Left of {name}"
+  "{name} Collective"
+ ],
+ "TEAM_DISPOSITION": [
+  {
+   "label": "hostile",
+   "reaction": "attacks on sight; they have decided the party is competition, whatever they are to anyone else"
+  },
+  {
+   "label": "territorial",
+   "reaction": "warns the party off whatever they are holding, and means it, but throws the first punch only if pushed"
+  },
+  {
+   "label": "wary",
+   "reaction": "talks from across the room, weapons down but in hand; will not share a safe room overnight"
+  },
+  {
+   "label": "friendly",
+   "reaction": "trades at fair terms and passes on what they know about the neighborhood, short of fighting anyone else's fight"
+  },
+  {
+   "label": "allied",
+   "reaction": "will fight alongside the party if asked, and expects the party to turn up when they ask in return"
+  }
+ ],
+ "TEAM_NAME_FORM_DIMINISHED": [
+  "What's Left of {name}",
+  "The Last of {name}",
+  "The {name} Remnant"
  ]
 }

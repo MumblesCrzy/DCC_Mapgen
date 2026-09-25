@@ -121,7 +121,7 @@ Run `python dcc_mapgen.py --help` for the full flag list (per-floor options like
 python -m unittest discover -s tests -v
 ```
 
-Stdlib `unittest`, so nothing needs installing, and it finishes in about a second.
+Stdlib `unittest`, so nothing needs installing, and it finishes in a few seconds.
 GitHub Actions runs it on every push across Linux and Windows.
 
 `tests/golden.json` pins a hash of the Markdown and maps for every floor at every
@@ -139,6 +139,12 @@ size, plus the multi-city tiers and each floor's own options. Two things are che
   Floor 9 stairwell angles, and the Floor 4 transfer connectors); within a single
   process all three were invisible, because that order is stable until the
   interpreter restarts.
+
+A third group covers the floor 1–2 crawler roster, which is dealt rather than rolled
+so a floor gets a spread of fates and dispositions: no roster repeats a name, origin
+or status; a floor of more than one team is never all fatalities; the dispositions
+span the hostile–allied scale; and a name like "What's Left of X" only lands on a
+team that actually lost something.
 
 If you add a floor, the suite fails until `tests/corpus.py` covers it.
 
