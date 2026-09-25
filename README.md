@@ -100,6 +100,16 @@ were before the Collapse, and where it stands with the party; only its fate is
 dealt again. A team whose fate comes up fatal leaves the floor but stays on the
 roster, with the floor it died on.
 
+The party also meets new groups on every floor, not only when deaths have left
+room — 8.1 million crawlers enter Floor 1 and no party can know a fraction of them.
+So a roster turns over rather than dwindling: it settles at about four teams on a
+medium floor and eight on a large one, whatever the dice do.
+
+Teams that have already lived through a floor or two are harder to kill than ones
+the party has just met — around three times harder, once a team is four floors in.
+Harder, not safe: a veteran still dies, and roughly half of full Floor 1-to-11 runs
+end with one of the original groups still out there.
+
 Standing is the part the party changes in play. Befriend the group that attacked
 them on Floor 2, or fall out with an ally:
 

@@ -16,6 +16,7 @@ bugs have shipped in this project, and none of them were visible from a single
 run, because within one process that order is perfectly stable.
 """
 
+import collections
 import json
 import os
 import subprocess
@@ -347,6 +348,73 @@ class CampaignTest(unittest.TestCase):
                 else:
                     self.assertTrue(all(d is None for d in days),
                                     f"floor {f} has no day count to date against")
+
+    def test_new_teams_arrive_on_every_floor(self):
+        """8.1 million crawlers enter floor 1, so there are always people the party
+        has not met. A roster tops up every floor, not only after a death."""
+        for size in ("small", "medium", "large"):
+            with self.subTest(size=size):
+                roster, per_floor = self._run_campaign(size=size, base_seed=300)
+                for floor, teams in list(per_floor.items())[1:]:
+                    newcomers = [t for t in teams if t.first_seen == floor]
+                    self.assertTrue(newcomers, f"floor {floor} introduced nobody new")
+
+    def test_the_roster_neither_dwindles_nor_runs_away(self):
+        """The point of topping up is that a campaign cannot be emptied out; the
+        point of a death rate is that it cannot grow without bound either."""
+        sizes = {"small": 12, "medium": 12, "large": 20}
+        for size, ceiling in sizes.items():
+            with self.subTest(size=size):
+                for run in range(6):
+                    _, per_floor = self._run_campaign(size=size, base_seed=400 + run * 50)
+                    counts = [len(t) for t in per_floor.values()]
+                    self.assertTrue(all(counts), "a floor reported no teams at all")
+                    self.assertLessEqual(max(counts), ceiling,
+                                         f"{size} roster reached {max(counts)}")
+
+    def test_experience_makes_a_team_harder_to_kill(self):
+        """Veterans are meant to be safer than newcomers, but not safe.
+
+        Measured over enough campaigns to be stable: the gap was around 2.8x when
+        this was tuned, so 1.4x is a floor that a real regression breaks and noise
+        does not. Both bounds matter -- an earlier version sorted deaths onto the
+        newest team, which killed 59% of groups on sight and made anyone four
+        floors in practically immortal."""
+        dealt, died = collections.Counter(), collections.Counter()
+        for c in range(60):
+            roster = None
+            for f in mg.FLOORS:
+                before = ({t.name: len(t.history) for t in roster.active()}
+                          if roster else {})
+                res = mg.generate(f, "medium", c * 37 + f, images=False, roster=roster)
+                roster = res.roster
+                for t in res.floor.other_crawlers:
+                    veteran = before.get(t.name, 0) >= 2
+                    dealt[veteran] += 1
+                    died[veteran] += t.outcome == "fatal"
+        rookie = died[False] / dealt[False]
+        veteran = died[True] / dealt[True]
+        self.assertGreater(rookie, veteran * 1.4,
+                           f"experience barely helped: {rookie:.0%} vs {veteran:.0%}")
+        self.assertGreater(veteran, 0.04,
+                           f"veterans are practically immortal at {veteran:.0%}")
+        self.assertLess(rookie, 0.55,
+                        f"newcomers are dying on sight at {rookie:.0%}")
+
+    def test_the_mix_of_fates_is_unchanged_by_the_bias(self):
+        """Weighting decides who draws a death, not how many are dealt."""
+        outcomes = collections.Counter()
+        for c in range(40):
+            roster = None
+            for f in mg.FLOORS:
+                res = mg.generate(f, "medium", c * 13 + f, images=False, roster=roster)
+                roster = res.roster
+                outcomes.update(t.outcome for t in res.floor.other_crawlers)
+        total = sum(outcomes.values())
+        for kind in mg.TEAM_STATUS:
+            share = outcomes[kind] / total
+            self.assertTrue(0.18 < share < 0.32,
+                            f"{kind} is {share:.0%} of fates, expected about a quarter")
 
     def test_a_campaign_cannot_change_the_floor_itself(self):
         """Teams are dealt on their own rng stream, so carrying a roster in gives

@@ -4057,11 +4057,25 @@ def render_rooms_only(nb: Neighborhood) -> str:
 
 FLOORS = (1, 2, 3, 4, 5, 6, 8, 9, 10, 11)
 
-# How many other teams a floor carries at its size. Survivors always come along,
-# so this is a floor's target, not a cap: a campaign that keeps everyone alive
-# simply stops meeting new people.
+# How many other teams a floor starts a campaign with, at its size.
 TEAM_COUNT = {"small": 1, "medium": 2, "large": 3, "huge": 4,
               "giant": 5, "massive": 6, "continent": 7}
+
+# How many groups the party newly runs into on each later floor. 8.1 million
+# crawlers enter floor 1 and no party can know a fraction of them, so there are
+# always new people to meet -- a roster is topped up every floor, not only when
+# it has been thinned by deaths.
+TEAM_NEW_PER_FLOOR = {"small": 1, "medium": 1, "large": 2, "huge": 2,
+                      "giant": 3, "massive": 3, "continent": 4}
+
+# Surviving a floor is evidence a team is good at surviving floors, so fatalities
+# are weighted towards the least experienced rather than dealt blind. Weighting,
+# not sorting: sorting funnelled every death onto the one or two newest teams,
+# killing 59% of groups on the floor the party met them and leaving anyone four
+# floors in effectively immortal at 1.6%. At this slope a veteran is around three
+# times safer than a newcomer, which is a bias rather than a guarantee.
+VETERAN_CAP = 4          # floors of experience past which no further credit accrues
+VETERAN_SLOPE = 0.6      # how sharply that credit lowers the odds of drawing a death
 
 
 def _render_floor(fl, floor: int) -> str:
@@ -4076,6 +4090,24 @@ def _team_rng(seed: int, floor: int) -> random.Random:
     """A stream of its own, so the roster is reproducible from the floor seed
     without team changes shifting every later roll on the floor itself."""
     return random.Random(f"crawlers|{seed}|{floor}")
+
+
+def _weighted_sample(rng, weights: List[float], k: int) -> List[int]:
+    """k distinct indices, each drawn with probability proportional to its weight."""
+    pool = list(range(len(weights)))
+    chosen = []
+    for _ in range(min(k, len(pool))):
+        cut = rng.random() * sum(weights[i] for i in pool)
+        running = 0.0
+        pick = pool[-1]
+        for i in pool:
+            running += weights[i]
+            if running >= cut:
+                pick = i
+                break
+        chosen.append(pick)
+        pool.remove(pick)
+    return chosen
 
 
 def _pick_distinct(rng, bank, k: int) -> list:
@@ -4135,7 +4167,11 @@ def build_crawler_teams(fl, size: str, seed: int, floor: int,
         t.floor = floor
     taken_surnames = {t.surname for t in roster.teams if t.surname}
     taken_origins = {t.origin for t in roster.teams}
-    need = max(0, TEAM_COUNT[size] - len(active))
+    # A campaign meets new groups on every floor, not just when deaths have left
+    # room: the party's roster grows and turns over rather than dwindling to
+    # nobody by floor 5. An empty roster is a campaign's first floor, which starts
+    # at the size's full count.
+    need = TEAM_COUNT[size] if not active else TEAM_NEW_PER_FLOOR[size]
     fresh = _fresh_teams(rng, need, floor, taken_surnames, taken_origins)
     roster.teams.extend(fresh)
     active = active + fresh
@@ -4149,6 +4185,14 @@ def build_crawler_teams(fl, size: str, seed: int, floor: int,
     start = rng.randrange(len(kinds))
     outcomes = [kinds[(start + i) % len(kinds)] for i in range(n)]
     rng.shuffle(outcomes)
+    # Same mix of fates; who draws the fatal ones is weighted by experience.
+    fatalities = outcomes.count("fatal")
+    if fatalities and fatalities < n:
+        risk = [1.0 / (1.0 + min(len(t.history), VETERAN_CAP) * VETERAN_SLOPE)
+                for t in active]
+        doomed = set(_weighted_sample(rng, risk, fatalities))
+        spare = [o for o in outcomes if o != "fatal"]
+        outcomes = ["fatal" if i in doomed else spare.pop() for i in range(n)]
     # Walk `kinds`, not set(outcomes): this draws from the rng, and a set of
     # strings iterates in per-process hash order.
     pools = {k: iter(_pick_distinct(rng, TEAM_STATUS[k], outcomes.count(k)))
