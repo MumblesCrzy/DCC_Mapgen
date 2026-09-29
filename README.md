@@ -22,6 +22,20 @@ A procedural floor/map generator in the style of the *Dungeon Crawler Carl* book
 
 Word banks (names, mobs, bosses, loot, room flavor, etc.) live in `data/*.json` — edit those to add or reskin content without touching the code.
 
+Mob vocabulary is shared rather than kept per floor. `data/common.json` holds `MOB_NOUN`
+and `MOB_ADJ` grouped by where a word can show up — `anywhere`, `urban`, `rail`,
+`jungle` — and `FLOOR_MOB_TAGS` says which of those each floor draws from, and how
+heavily:
+
+```json
+"FLOOR_MOB_TAGS": { "4": { "anywhere": 2, "rail": 3 } }
+```
+
+The tag is picked first by weight, then a word from it, so the Iron Tangle leads with
+porters and signalmen but still turns up the occasional Hazard-Pay Shark. To add a mob,
+drop it under the tag it belongs to; to give a floor a new habitat, add the tag to both
+banks and list it for that floor.
+
 ## Examples
 
 | Main map | Room detail (per neighborhood) |

@@ -19,6 +19,7 @@ run, because within one process that order is perfectly stable.
 import collections
 import json
 import os
+import random
 import subprocess
 import sys
 import tempfile
@@ -438,6 +439,79 @@ class CampaignTest(unittest.TestCase):
 def _t(team):
     """A team reduced to comparable data, for round-trip checks."""
     return {f: getattr(team, f) for f in mg._TEAM_FIELDS}
+
+
+class MobVocabularyTest(unittest.TestCase):
+    """Mob words live in one tagged pool that every floor draws from.
+
+    Floors used to keep private lists, which left a rail map picking from 16
+    adjectives and 20 nouns. Sharing the pool is only safe while the tags keep each
+    floor to words that make sense on it, and while the weighting keeps a floor's
+    own habitat present rather than drowned by the much larger common pool."""
+
+    MOB_FLOORS = (1, 2, 3, 4, 5, 6)
+
+    def test_every_mob_floor_declares_its_tags(self):
+        for floor in self.MOB_FLOORS:
+            self.assertIn(str(floor), mg.FLOOR_MOB_TAGS,
+                          f"floor {floor} makes mobs but declares no tags")
+
+    def test_declared_tags_exist_in_both_banks(self):
+        for floor, weights in mg.FLOOR_MOB_TAGS.items():
+            for tag, weight in weights.items():
+                with self.subTest(floor=floor, tag=tag):
+                    self.assertIn(tag, mg.MOB_NOUN, "no nouns carry this tag")
+                    self.assertIn(tag, mg.MOB_ADJ, "no adjectives carry this tag")
+                    self.assertGreater(weight, 0)
+
+    def test_tags_do_not_overlap(self):
+        """A word in two tags would be drawn more often than its weight implies."""
+        for name, bank in (("MOB_NOUN", mg.MOB_NOUN), ("MOB_ADJ", mg.MOB_ADJ)):
+            seen = collections.Counter(w for words in bank.values() for w in words)
+            dupes = sorted(w for w, n in seen.items() if n > 1)
+            self.assertEqual(dupes, [], f"{name} lists these under several tags: {dupes}")
+
+    def test_a_floor_only_draws_words_it_can_host(self):
+        for floor in self.MOB_FLOORS:
+            allowed = set(mg.FLOOR_MOB_TAGS[str(floor)])
+            ok_nouns = {w for t in allowed for w in mg.MOB_NOUN[t]}
+            ok_adj = {w for t in allowed for w in mg.MOB_ADJ[t]}
+            rng = random.Random(floor)
+            for _ in range(400):
+                adj, noun = mg.mob_words(rng, floor)
+                self.assertIn(noun, ok_nouns, f"floor {floor} drew an off-limits noun")
+                self.assertIn(adj, ok_adj, f"floor {floor} drew an off-limits adjective")
+
+    def test_every_floor_has_a_deep_pool(self):
+        """The whole point of pooling. Floors 3, 4 and 6 had 216-320 combinations."""
+        for floor in self.MOB_FLOORS:
+            if floor == 5:
+                continue                      # floor 5's quadrants supply the nouns
+            tags = mg.FLOOR_MOB_TAGS[str(floor)]
+            combos = (sum(len(mg.MOB_ADJ[t]) for t in tags)
+                      * sum(len(mg.MOB_NOUN[t]) for t in tags))
+            self.assertGreater(combos, 5000, f"floor {floor} can only make {combos} mobs")
+
+    def test_a_floor_keeps_its_own_flavour(self):
+        """The common pool dwarfs each habitat, so without weighting a rail floor
+        would almost never field anything rail. These floors are meant to lead with
+        their own habitat; floors 1-2 only season with theirs."""
+        for floor, tag, low, high in ((3, "urban", 0.40, 0.80), (4, "rail", 0.40, 0.80),
+                                      (6, "jungle", 0.40, 0.80), (1, "urban", 0.05, 0.40)):
+            with self.subTest(floor=floor):
+                rng = random.Random(99)
+                habitat = sum(1 for _ in range(2000)
+                              if mg.mob_words(rng, floor)[1] in mg.MOB_NOUN[tag])
+                share = habitat / 2000
+                self.assertTrue(low <= share <= high,
+                                f"floor {floor} drew {share:.0%} {tag} nouns, "
+                                f"wanted {low:.0%}-{high:.0%}")
+
+    def test_unknown_floors_still_get_words(self):
+        """A floor with no entry falls back rather than failing to build."""
+        adj, noun = mg.mob_words(random.Random(1), 99)
+        self.assertIn(noun, mg.MOB_NOUN["anywhere"])
+        self.assertIn(adj, mg.MOB_ADJ["anywhere"])
 
 
 class OptionValidationTest(unittest.TestCase):

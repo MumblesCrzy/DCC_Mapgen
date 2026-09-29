@@ -186,6 +186,40 @@ def singular(noun: str) -> str:
 def article(word: str) -> str:
     return "an" if word[0].lower() in "aeiou" else "a"
 
+def mob_words(rng, floor: int) -> Tuple[str, str]:
+    """An (adjective, noun) pair drawn from the pools a floor can host.
+
+    Mob vocabulary lives in one place, tagged by where it can show up, rather than
+    a private list per floor: a rail map had 16 adjectives against 20 nouns to its
+    name, which is 320 possible mobs before a repeat. Drawing from the shared pool
+    instead gives every floor the whole dungeon's fauna.
+
+    The tag is picked first, by weight, and the word uniformly from it. Picking a
+    word uniformly across the merged pools would drown each floor's own character,
+    since "anywhere" is several times the size of any habitat.
+    """
+    weights = FLOOR_MOB_TAGS.get(str(floor), {"anywhere": 1})
+
+    def pick(bank):
+        tags = [t for t in weights if bank.get(t)]
+        if not tags:
+            tags = [t for t in bank if bank[t]]
+        tag = rng.choices(tags, weights=[weights.get(t, 1) for t in tags])[0]
+        return rng.choice(bank[tag])
+
+    return pick(MOB_ADJ), pick(MOB_NOUN)
+
+
+def describe_mob(rng, adj: str, noun: str) -> Mob:
+    """The System's write-up of one mob. Shared by every floor that has mobs."""
+    quirk, mod = rng.choice(MOB_QUIRKS)
+    desc = rng.choice(SYSTEM_DESC).format(
+        a=article(adj), b=f"{adj.lower()} {singular(noun).lower()}",
+        noun=noun, noun_l=noun.lower(), adj_l=adj.lower(),
+        noun_sing=singular(noun).lower())
+    return Mob(adj, noun, quirk, mod, desc)
+
+
 def grid_label(i: int) -> str:
     """Spreadsheet-column-style label: 0->A, 25->Z, 26->AA, ... — plain A-Z runs out past
     26 neighborhoods, which huge/giant/massive floors need."""
@@ -462,19 +496,11 @@ class Generator:
 
     def make_mob(self) -> Mob:
         for _ in range(100):
-            adj = self.rng.choice(MOB_ADJ)
-            noun = self.rng.choice(MOB_NOUN)
+            adj, noun = mob_words(self.rng, self.floor)
             if (adj, noun) not in self.used_mobs:
                 break
         self.used_mobs.add((adj, noun))
-        quirk, mod = self.rng.choice(MOB_QUIRKS)
-        tmpl = self.rng.choice(SYSTEM_DESC)
-        desc = tmpl.format(
-            a=article(adj), b=f"{adj.lower()} {singular(noun).lower()}",
-            noun=noun, noun_l=noun.lower(), adj_l=adj.lower(),
-            noun_sing=singular(noun).lower(),
-        )
-        return Mob(adj, noun, quirk, mod, desc)
+        return describe_mob(self.rng, adj, noun)
 
     def make_boss(self, tier: str, mob: Mob, base_level: int) -> Boss:
         # Retry until the name is new AND doesn't just recombine a first name or
@@ -1510,12 +1536,8 @@ class Generator3:
         return self._unique(lambda: f"The {self.rng.choice(RUIN_ADJ)} {self.rng.choice(RUIN_PLACE)}")
 
     def make_mob(self) -> Mob:
-        adj, noun = self._unique(lambda: (self.rng.choice(RUIN_MOB_ADJ), self.rng.choice(RUIN_MOB_NOUN)))
-        quirk, mod = self.rng.choice(MOB_QUIRKS)
-        desc = self.rng.choice(SYSTEM_DESC).format(
-            a=article(adj), b=f"{adj.lower()} {singular(noun).lower()}",
-            noun=noun, noun_l=noun.lower(), adj_l=adj.lower(), noun_sing=singular(noun).lower())
-        return Mob(adj, noun, quirk, mod, desc)
+        adj, noun = self._unique(lambda: mob_words(self.rng, 3))
+        return describe_mob(self.rng, adj, noun)
 
     def make_boss(self, tier: str, mob: Mob, base: int) -> Boss:
         name = self._unique(lambda: (f"{self.rng.choice(BOSS_FIRST)} {self.rng.choice(BOSS_TITLE)}"
@@ -1948,12 +1970,8 @@ class Generator4:
         return v
 
     def make_mob(self) -> Mob:
-        adj, noun = self._unique(lambda: (self.rng.choice(TRAIN_MOB_ADJ), self.rng.choice(TRAIN_MOB_NOUN)))
-        quirk, mod = self.rng.choice(MOB_QUIRKS)
-        desc = self.rng.choice(SYSTEM_DESC).format(
-            a=article(adj), b=f"{adj.lower()} {singular(noun).lower()}",
-            noun=noun, noun_l=noun.lower(), adj_l=adj.lower(), noun_sing=singular(noun).lower())
-        return Mob(adj, noun, quirk, mod, desc)
+        adj, noun = self._unique(lambda: mob_words(self.rng, 4))
+        return describe_mob(self.rng, adj, noun)
 
     def build(self) -> Floor4:
         n_lines = self.sc["lines"]
@@ -2348,12 +2366,8 @@ class Generator5:
         return v
 
     def make_mob(self, noun) -> Mob:
-        adj = self.rng.choice(RUIN_MOB_ADJ + MOB_ADJ)
-        quirk, mod = self.rng.choice(MOB_QUIRKS)
-        desc = self.rng.choice(SYSTEM_DESC).format(
-            a=article(adj), b=f"{adj.lower()} {singular(noun).lower()}",
-            noun=noun, noun_l=noun.lower(), adj_l=adj.lower(), noun_sing=singular(noun).lower())
-        return Mob(adj, noun, quirk, mod, desc)
+        adj, _ = mob_words(self.rng, 5)       # the quadrant supplies the noun
+        return describe_mob(self.rng, adj, noun)
 
     def make_castle(self, q: str, mob: Mob, top: int, diff) -> Castle:
         qd = QUADRANT_DATA[q]
@@ -2591,12 +2605,8 @@ class Generator6(Generator3):
         return self._unique(lambda: f"The {self.rng.choice(JUNGLE_ADJ)} {self.rng.choice(JUNGLE_PLACE)}")
 
     def make_mob(self) -> Mob:
-        adj, noun = self._unique(lambda: (self.rng.choice(JUNGLE_MOB_ADJ), self.rng.choice(JUNGLE_MOB_NOUN)))
-        quirk, mod = self.rng.choice(MOB_QUIRKS)
-        desc = self.rng.choice(SYSTEM_DESC).format(
-            a=article(adj), b=f"{adj.lower()} {singular(noun).lower()}",
-            noun=noun, noun_l=noun.lower(), adj_l=adj.lower(), noun_sing=singular(noun).lower())
-        return Mob(adj, noun, quirk, mod, desc)
+        adj, noun = self._unique(lambda: mob_words(self.rng, 6))
+        return describe_mob(self.rng, adj, noun)
 
     def build(self) -> Floor6:
         base = super().build()
