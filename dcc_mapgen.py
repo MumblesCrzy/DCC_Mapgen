@@ -186,6 +186,47 @@ def singular(noun: str) -> str:
 def article(word: str) -> str:
     return "an" if word[0].lower() in "aeiou" else "a"
 
+class Deck:
+    """Deals from a pool without repeating until the pool runs out, then reshuffles.
+
+    Boss mechanics were drawn with an independent sample per boss, which dedupes
+    the two a single boss gets and nothing else. A large floor 1 fields 21 bosses
+    across 33 mechanic slots, so the same trick came up five times on one floor and
+    twelve times on a huge one -- a boss run turned into the same fight repeatedly.
+    Dealing from a shuffled deck means a floor sees every mechanic once before it
+    sees any of them twice."""
+
+    def __init__(self, rng, items):
+        self.rng = rng
+        self.items = list(items)
+        self._pile = []
+
+    def draw(self) -> str:
+        if not self._pile:
+            self._pile = list(self.items)
+            self.rng.shuffle(self._pile)
+        return self._pile.pop()
+
+    def draw_many(self, k: int) -> List[str]:
+        return [self.draw() for _ in range(k)]
+
+
+def boss_mechanics(decks, tier: str) -> str:
+    """Mechanics for one boss: grander bosses get an arena-scale trick as well.
+
+    `decks` is the (any, grand) pair a generator keeps for the whole floor. Tiers
+    above neighborhood take one from each, so a city boss reshapes the room while a
+    level-7 neighborhood boss keeps to things that fit a room."""
+    any_deck, grand_deck = decks
+    if tier == "neighborhood":
+        return any_deck.draw()
+    return f"{grand_deck.draw()} {any_deck.draw()}"
+
+
+def make_mechanic_decks(rng) -> Tuple["Deck", "Deck"]:
+    return Deck(rng, BOSS_MECHANICS["any"]), Deck(rng, BOSS_MECHANICS["grand"])
+
+
 def mob_words(rng, floor: int) -> Tuple[str, str]:
     """An (adjective, noun) pair drawn from the pools a floor can host.
 
@@ -475,6 +516,7 @@ class Generator:
         self.stair_chance = stair_chance
         self.borough_boss_rate = borough_boss_rate
         self.used_mobs = set()
+        self.mech_decks = make_mechanic_decks(self.rng)
         self.used_names = set()
         self.used_firsts = set()
         self.used_titles = set()
@@ -540,9 +582,9 @@ class Generator:
                 break
         self.used_forms.add(form)
         level = base_level + self.cfg["boss_offset"][tier]
-        mechanics = self.rng.sample(BOSS_MECHANICS, 2 if tier != "neighborhood" else 1)
+        mechanics = boss_mechanics(self.mech_decks, tier)
         stair = (self.rng.random() < self.stair_chance) if tier == "neighborhood" else self.boss_stairs
-        return Boss(name, tier, level, form, " ".join(mechanics),
+        return Boss(name, tier, level, form, mechanics,
                     self.rng.choice(CHAMBER_STYLE), stair)
 
     def nbhd_name(self) -> str:
@@ -1520,6 +1562,7 @@ class Generator3:
         self.sc = SIZE3_CFG[size]
         self.days_override = days
         self.used = set()
+        self.mech_decks = make_mechanic_decks(self.rng)
 
     def _unique(self, fn):
         for _ in range(100):
@@ -1549,9 +1592,9 @@ class Generator3:
             size=sz, a_size=("an" if sz in (8, 11, 18) else "a"),
             noun_l=mob.noun.lower(), noun_sing=singular(mob.noun).lower())
         level = self.cfg["city_boss_level"] if tier == "city" else base + self.cfg["boss_offset"][tier]
-        mech = self.rng.sample(BOSS_MECHANICS, 1 if tier == "neighborhood" else 2)
+        mech = boss_mechanics(self.mech_decks, tier)
         chamber = "roams the ruins; no fixed chamber"
-        return Boss(name, tier, level, form, " ".join(mech), chamber, False)
+        return Boss(name, tier, level, form, mech, chamber, False)
 
     def level_range(self, dist, max_dist):
         lo, hi = self.cfg["mob_band"]
@@ -1960,6 +2003,7 @@ class Generator4:
         self.sc = SIZE4_CFG[size]
         self.days_override = days
         self.used = set()
+        self.mech_decks = make_mechanic_decks(self.rng)
 
     def _unique(self, fn):
         for _ in range(100):
@@ -2356,6 +2400,7 @@ class Generator5:
         self.cfg = FLOOR5_CFG
         self.days_override = days
         self.used = set()
+        self.mech_decks = make_mechanic_decks(self.rng)
 
     def _unique(self, fn):
         for _ in range(100):
@@ -2382,7 +2427,7 @@ class Generator5:
         bump = {"Easy": 10, "Moderate": 15, "Hard": 20, "Brutal": 25}[diff[0]]
         lvl = top + bump + self.rng.randint(-2, 2)
         boss = Boss(f"{ruler}, ruler of {name}", "castle", lvl, form,
-                    " ".join(self.rng.sample(BOSS_MECHANICS, 2)), "the throne room", True)
+                    boss_mechanics(self.mech_decks, "castle"), "the throne room", True)
         c = Castle(name=name, form=self.rng.choice(qd["castle_forms"]), ruler=ruler, boss=boss,
                    throne=self.rng.choice(THRONE_NOTE), difficulty=diff[0], difficulty_note=diff[1])
         if self.size in ("medium", "large"):

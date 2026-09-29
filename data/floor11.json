@@ -223,7 +223,19 @@
   "Breaks the arena floor in stages; the fighting ring shrinks.",
   "Silences spells while the crowd is chanting; kill the noise or fight in it.",
   "Takes a parade theme each phase and becomes it.",
-  "Cannot be killed while the Grand Master lives. The Grand Master is in the stands."
+  "Cannot be killed while the Grand Master lives. The Grand Master is in the stands.",
+  "Rides a float of its own and must be dismounted before it can be hurt.",
+  "Judges the party mid-fight; a low score from the stands becomes a debuff.",
+  "Wears the crowd's favourite as armour. Turn the crowd and the armour goes.",
+  "Absorbs any float still standing when a phase ends, and grows.",
+  "Marches a circuit of the arena and only stops to be hit at the turns.",
+  "Pulls a former crawler from the stands each phase to fight in its place.",
+  "Confetti hides it every thirty seconds; it moves while the air is full.",
+  "Its music buffs everything hostile in the arena. The band is on a gantry.",
+  "Cannot be hit by anyone who has not performed for the crowd this phase.",
+  "Splits into the parade's three best floats, each with its own theme.",
+  "Repairs itself between phases unless the pit crew is dealt with first.",
+  "Every cheer heals it and every boo staggers it. Play to the stands."
  ],
  "PARADE_BOSS_FORM": [
   "a colossal centipede-thing wearing the parade's discarded masks as scales",

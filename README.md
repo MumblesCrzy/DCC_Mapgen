@@ -36,6 +36,12 @@ porters and signalmen but still turns up the occasional Hazard-Pay Shark. To add
 drop it under the tag it belongs to; to give a floor a new habitat, add the tag to both
 banks and list it for that floor.
 
+`BOSS_MECHANICS` is split the same way, into `any` and `grand`. Neighborhood bosses
+draw only from `any`; borough, city and top-tier bosses take one `grand` mechanic —
+the arena-scale ones that reshape a room — plus one ordinary one. A floor deals them
+from a shuffled deck, so it runs through every mechanic before repeating any, and a
+boss run is not the same fight over and over.
+
 ## Examples
 
 | Main map | Room detail (per neighborhood) |

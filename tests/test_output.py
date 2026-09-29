@@ -514,6 +514,101 @@ class MobVocabularyTest(unittest.TestCase):
         self.assertIn(adj, mg.MOB_ADJ["anywhere"])
 
 
+class BossMechanicTest(unittest.TestCase):
+    """A boss run should not be the same fight repeatedly.
+
+    Mechanics used to be sampled per boss from one 14-entry list, which dedupes the
+    pair a single boss gets and nothing across the floor: a large floor 1 repeated
+    one mechanic five times over 26 slots, and a huge floor twelve times. They are
+    dealt from a shuffled deck now, so a floor exhausts the pool before repeating."""
+
+    @staticmethod
+    def _bosses(fl):
+        out = []
+        for attr in ("neighborhoods", "cells"):
+            for item in getattr(fl, attr, []) or []:
+                if getattr(item, "boss", None):
+                    out.append(item.boss)
+        for group in (getattr(fl, "borough_bosses", {}) or {},
+                      getattr(fl, "city_bosses", {}) or {}):
+            out += list(group.values())
+        if getattr(fl, "top_boss", None):
+            out.append(fl.top_boss)
+        return out
+
+    @classmethod
+    def setUpClass(cls):
+        cls.known = set(mg.BOSS_MECHANICS["any"]) | set(mg.BOSS_MECHANICS["grand"])
+
+    def _split(self, text):
+        """Mechanics are joined with a space, so they are split back by matching."""
+        found, rest = [], text
+        while rest:
+            hit = next((m for m in self.known if rest.startswith(m)), None)
+            if hit is None:
+                self.fail(f"unrecognised mechanic text: {rest[:60]!r}")
+            found.append(hit)
+            rest = rest[len(hit):].lstrip()
+        return found
+
+    def test_a_floor_does_not_repeat_until_the_pool_runs_out(self):
+        pool = len(self.known)
+        for floor, size in ((1, "large"), (2, "large"), (3, "large"), (6, "large")):
+            with self.subTest(floor=floor, size=size):
+                for seed in (1, 2, 3):
+                    fl = mg.generate(floor, size, seed, images=False).floor
+                    slots = [m for b in self._bosses(fl) for m in self._split(b.mechanic)]
+                    counts = collections.Counter(slots)
+                    # Repeats are only acceptable once every mechanic has been used.
+                    allowed = max(1, -(-len(slots) // pool))
+                    worst = max(counts.values()) if counts else 0
+                    self.assertLessEqual(
+                        worst, allowed,
+                        f"floor {floor} {size} seed {seed}: a mechanic appears "
+                        f"{worst} times across {len(slots)} slots")
+
+    def test_even_the_biggest_floor_spreads_them(self):
+        """A huge floor has more slots than mechanics, so some must repeat -- but
+        only about as often as the arithmetic forces."""
+        fl = mg.generate(1, "huge", 42, images=False).floor
+        slots = [m for b in self._bosses(fl) for m in self._split(b.mechanic)]
+        counts = collections.Counter(slots)
+        self.assertGreater(len(slots), len(self.known), "expected more slots than mechanics")
+        self.assertLessEqual(max(counts.values()), 3,
+                             f"a mechanic appears {max(counts.values())} times")
+        self.assertGreater(len(counts), len(self.known) * 0.8,
+                           "most of the pool should be in play on a floor this size")
+
+    def test_only_grand_bosses_get_arena_scale_mechanics(self):
+        """A level-7 neighborhood boss should not be reshaping the arena."""
+        grand = set(mg.BOSS_MECHANICS["grand"])
+        for seed in range(6):
+            fl = mg.generate(1, "large", seed, images=False).floor
+            for nb in fl.neighborhoods:
+                for mech in self._split(nb.boss.mechanic):
+                    self.assertNotIn(mech, grand,
+                                     f"neighborhood boss {nb.boss.name} got a grand mechanic")
+            for boss in list(fl.borough_bosses.values()) + list(fl.city_bosses.values()):
+                mechs = self._split(boss.mechanic)
+                self.assertTrue(any(m in grand for m in mechs),
+                                f"{boss.name} ({boss.tier}) got no grand mechanic")
+
+    def test_the_pools_are_deep_enough_to_matter(self):
+        self.assertGreater(len(mg.BOSS_MECHANICS["any"]), 40)
+        self.assertGreater(len(mg.BOSS_MECHANICS["grand"]), 10)
+        self.assertGreater(len(mg.PARADE_BOSS_MECHANICS), 12)
+
+    def test_mechanics_are_not_listed_twice(self):
+        seen = collections.Counter(m for group in mg.BOSS_MECHANICS.values() for m in group)
+        dupes = sorted(m for m, n in seen.items() if n > 1)
+        self.assertEqual(dupes, [], f"duplicated mechanics: {dupes}")
+
+    def test_a_deck_deals_everything_before_repeating(self):
+        deck = mg.Deck(random.Random(1), ["a", "b", "c"])
+        self.assertEqual(sorted(deck.draw_many(3)), ["a", "b", "c"])
+        self.assertEqual(sorted(deck.draw_many(3)), ["a", "b", "c"])
+
+
 class OptionValidationTest(unittest.TestCase):
     """Bad options raise MapgenError rather than exiting or crashing."""
 
