@@ -340,20 +340,42 @@
   "thriving": [
    "trading loot out of a safe room {where}",
    "thriving {where}, having adopted something local as a pet",
-   "throws in with another team {where}; both rosters now count as one",
+   [
+    "throws in with another team {where}; both rosters now count as one",
+    2
+   ],
    "sponsored mid-fight {where} and hasn't shut up about it since",
    "clears a boss well ahead of schedule {where}",
    "running a working shop {where}, and getting rich on it",
-   "two of them hit a class upgrade {where} on the same run"
+   [
+    "takes a class upgrade {where} on the back of one good run",
+    0,
+    "upgrade"
+   ]
   ],
   "costly": [
-   "down to half their number, holed up {where}",
+   [
+    "down to half their number, holed up {where}",
+    -2
+   ],
    "loses their healer to a trapped loot box {where}",
-   "breaks and runs {where}, leaving two behind",
-   "reduced to one survivor, still moving {where}",
+   [
+    "breaks and runs {where}, leaving two behind",
+    -2
+   ],
+   [
+    "reduced to one survivor, still moving {where}",
+    -6
+   ],
    "caught in the open {where} and comes away lighter",
-   "burns every consumable they own getting clear {where}",
-   "loses their stockpile to a mimic {where} and starts over"
+   [
+    "burns every consumable they own getting clear {where}",
+    0
+   ],
+   [
+    "loses their stockpile to a mimic {where} and starts over",
+    0
+   ]
   ],
   "fatal": [
    "wiped out by a boss {where}, per the death feed",

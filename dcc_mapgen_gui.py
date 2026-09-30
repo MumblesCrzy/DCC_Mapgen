@@ -272,9 +272,9 @@ class CampaignView(ttk.Frame):
     party changes in play -- befriend the group that attacked them on floor 2 --
     so it is editable here, and takes effect on the next floor generated."""
 
-    COLUMNS = (("name", "Team", 230), ("standing", "Standing", 90),
-               ("met", "Met", 45), ("seen", "Last seen", 70),
-               ("fate", "Last report", 260))
+    COLUMNS = (("name", "Team", 210), ("standing", "Standing", 85),
+               ("party", "Crawlers", 60), ("met", "Met", 40),
+               ("seen", "Last seen", 65), ("fate", "Last report", 250))
 
     def __init__(self, master, app):
         super().__init__(master)
@@ -305,7 +305,8 @@ class CampaignView(ttk.Frame):
 
         edit = ttk.Labelframe(self, text="Where they stand with the party", padding=PAD)
         edit.pack(fill="x", padx=PAD, pady=(0, PAD))
-        self.sel_lbl = ttk.Label(edit, text="Select a team above.", foreground="#666")
+        self.sel_lbl = ttk.Label(edit, text="Select a team above.", foreground="#666",
+                                 justify="left")
         self.sel_lbl.pack(anchor="w")
         row = ttk.Frame(edit)
         row.pack(fill="x", pady=(6, 0))
@@ -385,8 +386,12 @@ class CampaignView(ttk.Frame):
             seen = f"floor {t.floor}" if t.history else "-"
             if not t.alive:
                 fate = f"died on floor {t.died_on} - {fate}"
+            # A dash until floor 3, where the System has everyone pick a race
+            # and a class and there is finally a party to count.
+            party = str(len(t.members)) if t.members else "-"
             self.tree.insert("", "end", iid=t.name,
-                             values=(t.name, t.disposition, t.first_seen, seen, fate),
+                             values=(t.name, t.disposition, party, t.first_seen,
+                                     seen, fate),
                              tags=() if t.alive else ("dead",))
         self._select(None)
 
@@ -407,7 +412,8 @@ class CampaignView(ttk.Frame):
             self.apply_btn.configure(state="disabled")
             return
         note = "" if team.alive else f"  (died on floor {team.died_on})"
-        self.sel_lbl.configure(text=f"{team.name} - formed from {team.origin}{note}",
+        who = "\n" + mg.party_line(team) if team.members else ""
+        self.sel_lbl.configure(text=f"{team.name} - formed from {team.origin}{note}{who}",
                                foreground="#222")
         self.standing.set(team.disposition)
         self.standing_cb.configure(state="normal")
@@ -938,6 +944,29 @@ def selftest() -> int:
         if app.view._photo is not None:
             check(app.view._photo.width() > 100,
                   f"preview is a real image ({app.view._photo.width()}px wide)")
+
+    # The campaign table, driven straight off a roster rather than through the file
+    # dialogs: floor 3 is where crawlers pick a race and a class, so the party
+    # column has to fill in by then.
+    roster = None
+    for f in (1, 2, 3):
+        roster = mg.generate(f, "small", 4242, images=False, roster=roster).roster
+    app.roster = roster
+    app.campaign_tab.refresh()
+    app.update()
+    rows = app.campaign_tab.tree.get_children()
+    check(len(rows) == len(roster.teams), f"campaign table lists every team ({len(rows)})")
+    parties = [app.campaign_tab.tree.set(r, "party") for r in rows]
+    check(any(p.isdigit() and int(p) > 1 for p in parties),
+          f"teams carry a party after floor 3 (column shows {parties})")
+    # A team that died on floor 1 or 2 never chose, so pick one that did.
+    picked = next(t for t in roster.teams if t.members)
+    app.campaign_tab.tree.selection_set(picked.name)
+    app.update()
+    check(mg.party_line(picked) in app.campaign_tab.sel_lbl.cget("text"),
+          "selecting a team names its crawlers")
+    app.roster = None
+    app.campaign_tab.refresh()
 
     # An option combination the generator must reject rather than crash on.
     errs = []

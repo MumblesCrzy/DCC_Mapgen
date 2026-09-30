@@ -20,6 +20,7 @@ import collections
 import json
 import os
 import random
+import re
 import subprocess
 import sys
 import tempfile
@@ -439,6 +440,267 @@ class CampaignTest(unittest.TestCase):
 def _t(team):
     """A team reduced to comparable data, for round-trip checks."""
     return {f: getattr(team, f) for f in mg._TEAM_FIELDS}
+
+
+class CrawlerPartyTest(unittest.TestCase):
+    """Floor 3 is where every surviving crawler picks a race and a class.
+
+    The race is a permanent transformation and must never be rerolled. The class
+    can move, but only the way the System moves it: the documented level 6 upgrade,
+    and only forwards. The party itself grows and shrinks with what the floor's
+    report says happened to the group, which is the part that has to stay honest --
+    a group reported as reduced to one survivor cannot be listed four strong."""
+
+    PARTY_RE = re.compile(
+        r"^  - (?:\w+ crawlers|Down to one crawler|Who they were): (.+)\.$")
+
+    @classmethod
+    def setUpClass(cls):
+        # One campaign, shared: every floor of it is generated map-free, but that is
+        # still ten builds and each test would otherwise pay for its own.
+        cls.per_floor = {}
+        roster = None
+        for f in mg.FLOORS:
+            res = mg.generate(f, "large", 700 + f, images=False, roster=roster)
+            roster, cls.per_floor[f] = res.roster, res.floor.other_crawlers
+        cls.roster = roster
+        cls.md = {2: mg.generate(2, "medium", 808, images=False).markdown}
+
+    def _teams(self, floors=mg.FLOORS):
+        for f in floors:
+            for team in self.per_floor[f]:
+                yield f, team
+
+    @staticmethod
+    def _bulk(seeds, size="large"):
+        """Campaigns dealt straight through build_crawler_teams against a stub floor.
+
+        Some of what a party has to get right -- never doubling up on a class, say --
+        goes wrong about twice in four thousand team reports, which is far more
+        volume than generating real floors can afford. This skips the maps, the
+        rooms and the rendering and deals nothing but rosters."""
+        stub = type("StubFloor", (), {"days": 8, "neighborhoods": None})
+        for seed in seeds:
+            roster = mg.CampaignRoster()
+            for f in mg.FLOORS:
+                roster = mg.build_crawler_teams(stub(), size, seed, f, roster)
+                for team in roster.teams:
+                    if team.floor == f and team.history:
+                        yield f, team
+
+    # -- when a party exists at all -----------------------------------------
+
+    def test_nobody_has_picked_before_floor_3(self):
+        for f, team in self._teams(floors=(1, 2)):
+            self.assertEqual(team.members, [],
+                             f"{team.name} has a race and class on floor {f}, "
+                             "before the System offers them")
+        self.assertNotIn("crawlers:", self.md[2],
+                         "floor 2 printed a party line")
+
+    def test_every_team_has_a_party_from_floor_3_down(self):
+        for f, team in self._teams(floors=(3, 4, 5, 6, 8, 9, 10, 11)):
+            self.assertTrue(team.members,
+                            f"{team.name} is reported on floor {f} with no crawlers")
+            self.assertLessEqual(len(team.members), mg.PARTY_MAX)
+            for m in team.members:
+                self.assertIn(m["race"], mg.CRAWLER_RACE)
+
+    def test_a_party_never_doubles_up_on_a_race_or_a_class(self):
+        """Run at volume: the way this breaks is a Rogue joining a merged party that
+        already holds the Rogue Trapmaster they are about to upgrade into, which
+        needs a merge, a floor 6 and the wrong draw all at once."""
+        reports = 0
+        for f, team in self._bulk(range(200)):
+            reports += 1
+            races = [m["race"] for m in team.members]
+            classes = [m["class"] for m in team.members]
+            self.assertEqual(len(set(races)), len(races),
+                             f"{team.name} on floor {f} has two of the same race")
+            self.assertEqual(len(set(classes)), len(classes),
+                             f"{team.name} on floor {f} has two of the same class: "
+                             f"{classes}")
+        self.assertGreater(reports, 3000, "not enough reports to find a rare clash")
+
+    # -- what persists and what moves ---------------------------------------
+
+    def test_a_race_is_permanent(self):
+        """A party that did not grow can only have lost people, so its races this
+        floor have to be a subset of last floor's. Rerolling shows up here."""
+        seen = {}
+        for f, team in self._teams():
+            races = {m["race"] for m in team.members}
+            was = seen.get(team.surname)
+            if was is not None and len(races) <= len(was):
+                self.assertTrue(races <= was,
+                                f"{team.name} arrived on floor {f} with races nobody "
+                                f"had before: {races - was}")
+            seen[team.surname] = races
+
+    def test_the_level_6_upgrade_is_taken_and_only_forwards(self):
+        for f, team in self._teams(floors=(6, 8, 9, 10, 11)):
+            for m in team.members:
+                self.assertNotIn(m["class"], mg.CRAWLER_CLASS_UPGRADE,
+                                 f"{team.name} on floor {f} still has a "
+                                 f"{m['class']}, which upgrades at level 6")
+        below = {m["class"] for f, t in self._teams(floors=(3, 4, 5)) for m in t.members}
+        self.assertTrue(below & set(mg.CRAWLER_CLASS_UPGRADE),
+                        "no team above floor 6 has an upgradable class, so the "
+                        "upgrade check above proves nothing")
+
+    def test_an_earlier_floors_result_keeps_its_own_classes(self):
+        """Upgrading rewrites the member dicts in place, so a result handed back for
+        floor 3 has to hold copies of them or floor 6 promotes it retroactively.
+
+        Several seeds, and the assertion at the end: on any one seed the floor 3
+        teams can all die before floor 6, or all hold classes with no upgrade path,
+        and the comparison passes without having tested anything."""
+        proved = 0
+        for seed in (4242, 11, 77, 900, 1234):
+            roster, three, snapshot = None, None, None
+            for f in (3, 4, 5, 6):
+                res = mg.generate(f, "medium", seed, images=False, roster=roster)
+                roster = res.roster
+                if f == 3:
+                    three = res.floor.other_crawlers
+                    snapshot = [[dict(m) for m in t.members] for t in three]
+            self.assertEqual([[dict(m) for m in t.members] for t in three], snapshot,
+                             f"seed {seed}: later floors rewrote the floor 3 result")
+            live = {t.surname: t for t in roster.teams}
+            proved += sum([dict(m) for m in live[t.surname].members] != snap
+                          for t, snap in zip(three, snapshot))
+        self.assertTrue(proved, "no floor 3 team was changed by a later floor, so "
+                                "sharing the member dicts would have gone unnoticed")
+
+    # -- the report and the roster agree ------------------------------------
+
+    def test_the_party_line_names_exactly_the_roster(self):
+        for f in (3, 6):
+            res = mg.generate(f, "medium", 808, images=False)
+            lines = [self.PARTY_RE.match(ln) for ln in res.markdown.splitlines()]
+            found = [m.group(1) for m in lines if m]
+            teams = [t for t in res.floor.other_crawlers if t.members]
+            self.assertEqual(len(found), len(teams),
+                             f"floor {f} printed {len(found)} party lines for "
+                             f"{len(teams)} teams")
+            for who, team in zip(found, teams):
+                people = who.split(", ")
+                self.assertEqual(len(people), len(team.members),
+                                 f"{team.name} lists {len(people)} of "
+                                 f"{len(team.members)} crawlers")
+                self.assertTrue(all(p.startswith(("a ", "an ")) for p in people), who)
+                self.assertEqual(len(set(people)), len(people),
+                                 f"floor {f} listed the same crawler twice: {who}")
+                for m in team.members:
+                    self.assertIn(f"{m['race']} {m['class']}", who)
+
+    def test_a_wiped_team_is_written_up_in_the_past_tense(self):
+        dead = [t for _, t in self._teams() if not t.alive and t.members]
+        self.assertTrue(dead, "no team died holding a party, so nothing was checked")
+        for team in dead:
+            self.assertTrue(mg.party_line(team).startswith("Who they were:"),
+                            f"{team.name} died on floor {team.died_on} but is still "
+                            f"described in the present: {mg.party_line(team)}")
+        for _, team in self._teams():
+            if team.alive:
+                self.assertNotIn("Who they were", mg.party_line(team))
+
+    def test_a_report_that_claims_an_upgrade_can_show_one(self):
+        claims = 0
+        for seed in range(40):
+            roster = None
+            for f in (3, 4, 5):
+                res = mg.generate(f, "medium", 300 + seed * 7 + f, images=False,
+                                  roster=roster)
+                roster = res.roster
+                for team in res.floor.other_crawlers:
+                    if "class upgrade" not in team.status:
+                        continue
+                    claims += 1
+                    self.assertTrue(
+                        any(m["class"] in mg._UPGRADED_CLASSES for m in team.members),
+                        f"{team.name} on floor {f} reports a class upgrade but "
+                        f"nobody in it has one: {team.members}")
+        self.assertGreater(claims, 5, "too few upgrade reports to prove anything")
+
+    def test_an_untagged_report_falls_back_to_what_its_outcome_costs(self):
+        """Most of the bank is still plain strings, and has to keep working: a
+        costly floor takes someone whether or not the line spells it out, and the
+        other three outcomes leave the headcount alone."""
+        plain = collections.Counter()
+        for kind, entries in mg.TEAM_STATUS.items():
+            for entry in entries:
+                if isinstance(entry, list):
+                    self.assertEqual(mg.status_change(entry, kind),
+                                     (entry[1], entry[2] if len(entry) > 2 else None))
+                    continue
+                plain[kind] += 1
+                expected = -1 if kind == "costly" else 0
+                self.assertEqual(mg.status_change(entry, kind), (expected, None),
+                                 f"a plain {kind} report should be worth {expected}")
+        self.assertTrue(plain["costly"], "no plain costly report left to check")
+
+    def test_the_numbers_a_report_names_are_the_numbers_listed(self):
+        """The bank tags the reports that say out loud what happened to the group's
+        headcount. Those are the ones a party line can contradict."""
+        cases = [(-1, 4, 3), (-2, 4, 2), (-6, 5, 1), (-6, 1, 1), (2, 3, 5),
+                 (2, mg.PARTY_MAX, mg.PARTY_MAX), (0, 4, 4)]
+        for delta, before, after in cases:
+            with self.subTest(delta=delta, before=before):
+                rng = random.Random(7)
+                team = mg.CrawlerTeam(name="Team Probe", origin="a probe", outcome="costly")
+                team.members = mg._new_members(rng, before, [])
+                self.assertEqual(len(team.members), before)
+                mg._deal_party(rng, team, 4, (delta, None))
+                self.assertEqual(len(team.members), after)
+
+    def test_a_merge_reads_as_a_merge(self):
+        """Every report tagged as a merge should leave the group bigger, and the
+        other outcomes should never quietly grow."""
+        grew = 0
+        for seed in range(30):
+            roster = None
+            prev = {}
+            for f in (3, 4, 5, 6, 8):
+                res = mg.generate(f, "medium", 500 + seed * 11 + f, images=False,
+                                  roster=roster)
+                roster = res.roster
+                for team in res.floor.other_crawlers:
+                    was = prev.get(team.surname)
+                    now = len(team.members)
+                    if was is not None and now > was:
+                        grew += 1
+                        self.assertIn("throws in with another team", team.status,
+                                      f"{team.name} grew from {was} to {now} on floor "
+                                      f"{f} with no report that says so: {team.status}")
+                    prev[team.surname] = now
+        self.assertGreater(grew, 5, "no team ever merged, so nothing was checked")
+
+    # -- storage -------------------------------------------------------------
+
+    def test_a_roster_written_before_parties_existed_still_loads(self):
+        """`members` was added without bumping ROSTER_VERSION, on the grounds that
+        an older file is readable and fills in on its next floor. That only holds
+        while this passes."""
+        roster = None
+        for f in (1, 2, 3, 4, 5):
+            roster = mg.generate(f, "medium", 4242, images=False, roster=roster).roster
+        old = roster.to_dict()
+        for team in old["teams"]:
+            team.pop("members")                 # what the previous build would write
+        back = mg.CampaignRoster.from_dict(old)
+        self.assertTrue(back.active())
+        self.assertTrue(all(t.members == [] for t in back.teams))
+        res = mg.generate(6, "medium", 4242, images=False, roster=back)
+        for team in res.floor.other_crawlers:
+            self.assertTrue(team.members,
+                            f"{team.name} carried in from an older roster and never "
+                            "picked a race or class")
+
+    def test_a_party_survives_a_save_and_load(self):
+        round_tripped = mg.CampaignRoster.from_dict(self.roster.to_dict())
+        self.assertEqual([_t(t) for t in round_tripped.teams],
+                         [_t(t) for t in self.roster.teams])
 
 
 class MobVocabularyTest(unittest.TestCase):

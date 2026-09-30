@@ -345,6 +345,9 @@ class CrawlerTeam:
     origin: str
     surname: str = ""              # the bare place name, kept so it is never reused
     disposition: str = "wary"      # hostile..allied; how they take the party
+    # Who is actually in the group: one {"race", "class"} per crawler, empty until
+    # the floor 3 selection. Race never changes after that; the class can upgrade.
+    members: List[dict] = field(default_factory=list)
     # -- this floor's report, rerolled each floor --
     status: str = ""
     outcome: str = "steady"        # steady/thriving/costly/fatal
@@ -402,9 +405,13 @@ class CampaignRoster:
         return cls(teams=[_team_from_dict(t) for t in raw.get("teams", [])])
 
 
+# Still 1 with `members` added: a roster written before parties existed loads
+# fine (the field defaults to empty and fills on the next floor 3+), and an older
+# build reading a newer file drops the key it does not know. Bumping this would
+# reject both, for no incompatibility.
 ROSTER_VERSION = 1
-_TEAM_FIELDS = ("name", "origin", "surname", "disposition", "status", "outcome",
-                "day", "floor", "first_seen", "died_on", "history")
+_TEAM_FIELDS = ("name", "origin", "surname", "disposition", "members", "status",
+                "outcome", "day", "floor", "first_seen", "died_on", "history")
 
 
 def _team_to_dict(t: CrawlerTeam) -> dict:
@@ -803,12 +810,18 @@ def crawler_section(fl) -> List[str]:
     else:
         o.append("Other survivors sharing this floor, as the death feed and the rumor "
                  "mill have them. This floor runs too short to date them to a day.")
+    if any(t.members for t in teams):
+        o.append("")
+        o.append("Everyone still breathing chose a race and a class on floor 3. The race "
+                 "is permanent; classes with a level 6 upgrade show it from floor 6 down.")
     o.append("")
     for ct in teams:
         lead = f"Day {ct.day} — {ct.name}" if ct.day else ct.name
         carried = "" if ct.first_seen == ct.floor else f" — met on floor {ct.first_seen}"
         o.append(f"- **{lead}** (*{ct.disposition}*{carried}) — formed from "
                  f"{ct.origin}; {ct.status}.")
+        if ct.members:
+            o.append(f"  - {party_line(ct)}")
     o.append("")
     # The reactions are listed once rather than per team: with more teams than
     # points on the scale they repeat, and the same two sentences under every
@@ -4132,6 +4145,34 @@ TEAM_NEW_PER_FLOOR = {"small": 1, "medium": 1, "large": 2, "huge": 2,
 VETERAN_CAP = 4          # floors of experience past which no further credit accrues
 VETERAN_SLOPE = 0.6      # how sharply that credit lowers the odds of drawing a death
 
+# Floor 3 is where the System makes every surviving crawler choose a race and a
+# class. The race is a permanent transformation and is never rerolled; the class
+# has a documented upgrade for some picks, which lands at level 6 -- floor 6 in
+# this generator, which is where the reference material puts the crawlers who
+# take one. Groups the party meets on a later floor have already chosen, so they
+# arrive with a party built and, past floor 6, already upgraded.
+CLASS_FLOOR = 3
+CLASS_UPGRADE_FLOOR = 6
+_UPGRADED_CLASSES = frozenset(CRAWLER_CLASS_UPGRADE.values())
+
+# How many crawlers are in a group the party runs into. Weighted towards three
+# and four: a six-strong party that has held together this deep is a rarity, and
+# should read as one.
+PARTY_SIZES = (2, 3, 4, 5, 6)
+PARTY_SIZE_WEIGHTS = (3, 5, 5, 3, 1)
+PARTY_MAX = 8            # even a merged roster stops reading as a party past this
+
+# What a report does to a group's numbers when it does not say otherwise. A team
+# that had a costly floor lost someone; the other three outcomes leave the roster
+# where it was. A status in the bank can override this by being written as
+# [text, delta] -- or [text, delta, "upgrade"] for one that claims a class
+# upgrade. A delta larger than any party just means "down to the last one",
+# since a group is never thinned below its final survivor.
+PARTY_DELTA = {"costly": -1}
+
+_COUNT_WORD = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five", 6: "six",
+               7: "seven", 8: "eight"}
+
 
 def _render_floor(fl, floor: int) -> str:
     """Markdown for a built floor. Kept beside the build dispatch so the two lists
@@ -4204,6 +4245,103 @@ def _fresh_teams(rng, count: int, floor: int, taken_surnames, taken_origins) -> 
     return out
 
 
+def upgraded_class(name: str) -> str:
+    """The level 6 form of a class, or the class itself if it has no documented one.
+
+    Idempotent, so running a team through it again on floors 7+ is a no-op rather
+    than a second promotion."""
+    return CRAWLER_CLASS_UPGRADE.get(name, name)
+
+
+def status_text(entry) -> str:
+    """The report itself, whether the bank wrote it bare or with a party change."""
+    return entry[0] if isinstance(entry, (list, tuple)) else entry
+
+
+def status_change(entry, outcome: str) -> Tuple[int, Optional[str]]:
+    """How many crawlers a report costs or gains the group, and any class upgrade
+    it claims. Bare strings fall back to whatever the outcome usually does, so a
+    bank edited by hand needs no new syntax."""
+    if isinstance(entry, (list, tuple)):
+        return entry[1], (entry[2] if len(entry) > 2 else None)
+    return PARTY_DELTA.get(outcome, 0), None
+
+
+def _new_members(rng, n: int, existing: List[dict]) -> List[dict]:
+    """n crawlers who share neither a race nor a class with anyone already there.
+    Duplicates are possible in life but read as a generator slip, and both banks
+    are far larger than any party."""
+    if n <= 0:
+        return []
+    taken = {m["race"] for m in existing}
+    races = [r for r in CRAWLER_RACE if r not in taken]
+    # A class is off the table if the party already has it *or* already has what it
+    # upgrades into: a Rogue joining a group that has a Rogue Trapmaster becomes a
+    # second Rogue Trapmaster the moment the floor deals an upgrade.
+    taken = {m["class"] for m in existing}
+    classes = [c for c in CRAWLER_CLASS
+               if c not in taken and upgraded_class(c) not in taken]
+    return [{"race": race, "class": klass} for race, klass
+            in zip(_pick_distinct(rng, races, n), _pick_distinct(rng, classes, n))]
+
+
+def _deal_party(rng, team: CrawlerTeam, floor: int,
+                change: Tuple[int, Optional[str]] = (0, None)) -> None:
+    """Bring a team's crawlers up to date for the floor they are reported on.
+
+    In order: a group that has not chosen yet picks races and classes, the floor's
+    report adds or takes away crawlers, and anyone owed a class upgrade takes it.
+    Upgrades come last so that crawlers who joined a merged roster this floor are
+    promoted alongside the ones who were already there."""
+    if floor < CLASS_FLOOR:
+        return                               # nobody has chosen yet on floors 1-2
+    delta, effect = change
+    if not team.members:
+        n = rng.choices(PARTY_SIZES, weights=PARTY_SIZE_WEIGHTS)[0]
+        team.members = _new_members(rng, n, [])
+    if delta > 0:
+        team.members += _new_members(rng, min(delta, PARTY_MAX - len(team.members)),
+                                     team.members)
+    elif delta < 0:
+        # Never thinned below the last survivor: a group with nobody left is a
+        # fatality, which is a separate outcome with its own bookkeeping.
+        for _ in range(min(-delta, len(team.members) - 1)):
+            team.members.pop(rng.randrange(len(team.members)))
+    # Below floor 6 only a group whose report says it outlevelled the floor takes
+    # its upgrade early; from floor 6 everyone owed one has it.
+    if floor >= CLASS_UPGRADE_FLOOR or effect == "upgrade":
+        for m in team.members:
+            m["class"] = upgraded_class(m["class"])
+    if effect == "upgrade" and not any(m["class"] in _UPGRADED_CLASSES
+                                       for m in team.members):
+        # A sixth of the classes in the bank have a documented upgrade, so about
+        # half of all parties draw this report with nobody able to show it.
+        # Rather than print a line with nothing under it, one crawler is re-dealt
+        # a class that does have a path, and takes it.
+        taken = {m["class"] for m in team.members}
+        paths = [upgraded_class(c) for c in CRAWLER_CLASS_UPGRADE
+                 if upgraded_class(c) not in taken]
+        team.members[rng.randrange(len(team.members))]["class"] = rng.choice(paths)
+
+
+def _article(word: str) -> str:
+    return "an" if word[:1].upper() in "AEIOU" else "a"
+
+
+def party_line(team: CrawlerTeam) -> str:
+    """One line naming what the group is made of, for the Other Crawlers section."""
+    who = ", ".join(f"{_article(m['race'])} {m['race']} {m['class']}"
+                    for m in team.members)
+    n = len(team.members)
+    if not team.alive:
+        # Past tense for a group that is already on the death feed, and kept rather
+        # than dropped: floor 11 parades crawlers who died floors ago.
+        return f"Who they were: {who}."
+    if n == 1:
+        return f"Down to one crawler: {who}."
+    return f"{_COUNT_WORD.get(n, str(n)).capitalize()} crawlers: {who}."
+
+
 def build_crawler_teams(fl, size: str, seed: int, floor: int,
                         roster: Optional[CampaignRoster] = None) -> CampaignRoster:
     """Deal this floor's roster of other survivors and return the updated campaign.
@@ -4272,7 +4410,8 @@ def build_crawler_teams(fl, size: str, seed: int, floor: int,
 
     for i, team in enumerate(active):
         team.outcome = outcomes[i]
-        team.status = next(pools[outcomes[i]]).format(where=wheres[i])
+        entry = next(pools[outcomes[i]])
+        team.status = status_text(entry).format(where=wheres[i])
         if days:
             # One team per slice of the countdown, jittered inside its slice:
             # rolling each freely piles half the roster onto the same day.
@@ -4283,10 +4422,17 @@ def build_crawler_teams(fl, size: str, seed: int, floor: int,
         if i in newcomers:
             form = next(dim_forms) if i in diminished else next(neutral)
             team.name = form.format(name=team.surname)
+        # After the report is drawn, so that a status claiming the group lost half
+        # its number, merged with another team or took a class upgrade is the same
+        # thing the party line underneath it says.
+        _deal_party(rng, team, floor, status_change(entry, team.outcome))
         if team.outcome == "fatal":
             team.died_on = floor
-        team.history.append({"floor": floor, "day": team.day,
-                             "outcome": team.outcome, "status": team.status})
+        entry = {"floor": floor, "day": team.day,
+                 "outcome": team.outcome, "status": team.status}
+        if team.members:
+            entry["crawlers"] = len(team.members)
+        team.history.append(entry)
 
     return roster
 
@@ -4324,7 +4470,10 @@ def floor_teams(roster: CampaignRoster, floor: int) -> List[CrawlerTeam]:
     1 after floor 2 has been generated from the same campaign."""
     teams = [t for t in roster.teams if t.floor == floor and t.history]
     teams.sort(key=lambda t: (t.day is None, t.day or 0, t.name))
-    return [replace(t, history=list(t.history)) for t in teams]
+    # The member dicts are copied too, not just the list: floor 6 upgrades classes
+    # in place, and a floor 3 result should still show the floor 3 classes.
+    return [replace(t, history=list(t.history),
+                    members=[dict(m) for m in t.members]) for t in teams]
 
 
 @dataclass

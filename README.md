@@ -15,7 +15,7 @@ A procedural floor/map generator in the style of the *Dungeon Crawler Carl* book
 - **Floor 9** (Faction Wars) — the nine-slice pie around Larracos, warlords, stance paths.
 - **Floor 10** (Don't Come In Last) — seven-heat race season, garage/vehicle/upgrades.
 - **Floor 11** (A Parade of Horribles) — parade route, judges, arena boss.
-- **Campaigns** — other crawler teams carry from floor to floor, keeping who they are and where they stand with the party, until their luck runs out. See [Campaigns](#campaigns).
+- **Campaigns** — other crawler teams carry from floor to floor, keeping who they are and where they stand with the party, until their luck runs out. From Floor 3 they carry a party of named races and classes too. See [Campaigns](#campaigns).
 - A **desktop app** (`dcc_mapgen_gui.py`) wrapping all of the above: pick a floor and size, generate, and read the write-up and browse every map without leaving the window. See [Desktop app](#desktop-app).
 - Every floor supports `--seed` for reproducible maps — byte-for-byte, and [tested](#tests) as such — and `--image`/`--save` for SVG or PNG output (PNG needs the optional `resvg-py` package).
 - `--rooms-for` can (re)generate just the room-level detail for one neighborhood from a floor you already generated and are playing, without touching the rest of the data.
@@ -130,6 +130,45 @@ the party has just met — around three times harder, once a team is four floors
 Harder, not safe: a veteran still dies, and roughly half of full Floor 1-to-11 runs
 end with one of the original groups still out there.
 
+### Races and classes
+
+Floor 3 is where the System makes every surviving crawler choose a race and a
+class, so from Floor 3 down each team is listed with the crawlers in it:
+
+```
+- **Day 1 — Team Grayson Park** (*territorial*) — formed from a laundromat and the people waiting on the dryers; holed up out at the edge of the map, waiting out something they have no intention of fighting.
+  - Four crawlers: a Harpy Rogue Trapmaster, a Changeling Former Child Actor, a Satyr Explosives Engineer, an Ashkin Hired Mercenary.
+```
+
+The race is a permanent transformation and is never rerolled — a Gnoll met on Floor
+3 is still a Gnoll on Floor 11. The class can move, but only the way the System
+moves it: `CRAWLER_CLASS_UPGRADE` in `data/common.json` maps the classes with a
+documented level 6 upgrade onto what they become, and a team standing on Floor 6 or
+deeper has taken it. A Pit Fighter met on Floor 4 is a Pit Champion by Floor 6.
+About two teams in five field someone who upgraded.
+
+The party itself grows and shrinks with what the floor's report says happened to
+the group, so the two never contradict each other. A report can say so explicitly:
+a status in `TEAM_STATUS` written as `[text, delta]` moves the headcount by that
+much, and `[text, delta, "upgrade"]` marks one that claims a class upgrade and
+makes sure somebody in the group can show it. Anything left as a plain string
+falls back to what its outcome usually costs — a `costly` floor takes one crawler,
+the other three outcomes leave the group as it was. A group is never thinned past
+its last survivor; that is what `fatal` is for.
+
+```json
+"costly": [
+  "loses their healer to a trapped loot box {where}",
+  ["reduced to one survivor, still moving {where}", -6],
+  ["burns every consumable they own getting clear {where}", 0]
+]
+```
+
+The race bank (`CRAWLER_RACE`, 46 entries) and the class bank (`CRAWLER_CLASS`, 102)
+are both in `data/common.json`. The classes are taken from the series' own list;
+the races are anchored on the ones the books name and filled out with picks the
+System would plausibly offer. Both are ordinary word banks — edit them.
+
 Standing is the part the party changes in play. Befriend the group that attacked
 them on Floor 2, or fall out with an ally:
 
@@ -216,6 +255,13 @@ so a floor gets a spread of fates and dispositions: no roster repeats a name, or
 or status; a floor of more than one team is never all fatalities; the dispositions
 span the hostile–allied scale; and a name like "What's Left of X" only lands on a
 team that actually lost something.
+
+A fourth covers the parties those teams field from Floor 3: nobody has a race or a
+class before the floor that offers them, a race is never rerolled afterwards, the
+level 6 upgrade is taken on Floor 6 and never walked back, and no party doubles up
+on a race or a class. That last one goes wrong about twice in four thousand team
+reports, so it is checked against two hundred campaigns dealt without their maps
+rather than against the pinned corpus.
 
 If you add a floor, the suite fails until `tests/corpus.py` covers it.
 
