@@ -999,6 +999,70 @@ class BossNameTest(unittest.TestCase):
         self.assertGreater(pairs, 5, "the pair shape never came up")
 
 
+class LootAndFeatureTest(unittest.TestCase):
+    """A floor should not keep handing out the same loot or the same room.
+
+    Both banks were fifteen entries sampled independently per cell, which is the
+    boss-mechanic bug again in a different place: a large floor 3 covered 18 regions
+    with 11 loot themes and used one of them three times, and a huge floor 1 put the
+    same loot theme on eight of its 64 neighborhoods. They are dealt from a deck
+    now, so repeats start only once the bank is spent, and then evenly."""
+
+    @staticmethod
+    def _cells(floor, size, seed):
+        fl = mg.generate(floor, size, seed, images=False).floor
+        return [c for c in (getattr(fl, "cells", None)
+                            or getattr(fl, "neighborhoods", None) or [])
+                if hasattr(c, "loot")]
+
+    def _banks(self, floor):
+        """The feature bank a floor draws from; floors 3 and 6 share the ruins one."""
+        return {"loot": mg.LOOT_THEMES,
+                "feature": mg.NOTABLE_FEATURES if floor in (1, 2) else mg.RUIN_FEATURES}
+
+    def test_a_floor_does_not_repeat_until_the_bank_runs_out(self):
+        for floor, size in ((1, "large"), (2, "large"), (3, "medium"), (3, "large"),
+                            (6, "large")):
+            for seed in (1, 77, 4242):
+                cells = self._cells(floor, size, seed)
+                for field, bank in self._banks(floor).items():
+                    self.assertLessEqual(len(cells), len(bank),
+                                         f"this case no longer fits the {field} bank, "
+                                         "so it cannot prove anything")
+                    values = [getattr(c, field) for c in cells]
+                    self.assertEqual(len(set(values)), len(values),
+                                     f"floor {floor} {size} seed {seed} repeats a "
+                                     f"{field} across {len(cells)} cells")
+
+    def test_past_the_bank_the_repeats_are_even(self):
+        """A continent is 400 neighborhoods against a 58-entry bank, so repetition
+        is arithmetic there. Dealing is what keeps it from clumping: every entry is
+        used n or n+1 times rather than one of them eight times."""
+        for floor, size in ((1, "huge"), (1, "giant")):
+            cells = self._cells(floor, size, 4242)
+            for field, bank in self._banks(floor).items():
+                counts = collections.Counter(getattr(c, field) for c in cells)
+                self.assertEqual(len(counts), len(bank),
+                                 f"floor {floor} {size} left part of the {field} "
+                                 f"bank unused: {len(counts)} of {len(bank)}")
+                spread = max(counts.values()) - min(counts.values())
+                self.assertLessEqual(spread, 1,
+                                     f"floor {floor} {size} uses its busiest {field} "
+                                     f"{max(counts.values())} times and its quietest "
+                                     f"{min(counts.values())}")
+
+    def test_the_banks_cover_the_sizes_that_are_played(self):
+        """The guard above only means something while the banks outlast a large
+        floor, which is the biggest size every floor shares."""
+        for floor in (1, 3, 6):
+            cells = len(self._cells(floor, "large", 4242))
+            for field, bank in self._banks(floor).items():
+                self.assertGreaterEqual(
+                    len(bank), cells,
+                    f"the {field} bank ({len(bank)}) is smaller than a large floor "
+                    f"{floor} ({cells} cells), so that floor must repeat itself")
+
+
 class BossMechanicTest(unittest.TestCase):
     """A boss run should not be the same fight repeatedly.
 

@@ -61,6 +61,13 @@ characters is rerolled — stacking a title onto an already multi-word mob produ
 *The Burning Goblin Bomb Bard the Non-Disclosure Agreement*. Floor 11's single
 Marshal has its own shapes in `PARADE_BOSS_NAME`.
 
+Loot themes (`LOOT_THEMES`, 58) and room features (`NOTABLE_FEATURES` for Floors 1–2,
+`RUIN_FEATURES` for Floors 3 and 6) are dealt from a deck for the same reason. They
+used to be fifteen entries sampled per cell, so a large Floor 3 covered 18 regions
+with 11 loot themes and used one of them three times. A floor now works through the
+bank before repeating anything, and past that — a continent is 400 neighborhoods —
+the repeats are spread evenly instead of clumping.
+
 ## Examples
 
 | Main map | Room detail (per neighborhood) |
@@ -293,6 +300,11 @@ seed, down to all 21 boss names, and Floors 3 and 6 came back with a third of th
 bosses in common. Each floor derives its own stream from the seed now. That check runs
 against a control, because two floors overlapping on a 15-entry bank is arithmetic,
 not a bug: the yardstick is how much a floor overlaps with *itself* at another seed.
+
+A sixth is the same idea applied to what fills a floor: no floor repeats a loot theme
+or a room feature while its bank still has unused entries, past that the repeats are
+even rather than clumped, and the banks are checked against the cell count of a large
+floor so the first guard cannot quietly stop meaning anything.
 
 If you add a floor, the suite fails until `tests/corpus.py` covers it.
 

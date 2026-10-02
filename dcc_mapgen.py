@@ -598,6 +598,14 @@ class Generator:
         self.used_mobs = set()
         self.mech_decks = make_mechanic_decks(self.rng)
         self.namer = BossNamer(self.rng, NBHD_ADJ)
+        # Loot and features are dealt, not rolled. Both banks used to be fifteen
+        # entries sampled independently per cell, so a large floor 3 covered 18
+        # regions with 11 loot themes and one of them three times over, and a huge
+        # floor 1 put the same loot theme on eight of its 64 neighborhoods. Dealing
+        # spreads them: repeats only start once the bank is exhausted, and then
+        # evenly, instead of clumping wherever the dice fell.
+        self.loot_deck = Deck(self.rng, LOOT_THEMES)
+        self.feature_deck = Deck(self.rng, NOTABLE_FEATURES)
         self.used_names = set()
         self.used_forms = set()
 
@@ -755,10 +763,10 @@ class Generator:
             nbhds.append(Neighborhood(
                 idx=i, label=grid_label(i), name=self.nbhd_name(),
                 row=r, col=c, borough=borough, city=city, mob=mob, level_range=lr,
-                boss=boss, loot=self.rng.choice(LOOT_THEMES),
+                boss=boss, loot=self.loot_deck.draw(),
                 safe_rooms=self.rng.randint(*self.cfg["safe_rooms"]),
                 tutorial_guild=self.rng.random() < self.cfg["guild_chance"],
-                feature=self.rng.choice(NOTABLE_FEATURES),
+                feature=self.feature_deck.draw(),
                 distance=dist, is_entry=(r, c) == entry,
                 loot_tier=LOOT_BOX_TIERS[tier_idx],
             ))
@@ -1633,6 +1641,9 @@ class Generator3:
         self.used = set()
         self.mech_decks = make_mechanic_decks(self.rng)
         self.namer = BossNamer(self.rng, RUIN_ADJ)
+        # Dealt rather than rolled, for the reasons in Generator.
+        self.loot_deck = Deck(self.rng, LOOT_THEMES)
+        self.feature_deck = Deck(self.rng, RUIN_FEATURES)
 
     def _unique(self, fn):
         for _ in range(100):
@@ -1741,7 +1752,7 @@ class Generator3:
                     idx=i, label=label, name=self.region_name(), row=r, col=c,
                     mob=self.make_mob(), night=self.rng.choice(NIGHT_THREATS),
                     level_range=self.level_range(dist, max_dist),
-                    loot=self.rng.choice(LOOT_THEMES), feature=self.rng.choice(RUIN_FEATURES),
+                    loot=self.loot_deck.draw(), feature=self.feature_deck.draw(),
                     distance=dist, is_entry=(r, c) == entry)
 
         regions = [v for v in grid.values() if isinstance(v, Region)]
