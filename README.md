@@ -7,7 +7,7 @@ A procedural floor/map generator in the style of the *Dungeon Crawler Carl* book
 ## Features
 
 - **Floors 1 & 2** — neighborhood/borough/city grid, from small up through large (1 City). Beyond that, huge/giant/massive/continent tile multiple Cities together — County (4 Cities), State (9), Country (16), Continent (25) — each City keeping its own City Boss, with one top-tier boss (County/State/Country/Continent) overseeing all of them. Bosses (with a word-bank uniqueness guard so names/forms don't collide), loot boxes, achievements, an Elite, other crawler teams, the tutorial guild, and a full connected **room graph** per neighborhood (safe rooms, hidden passages, guild hall, filler rooms, corridor encounters). `--stair-chance` and `--borough-boss-rate` tune how often neighborhood stairwells and borough bosses show up.
-- **Floor 3** (The Over City) — settlements on a wilderness grid, roaming bosses, locked stairwells, quests, one Elite.
+- **Floor 3** (The Over City) — settlements on a wilderness grid, roaming bosses, locked stairwells, a quest board per town, one Elite.
 - **Floor 4** (The Iron Tangle) — schematic rail/transit map.
 - **Floor 5** (The Bubbles) — four quadrants, castles, factions.
 - **Floor 6** (The Hunting Grounds) — Floor 3's grid reskinned as jungle, with hunter parties and a bounty board.
@@ -60,6 +60,27 @@ on that floor, so no two bosses read as the same person, and a name longer than 
 characters is rerolled — stacking a title onto an already multi-word mob produced
 *The Burning Goblin Bomb Bard the Non-Disclosure Agreement*. Floor 11's single
 Marshal has its own shapes in `PARADE_BOSS_NAME`.
+
+Quests on Floors 3 and 6 work the same way. A town posts three, six or nine of them
+by size, so a large floor carries about thirty across seven towns — far more than
+`rng.choice` on a ten-entry bank can fill without repeating. Objectives, items,
+rewards, flavor lines, giver trades and title forms are each dealt from their own
+per-floor deck, and the banks are sized to outlast a large floor:
+
+| bank | entries | | bank | entries |
+|---|---|---|---|---|
+| `QUEST_OBJECTIVE` | 52 | | `QUEST_REWARD` | 40 |
+| `QUEST_ITEM` | 50 | | `QUEST_FLAVOR` | 40 |
+| `QUEST_GIVER_ROLE` | 42 | | `QUEST_RELATIVE` | 24 |
+| `QUEST_TITLE` | 22 | | | |
+
+`QUEST_TITLE` is new — the five title forms used to be inlined in the code and all
+keyed off the giver's trade or the town, which a nine-quest town repeats at once.
+Titles can now name the thing the quest is about (`{item}`, `{mob}`, `{region}`),
+and a form is only used if the objective actually mentioned that thing, so you never
+get *The Price of the Town Charter* over a boundary dispute with no charter in it.
+Note that `{settlement}` in an objective means *somewhere else* while `{town}` in a
+title means the place posting the quest.
 
 Loot themes (`LOOT_THEMES`, 58) and room features (`NOTABLE_FEATURES` for Floors 1–2,
 `RUIN_FEATURES` for Floors 3 and 6) are dealt from a deck for the same reason. They
@@ -301,10 +322,12 @@ bosses in common. Each floor derives its own stream from the seed now. That chec
 against a control, because two floors overlapping on a 15-entry bank is arithmetic,
 not a bug: the yardstick is how much a floor overlaps with *itself* at another seed.
 
-A sixth is the same idea applied to what fills a floor: no floor repeats a loot theme
-or a room feature while its bank still has unused entries, past that the repeats are
-even rather than clumped, and the banks are checked against the cell count of a large
-floor so the first guard cannot quietly stop meaning anything.
+A sixth is the same idea applied to what fills a floor: no floor repeats a loot theme,
+a room feature or a quest while its bank still has unused entries, past that the
+repeats are even rather than clumped, and the banks are checked against the cell and
+quest counts of a large floor so the first guard cannot quietly stop meaning anything.
+A quest title is also checked against its own objective, and Floor 6's Zockau is
+pinned at zero quests, that being deliberate rather than an oversight.
 
 If you add a floor, the suite fails until `tests/corpus.py` covers it.
 

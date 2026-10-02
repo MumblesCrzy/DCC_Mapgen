@@ -999,6 +999,131 @@ class BossNameTest(unittest.TestCase):
         self.assertGreater(pairs, 5, "the pair shape never came up")
 
 
+class QuestTest(unittest.TestCase):
+    """Floors 3 and 6 post three times the quests they used to.
+
+    A large floor carries about thirty across seven towns, against banks of ten
+    objectives, ten rewards and eight flavor lines. Every component is dealt from
+    a per-floor deck now, and the title has to name something the objective is
+    actually about."""
+
+    QUOTA = {"tiny": 3, "small": 3, "medium": 6, "large": 6, "xl": 9}
+
+    @staticmethod
+    def _towns(floor, size, seed):
+        fl = mg.generate(floor, size, seed, images=False).floor
+        return fl, [c for c in fl.cells if hasattr(c, "quests")]
+
+    @classmethod
+    def setUpClass(cls):
+        cls.floors = {(f, s): cls._towns(f, s, 4242)
+                      for f in (3, 6) for s in ("small", "medium", "large")}
+
+    def test_a_town_posts_three_times_what_it_used_to(self):
+        for (floor, size), (_, towns) in self.floors.items():
+            for st in towns:
+                if st.name == "Zockau":
+                    continue                 # deliberately posts nothing; see below
+                self.assertGreaterEqual(
+                    len(st.quests), self.QUOTA[st.size],
+                    f"{st.name} on floor {floor} {size} is {st.size} and posts "
+                    f"{len(st.quests)} quests, under its quota")
+                # A stairwell-unlock quest is assigned before the quota is topped
+                # up, so one town on a floor can carry a single extra.
+                self.assertLessEqual(len(st.quests), self.QUOTA[st.size] + 1)
+
+    def test_zockau_posts_no_quests(self):
+        """Floor 6 replaces a settlement with Zockau, hostile and hunters-only,
+        and gives it no quest board. That is deliberate -- pinned here so the
+        quota rules above cannot quietly start filling it."""
+        found = 0
+        for size in ("small", "medium", "large"):
+            for seed in (1, 77, 4242):
+                _, towns = self._towns(6, size, seed)
+                zockau = [t for t in towns if t.name == "Zockau"]
+                self.assertEqual(len(zockau), 1, f"floor 6 {size} has no Zockau")
+                found += 1
+                self.assertEqual(zockau[0].quests, [],
+                                 "Zockau is supposed to post nothing")
+                self.assertTrue(zockau[0].hostile)
+        self.assertEqual(found, 9)
+
+    def test_a_floor_does_not_repeat_a_quest(self):
+        for (floor, size), (_, towns) in self.floors.items():
+            quests = [q for st in towns for q in st.quests]
+            for field, bank in (("objective", mg.QUEST_OBJECTIVE),
+                                ("reward", mg.QUEST_REWARD),
+                                ("flavor", mg.QUEST_FLAVOR)):
+                values = [getattr(q, field) for q in quests]
+                self.assertLessEqual(len(values), len(bank),
+                                     f"floor {floor} {size} posts more quests than the "
+                                     f"{field} bank holds, so this proves nothing")
+                counts = collections.Counter(values)
+                worst, hits = counts.most_common(1)[0]
+                self.assertEqual(hits, 1,
+                                 f"floor {floor} {size} uses the {field} {worst!r} "
+                                 f"{hits} times across {len(values)} quests")
+
+    def test_the_banks_outlast_a_large_floor(self):
+        """The check above is only worth anything while the banks are bigger than
+        the quest count. Raising the quota again means raising the banks."""
+        for floor in (3, 6):
+            _, towns = self.floors[(floor, "large")]
+            posted = sum(len(st.quests) for st in towns)
+            for name, bank in (("objective", mg.QUEST_OBJECTIVE),
+                               ("reward", mg.QUEST_REWARD),
+                               ("flavor", mg.QUEST_FLAVOR),
+                               ("item", mg.QUEST_ITEM),
+                               ("giver role", mg.QUEST_GIVER_ROLE)):
+                self.assertGreaterEqual(
+                    len(bank), posted,
+                    f"a large floor {floor} posts {posted} quests against "
+                    f"{len(bank)} {name}s, so it has to repeat itself")
+
+    def test_a_title_only_names_what_the_quest_is_about(self):
+        """Drawing the subject before the objective is what lets a title name it --
+        and what let "The Price of the Town Charter" sit on top of a boundary
+        dispute with no charter in it, because the objective never used the item."""
+        for (floor, size), (fl, towns) in self.floors.items():
+            regions = [c.name for c in fl.cells if not hasattr(c, "quests")]
+            mobs = [c.mob.name for c in fl.cells if hasattr(c, "mob")]
+            for st in towns:
+                for q in st.quests:
+                    with self.subTest(floor=floor, size=size, title=q.title):
+                        for mob in mobs:
+                            if mob in q.title:
+                                self.assertIn(mob, q.objective)
+                        for region in regions:
+                            if mg.mid_phrase(region) in q.title:
+                                self.assertIn(mg.mid_phrase(region), q.objective)
+                        for item in mg.QUEST_ITEM:
+                            if mg.cap_words(item) in q.title:
+                                self.assertIn(item, q.objective)
+
+    def test_a_proper_name_reads_inside_a_sentence(self):
+        self.assertEqual(mg.mid_phrase("The Sunken Market"), "the Sunken Market")
+        self.assertEqual(mg.mid_phrase("Grayhollow"), "Grayhollow")
+        for (floor, size), (_, towns) in self.floors.items():
+            for st in towns:
+                for q in st.quests:
+                    self.assertNotIn(" in The ", q.objective)
+                    self.assertNotIn(" to The ", q.objective)
+                    self.assertNotIn(" from The ", q.objective)
+
+    def test_title_case_leaves_the_small_words_alone(self):
+        """str.title() gives "Magistrate'S Seal" and "Set Of Certified Scales"."""
+        self.assertEqual(mg.cap_words("magistrate's seal"), "Magistrate's Seal")
+        self.assertEqual(mg.cap_words("set of certified scales"),
+                         "Set of Certified Scales")
+        self.assertEqual(mg.cap_words("the matter of the miller"),
+                         "The Matter of the Miller")
+        for (floor, size), (_, towns) in self.floors.items():
+            for st in towns:
+                for q in st.quests:
+                    for small in (" Of ", " The ", " A ", " To ", " From ", " With "):
+                        self.assertNotIn(small, q.title, f"{q.title!r}")
+
+
 class LootAndFeatureTest(unittest.TestCase):
     """A floor should not keep handing out the same loot or the same room.
 

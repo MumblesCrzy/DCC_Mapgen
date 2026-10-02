@@ -174,6 +174,27 @@ MOB_QUIRKS = [tuple(x) for x in MOB_QUIRKS]   # (text, danger modifier)
 # Helpers
 # ---------------------------------------------------------------------------
 
+_TITLE_SMALL = {"a", "an", "and", "as", "at", "but", "by", "for", "from", "in",
+                "nor", "of", "on", "or", "the", "to", "with", "who"}
+
+
+def cap_words(text: str) -> str:
+    """Title-case for display. Not str.title(), which capitalizes after an
+    apostrophe ("Magistrate'S Seal") and does not know to leave the small words
+    alone ("Set Of Certified Scales")."""
+    out = []
+    for i, word in enumerate(text.split()):
+        keep = i and word.lower() in _TITLE_SMALL
+        out.append(word.lower() if keep else word[:1].upper() + word[1:])
+    return " ".join(out)
+
+
+def mid_phrase(name: str) -> str:
+    """A proper name used inside a phrase: "The Sunken Market" reads better as
+    "Business in the Sunken Market" than as "Business in The Sunken Market"."""
+    return name[0].lower() + name[1:] if name.startswith("The ") else name
+
+
 def singular(noun: str) -> str:
     if noun.endswith("ies"):
         return noun[:-3] + "y"
@@ -1644,6 +1665,13 @@ class Generator3:
         # Dealt rather than rolled, for the reasons in Generator.
         self.loot_deck = Deck(self.rng, LOOT_THEMES)
         self.feature_deck = Deck(self.rng, RUIN_FEATURES)
+        # Quests too, and for the same reason with more force: a town posts three
+        # times as many as it used to, so a large floor carries about thirty and
+        # every component of them would otherwise be drawn from a bank of ten.
+        self.quest_decks = {name: Deck(self.rng, bank) for name, bank in (
+            ("objective", QUEST_OBJECTIVE), ("item", QUEST_ITEM),
+            ("role", QUEST_GIVER_ROLE), ("reward", QUEST_REWARD),
+            ("flavor", QUEST_FLAVOR), ("title", QUEST_TITLE))}
 
     def _unique(self, fn):
         for _ in range(100):
@@ -1687,21 +1715,40 @@ class Generator3:
         return (a, min(hi, a + self.rng.randint(2, 4)))
 
     def make_quest(self, s_name, region_names, settlement_names, mob_names, unlocks=None) -> Quest:
-        role = self.rng.choice(QUEST_GIVER_ROLE)
+        d = self.quest_decks
+        role = d["role"].draw()
         giver = f"{self.rng.choice(BOSS_FIRST)} the {role}"
         others = [n for n in settlement_names if n != s_name] or [s_name]
-        obj = self.rng.choice(QUEST_OBJECTIVE).format(
-            item=self.rng.choice(QUEST_ITEM), region=self.rng.choice(region_names),
-            mob=self.rng.choice(mob_names), settlement=self.rng.choice(others),
+        # The subject is drawn before the objective rather than inline in the
+        # format call, so the title can name the thing the quest is about. The old
+        # five title forms all keyed off the giver's trade or the town, which a
+        # town posting nine quests repeats immediately.
+        item, region = d["item"].draw(), self.rng.choice(region_names)
+        mob, elsewhere = self.rng.choice(mob_names), self.rng.choice(others)
+        form = d["objective"].draw()
+        obj = form.format(
+            item=item, region=mid_phrase(region), mob=mob, settlement=elsewhere,
             giver=giver.split()[0], relative=self.rng.choice(QUEST_RELATIVE),
-            role=self.rng.choice(QUEST_GIVER_ROLE))
-        title = self.rng.choice(["The Matter of the {x}", "A Favor for the {x}", "What the {x} Wants",
-                                 "{x}'s Errand", "Trouble in {s}"]).format(
-            x=role.split(" (")[0].split(" who")[0].title(), s=s_name)
-        reward = self.rng.choice(QUEST_REWARD)
+            role=d["role"].draw())
+        # A title may only name a subject the objective actually used, or it
+        # announces "The Price of the Town Charter" over a boundary dispute that
+        # has no charter in it. Forms built from the giver's trade or the town
+        # always fit, so there is always something to fall back on.
+        subjects = {k for k in ("item", "region", "mob") if "{%s}" % k in form}
+        for _ in range(8):
+            title_form = d["title"].draw()
+            if {k for k in ("item", "region", "mob") if "{%s}" % k in title_form} <= subjects:
+                break
+        # {settlement} in an objective is somewhere else; {town} in a title is the
+        # place posting the quest. Two names because they are two things.
+        title = title_form.format(
+            role=cap_words(role.split(" (")[0].split(" who")[0]), town=s_name,
+            item=cap_words(item), mob=mob, region=mid_phrase(region),
+            giver=giver.split()[0])
+        reward = d["reward"].draw()
         if unlocks:
             reward += f"; unlocks stairwell {unlocks}"
-        return Quest(title, giver, obj, self.rng.choice(QUEST_FLAVOR), reward, unlocks)
+        return Quest(title, giver, obj, d["flavor"].draw(), reward, unlocks)
 
     def build(self) -> Floor3:
         n = self.sc["grid"]
@@ -1806,7 +1853,10 @@ class Generator3:
             stairs.append(sw)
 
         # Ordinary quests.
-        qcount = {"tiny": 1, "small": 1, "medium": 2, "large": 2, "xl": 3}
+        # Three times what this used to post. A large floor carries about thirty
+        # quests across seven towns, which is why every component above is dealt
+        # from a deck instead of rolled.
+        qcount = {"tiny": 3, "small": 3, "medium": 6, "large": 6, "xl": 9}
         for st in settlements:
             while len(st.quests) < qcount[st.size]:
                 st.quests.append(self.make_quest(st.name, region_names, settlement_names, mob_names))
