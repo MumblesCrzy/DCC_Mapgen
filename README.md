@@ -82,6 +82,25 @@ get *The Price of the Town Charter* over a boundary dispute with no charter in i
 Note that `{settlement}` in an objective means *somewhere else* while `{town}` in a
 title means the place posting the quest.
 
+Floors 3 and 6 give every region a day mob and a `NIGHT_THREATS` line saying what
+changes after dark. Most of those lines are the same mob behaving differently, but
+some mean it is only there for half the cycle — and those need a second creature.
+An entry tagged with a shift gets one rolled:
+
+```json
+["Dormant by day; at night they hunt in packs led by a Level +5 alpha.", "day"],
+["At night they retreat to nests and the region's real predator comes out.", "night"],
+"Night doubles their level and halves their loot."
+```
+
+The tag names the half the listed mob *doesn't* cover, so the first line gets the
+region a daylight mob and the second gets it an after-dark one. Plain strings get
+nothing extra. About three regions on a large floor come out with two mobs on the
+same level band. The second of those entries used to end with the parenthetical
+"(roll a second mob)", which is a generator asking the table to finish its job;
+[a test](#tests) now fails on any line that asks for a roll, and on any new line
+that says a region empties out without carrying a tag.
+
 Loot themes (`LOOT_THEMES`, 58) and room features (`NOTABLE_FEATURES` for Floors 1–2,
 `RUIN_FEATURES` for Floors 3 and 6) are dealt from a deck for the same reason. They
 used to be fifteen entries sampled per cell, so a large Floor 3 covered 18 regions
@@ -362,6 +381,9 @@ repeats are even rather than clumped, and the banks are checked against the cell
 quest counts of a large floor so the first guard cannot quietly stop meaning anything.
 A quest title is also checked against its own objective, and Floor 6's Zockau is
 pinned at zero quests, that being deliberate rather than an oversight.
+
+The night-threat bank was 8 entries against 18 regions, which put the same line on
+four of them, so it grew to 47 and is dealt from a deck like the rest.
 
 A seventh group covers the stat rules, where the risk is drift rather than variety:
 the section renders identically on every floor and seed, it is the last section of

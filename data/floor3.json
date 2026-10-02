@@ -134,12 +134,81 @@
  "NIGHT_THREATS": [
   "Numbers triple after dark and they gain darkvision.",
   "At night the parasites take over and they coordinate like a single organism.",
-  "Dormant by day; at night they hunt in packs led by a Level +5 alpha.",
+  [
+   "Dormant by day; at night they hunt in packs led by a Level +5 alpha.",
+   "day"
+  ],
   "Sunset triggers a frenzy; they attack anything, including each other.",
   "After dark they go quiet and stalk. You won't hear them.",
-  "At night they retreat to nests and the region's real predator comes out (roll a second mob).",
+  [
+   "At night they retreat to nests and the region's real predator comes out.",
+   "night"
+  ],
   "They light fires at night. Follow the glow only if you want a fight.",
-  "Night doubles their level and halves their loot."
+  "Night doubles their level and halves their loot.",
+  "They sleep in heaps after dark and post one sentry. The sentry is the dangerous one.",
+  "Their eyes reflect torchlight at two hundred yards. So do yours, to them.",
+  "After sunset they will not cross running water, and they know where all of it is.",
+  "Night makes them cold-blooded and slow. It also makes them very hard to kill.",
+  "They sing at night. It carries for miles and it is a headcount.",
+  "At night they bury themselves and strike from underfoot.",
+  "Their camouflage only works in daylight. After dark they are obvious, and furious about it.",
+  "They hunt by body heat after dark, so a cold camp is genuinely invisible to them.",
+  "Night brings their young out, and the adults become considerably less reasonable.",
+  "After dark they will trade. By daylight they deny it ever happened.",
+  "They migrate at night, in one direction, and trample whatever is in the way.",
+  "Moonlight burns them. The overcast nights are the bad ones.",
+  "At night their wounds close. Anything done to them during the day is undone by dawn.",
+  "They drag the day's dead back to a cache after dark. Follow them if you want the gear.",
+  "Nightfall splits them into pairs that hunt a quarter mile apart.",
+  "After dark they mimic voices they heard during the day, including yours.",
+  "They go blind at night and compensate by being everywhere at once.",
+  "At night the whole region's worth of them converges on whatever is making light.",
+  "Territorial by day, nomadic by night. The map is wrong after sunset.",
+  "Night doubles their speed and halves their caution.",
+  "After dark they are docile unless touched, and they are difficult not to touch.",
+  "They take the high ground at night and throw things from it.",
+  "At night they stop eating and start collecting. They will take gear over food.",
+  "Their venom is only active after dark, which nobody warns a new crawler about.",
+  "They post no sentries at night, because something else is watching for them.",
+  "After dark they coordinate with the region next door, so clearing one achieves nothing.",
+  "At night there are three times as many of them and they are a third as brave.",
+  "They go quiet a full hour before dark. That hour is the only warning.",
+  "Night turns them scavenger; they will not start a fight they can inherit.",
+  "They roost at height after sunset and drop on whatever passes beneath.",
+  "After dark they follow sound rather than sight, and they are patient about it.",
+  [
+   "They do not exist in daylight. Not asleep, not hidden - gone, and back at dusk.",
+   "day"
+  ],
+  [
+   "Strictly nocturnal; by day the region belongs to something else entirely.",
+   "day"
+  ],
+  [
+   "They hatch at dusk and are dead by dawn, every night, without fail.",
+   "day"
+  ],
+  [
+   "Daylight drives them underground, and what uses the surface is not related to them.",
+   "day"
+  ],
+  [
+   "They bed down in a heap at sunset, and something else takes the region until dawn.",
+   "night"
+  ],
+  [
+   "At dusk they run for the settlements, and whatever they are running from moves in.",
+   "night"
+  ],
+  [
+   "By night they are prey rather than predator, and their predator is on this map.",
+   "night"
+  ],
+  [
+   "They hold the region while the sun is up and surrender it at dusk without a fight.",
+   "night"
+  ]
  ],
  "RUIN_FEATURES": [
   "A signpost pointing to the nearest settlement. Half the signs lie.",

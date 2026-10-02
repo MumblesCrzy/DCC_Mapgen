@@ -999,6 +999,129 @@ class BossNameTest(unittest.TestCase):
         self.assertGreater(pairs, 5, "the pair shape never came up")
 
 
+class NightThreatTest(unittest.TestCase):
+    """A night threat that takes the listed mob off the board has to leave another.
+
+    Two entries in the bank describe a region whose mob only holds it for half the
+    cycle -- "Dormant by day", and one whose real predator comes out after dark,
+    which used to end with the parenthetical "(roll a second mob)". Neither rolled
+    anything, so a region could be described as empty in daylight with nothing
+    named to fill it. Tagged entries now get that second mob rolled for them."""
+
+    @staticmethod
+    def _regions(floor, size, seed):
+        fl = mg.generate(floor, size, seed, images=False).floor
+        return [c for c in fl.cells if hasattr(c, "night")]
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tags = {}
+        for entry in mg.NIGHT_THREATS:
+            text, shift = mg.night_threat(entry)
+            cls.tags[text] = shift
+        cls.regions = [r for floor in (3, 6) for size in ("small", "medium", "large")
+                       for seed in range(1, 8)
+                       for r in cls._regions(floor, size, seed)]
+
+    def test_a_tagged_threat_always_gets_its_second_mob(self):
+        tagged = 0
+        for reg in self.regions:
+            shift = self.tags[reg.night]
+            if shift:
+                tagged += 1
+                self.assertIsNotNone(
+                    reg.second_mob,
+                    f"{reg.name} is told {reg.night!r} and has nobody holding the "
+                    f"other half of the day")
+                self.assertEqual(reg.second_shift, shift)
+            else:
+                self.assertIsNone(
+                    reg.second_mob,
+                    f"{reg.name} got a second mob from an untagged threat")
+        self.assertGreater(tagged, 40, "too few tagged threats drawn to prove anything")
+
+    def test_both_directions_of_the_split_are_used(self):
+        shifts = collections.Counter(r.second_shift for r in self.regions if r.second_mob)
+        self.assertGreater(shifts["day"], 5, "no region ever needed a daylight mob")
+        self.assertGreater(shifts["night"], 5, "no region ever needed an after-dark mob")
+
+    def test_the_second_mob_is_not_the_first(self):
+        for reg in self.regions:
+            if reg.second_mob:
+                self.assertNotEqual(reg.second_mob.name, reg.mob.name,
+                                    f"{reg.name} lists the same mob for both shifts")
+
+    def test_the_write_up_names_the_second_mob(self):
+        for floor in (3, 6):
+            md = mg.generate(floor, "large", 4242, images=False).markdown
+            regions = self._regions(floor, "large", 4242)
+            split = [r for r in regions if r.second_mob]
+            self.assertTrue(split, f"floor {floor} seed 4242 has no split region")
+            for reg in split:
+                label = ("Holds the region by day" if reg.second_shift == "day"
+                         else "Takes the region after dark")
+                self.assertIn(f"- **{label}:** {reg.second_mob.name}", md)
+            # And the parenthetical that asked the table to do it is gone.
+            self.assertNotIn("roll a second mob", md)
+
+    # Phrases that say the listed mob is not in the region for part of the cycle.
+    # A line like this without a tag is the original bug: the write-up says the
+    # place empties out and names nothing that fills it.
+    ABSENCE = ("dormant by day", "do not exist in daylight", "strictly nocturnal",
+               "belongs to something else", "something else takes",
+               "real predator comes out", "drives them underground",
+               "dead by dawn", "moves in", "prey rather than predator",
+               "surrender it")
+
+    def test_the_two_original_offenders_stay_tagged(self):
+        """Pinned by text, not derived from the bank. Every other test here builds
+        its expectations out of NIGHT_THREATS, so untagging an entry moves the
+        expectation with it and the regression passes -- which is exactly what
+        happened when this was checked against a probe."""
+        want = {"Dormant by day": "day", "real predator comes out": "night"}
+        for phrase, shift in want.items():
+            hits = [mg.night_threat(e) for e in mg.NIGHT_THREATS
+                    if phrase in mg.night_threat(e)[0]]
+            self.assertEqual(len(hits), 1,
+                             f"expected exactly one threat saying {phrase!r}")
+            self.assertEqual(hits[0][1], shift,
+                             f"{hits[0][0]!r} needs a {shift!r} mob and is tagged "
+                             f"{hits[0][1]!r}")
+
+    def test_any_line_that_empties_a_region_is_tagged(self):
+        """The bank is meant to be edited, so this has to hold for lines nobody has
+        written yet, not only for the two that started it."""
+        for entry in mg.NIGHT_THREATS:
+            text, shift = mg.night_threat(entry)
+            hit = next((p for p in self.ABSENCE if p in text.lower()), None)
+            if hit and not shift:
+                self.fail(f"{text!r} says {hit!r}, so the region has nobody for "
+                          f'half the day. Tag it ["...", "day"] or ["...", "night"] '
+                          f"and the generator will roll that mob.")
+
+    def test_no_threat_still_asks_the_table_to_roll(self):
+        """The bank is editable, so the instruction can come back. If a line tells
+        the DM to roll a mob, the tag that makes the generator do it is missing."""
+        for entry in mg.NIGHT_THREATS:
+            text, shift = mg.night_threat(entry)
+            if "roll a" in text.lower() and "mob" in text.lower():
+                self.fail(f"{text!r} asks the table to roll; tag it instead")
+            self.assertIn(shift, ("", "day", "night"),
+                          f"{text!r} carries an unknown shift {shift!r}")
+
+    def test_a_floor_does_not_repeat_a_night_threat(self):
+        """Eight entries against eighteen regions put the same line on four of
+        them. Dealt from a deck now, like the loot and the features."""
+        for floor, size in ((3, "medium"), (3, "large"), (6, "large")):
+            for seed in (1, 77, 4242):
+                regions = self._regions(floor, size, seed)
+                self.assertLessEqual(len(regions), len(mg.NIGHT_THREATS))
+                lines = [r.night for r in regions]
+                self.assertEqual(len(set(lines)), len(lines),
+                                 f"floor {floor} {size} seed {seed} repeats a night "
+                                 f"threat across {len(regions)} regions")
+
+
 class StatRulesTest(unittest.TestCase):
     """The stat rules are reference text, so the risk is not variety but drift.
 

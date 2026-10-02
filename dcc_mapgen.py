@@ -868,6 +868,21 @@ class Generator:
 # Rendering
 # ---------------------------------------------------------------------------
 
+def night_threat(entry) -> Tuple[str, str]:
+    """A night-threat line, and the shift its region still needs a mob for.
+
+    Plain strings are the common case: one mob holds the region around the clock
+    and behaves differently after dark. An entry written as [text, "day"] or
+    [text, "night"] means the listed mob only holds half the cycle, and the tag
+    names the half that is left over. "Dormant by day" needs a daylight mob; a
+    region whose real predator comes out at night needs that predator. One of
+    these used to end with "(roll a second mob)", which is a generator telling
+    the table to do its job for it."""
+    if isinstance(entry, (list, tuple)):
+        return entry[0], entry[1]
+    return entry, ""
+
+
 def _mana_regen_for(score: int) -> str:
     """The regeneration row that applies at a score, which is the last row at or
     below it -- the table is sparse on purpose."""
@@ -942,6 +957,18 @@ def stat_rules_section() -> List[str]:
     o.append(cs["npc_note"].format(**k))
     o.append("")
     return o
+
+
+def second_mob_lines(reg) -> List[str]:
+    """The mob that holds a region for the half of the cycle its listed mob does
+    not. Same level band -- it is the same region, at a different hour."""
+    if not reg.second_mob:
+        return []
+    label = ("Holds the region by day" if reg.second_shift == "day"
+             else "Takes the region after dark")
+    return [f"- **{label}:** {reg.second_mob.name}, same level band",
+            f"  - {reg.second_mob.quirk}",
+            f"  - *{reg.second_mob.description}*"]
 
 
 def crawler_section(fl) -> List[str]:
@@ -1692,6 +1719,11 @@ class Region:
     level_range: Tuple[int, int]
     loot: str
     feature: str
+    # Some night threats mean the listed mob only holds the region for half the
+    # cycle. The other half gets its own mob, on the same level band, and
+    # second_shift says which half that is -- "day" or "night".
+    second_mob: Optional[Mob] = None
+    second_shift: str = ""
     boss: Optional[Boss] = None
     roams_to: Optional[str] = None
     stairwell: Optional[Stairwell] = None
@@ -1748,6 +1780,7 @@ class Generator3:
             ("objective", QUEST_OBJECTIVE), ("item", QUEST_ITEM),
             ("role", QUEST_GIVER_ROLE), ("reward", QUEST_REWARD),
             ("flavor", QUEST_FLAVOR), ("title", QUEST_TITLE))}
+        self.night_deck = Deck(self.rng, NIGHT_THREATS)
 
     def _unique(self, fn):
         for _ in range(100):
@@ -1871,9 +1904,14 @@ class Generator3:
                     class_guilds=sorted(self.rng.sample(CLASS_GUILDS, n_cg)),
                     club=bool(club), quests=[], distance=dist)
             else:
+                after_dark, shift = night_threat(self.night_deck.draw())
                 grid[(r, c)] = Region(
                     idx=i, label=label, name=self.region_name(), row=r, col=c,
-                    mob=self.make_mob(), night=self.rng.choice(NIGHT_THREATS),
+                    mob=self.make_mob(), night=after_dark,
+                    # A threat that takes the listed mob off the board for half the
+                    # day leaves the region to something else, so that something
+                    # gets rolled here rather than left to the DM.
+                    second_mob=self.make_mob() if shift else None, second_shift=shift,
                     level_range=self.level_range(dist, max_dist),
                     loot=self.loot_deck.draw(), feature=self.feature_deck.draw(),
                     distance=dist, is_entry=(r, c) == entry)
@@ -2036,6 +2074,7 @@ def render3(fl: Floor3) -> str:
         o.append(f"  - {reg.mob.quirk}")
         o.append(f"  - Night: {reg.night}")
         o.append(f"  - *{reg.mob.description}*")
+        o += second_mob_lines(reg)
         if reg.boss:
             b = reg.boss
             o.append(f"- **{b.tier.title()} Boss:** {b.name} (Level {b.level})")
@@ -3075,6 +3114,7 @@ def render6(fl: Floor6) -> str:
         o.append(f"  - {reg.mob.quirk}")
         o.append(f"  - Night: {reg.night}")
         o.append(f"  - *{reg.mob.description}*")
+        o += second_mob_lines(reg)
         if reg.boss:
             b = reg.boss
             o.append(f"- **{b.tier.title()} Boss:** {b.name} (Level {b.level})")
