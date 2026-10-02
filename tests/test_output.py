@@ -776,6 +776,180 @@ class MobVocabularyTest(unittest.TestCase):
         self.assertIn(adj, mg.MOB_ADJ["anywhere"])
 
 
+class BossNameTest(unittest.TestCase):
+    """A boss run should not keep introducing the same boss.
+
+    Two name shapes used to split the whole game on a coin flip, drawing from 24
+    first names and 44 titles, so a montage of 718 bosses fielded only 396 distinct
+    names and heard "{first} the {title}" half the time. Worse, floors 1 and 2 share
+    a generator and shared a seed with it, so the same seed handed back the same
+    dungeon twice -- the same neighborhoods and the same 21 bosses, name for name."""
+
+    @staticmethod
+    def _bosses(fl):
+        """Every boss on a floor, including the single floor 11 Marshal that hangs
+        off the floor itself rather than off a cell."""
+        out = []
+        for attr in ("neighborhoods", "cells"):
+            for item in getattr(fl, attr, []) or []:
+                if getattr(item, "boss", None):
+                    out.append(item.boss)
+        for group in (getattr(fl, "borough_bosses", {}) or {},
+                      getattr(fl, "city_bosses", {}) or {}):
+            out += list(group.values())
+        for attr in ("top_boss", "boss"):
+            if getattr(fl, attr, None):
+                out.append(getattr(fl, attr))
+        return out
+
+    @classmethod
+    def setUpClass(cls):
+        # A montage: every floor at a shared size, over several seeds. Markdown
+        # only -- the maps are the slow part and no boss name is in them.
+        cls.per_case = {}
+        for seed in range(1, 9):
+            for floor in mg.FLOORS:
+                fl = mg.generate(floor, "large", seed, images=False).floor
+                cls.per_case[(floor, seed)] = [b.name for b in cls._bosses(fl)]
+        cls.all_names = [n for v in cls.per_case.values() for n in v]
+
+    # -- within one floor ----------------------------------------------------
+
+    def test_a_floor_never_repeats_a_boss_name(self):
+        for (floor, seed), names in self.per_case.items():
+            self.assertEqual(len(set(names)), len(names),
+                             f"floor {floor} seed {seed} repeats a boss name")
+        # The huge tier is where the old banks ran dry: 85 bosses against 24 first
+        # names and 44 titles could not help but collide.
+        for seed in (1, 77):
+            names = [b.name for b in self._bosses(
+                mg.generate(1, "huge", seed, images=False).floor)]
+            self.assertGreater(len(names), 80)
+            self.assertEqual(len(set(names)), len(names),
+                             f"a huge floor 1 at seed {seed} repeats a boss name")
+
+    def test_a_floor_never_recombines_a_first_name_or_a_title(self):
+        """"Vexnia the Auditor" two rooms from "Vexnia the Landlord" reads as one
+        boss with two entries, so a name or a title used once on a floor is spent."""
+        firsts, titles = set(mg.BOSS_FIRST), sorted(mg.BOSS_TITLE, key=len, reverse=True)
+        for (floor, seed), names in self.per_case.items():
+            seen_first, seen_title = collections.Counter(), collections.Counter()
+            for name in names:
+                for word in name.replace(",", " ").replace('"', " ").split():
+                    if word in firsts:
+                        seen_first[word] += 1
+                title = next((t for t in titles if name.endswith(t)), None)
+                if title:
+                    seen_title[title] += 1
+            for bank, label in ((seen_first, "first name"), (seen_title, "title")):
+                worst = bank.most_common(1)
+                if worst and worst[0][1] > 1:
+                    self.fail(f"floor {floor} seed {seed} uses the {label} "
+                              f"{worst[0][0]!r} {worst[0][1]} times")
+
+    # -- across floors and seeds ---------------------------------------------
+
+    def test_two_floors_at_one_seed_are_not_the_same_dungeon(self):
+        """Floors 1 and 2 are built by the same generator. The floor has to reach
+        its rng stream, or one seed describes both floors identically."""
+        for seed in (1, 77, 4242):
+            one = mg.generate(1, "large", seed, images=False).floor
+            two = mg.generate(2, "large", seed, images=False).floor
+            self.assertEqual({b.name for b in self._bosses(one)}
+                             & {b.name for b in self._bosses(two)}, set(),
+                             f"seed {seed}: floors 1 and 2 field the same bosses")
+            self.assertEqual({n.name for n in one.neighborhoods}
+                             & {n.name for n in two.neighborhoods}, set(),
+                             f"seed {seed}: floors 1 and 2 share neighborhood names")
+
+    def test_a_montage_does_not_run_out_of_names(self):
+        counts = collections.Counter(self.all_names)
+        distinct = len(counts) / len(self.all_names)
+        self.assertGreater(distinct, 0.85,
+                           f"only {distinct:.0%} of {len(self.all_names)} boss names "
+                           f"across the montage are distinct")
+        worst, hits = counts.most_common(1)[0]
+        self.assertLessEqual(hits, 3, f"{worst!r} turns up {hits} times in one montage")
+
+    def test_a_montage_draws_widely_from_the_banks(self):
+        """Distinct full names are not the whole story. With 24 first names and 44
+        titles every boss in a montage still came out of the same small hat --
+        "Vexnia" 24 times and "the Understudy" 25 in 718 bosses -- and that is what
+        a run of them sounds like, whether or not any two names matched."""
+        firsts, titles = collections.Counter(), collections.Counter()
+        known = set(mg.BOSS_FIRST)
+        longest_first = sorted(mg.BOSS_TITLE, key=len, reverse=True)
+        for name in self.all_names:
+            for word in name.replace(",", " ").replace('"', " ").split():
+                if word in known:
+                    firsts[word] += 1
+            title = next((t for t in longest_first if name.endswith(t)), None)
+            if title:
+                titles[title] += 1
+        for bank, label, floor in ((firsts, "first names", 90), (titles, "titles", 90)):
+            self.assertGreater(len(bank), floor,
+                               f"a montage of {len(self.all_names)} bosses used only "
+                               f"{len(bank)} different {label}")
+            busiest, hits = bank.most_common(1)[0]
+            share = hits / len(self.all_names)
+            self.assertLess(share, 0.04,
+                            f"{busiest!r} is on {share:.0%} of every boss in the montage")
+
+    def test_no_one_shape_dominates(self):
+        """The complaint was that the bosses sounded alike, not only that they
+        shared names. Each shape leaves a mark that can be counted."""
+        marks = {
+            "nickname": lambda n: '"' in n,
+            "a pair": lambda n: " and " in n,
+            "The adj noun": lambda n: n.startswith("The "),
+            "full name": lambda n: not n.startswith("The ") and '"' not in n
+                                   and n.split()[-1] in set(mg.BOSS_SURNAME),
+        }
+        for label, hit in marks.items():
+            share = sum(map(hit, self.all_names)) / len(self.all_names)
+            self.assertGreater(share, 0.02, f"the {label} shape is effectively unused")
+            self.assertLess(share, 0.5, f"the {label} shape is {share:.0%} of all names")
+
+    def test_names_stay_short_enough_to_read(self):
+        """Stacking a title onto an already multi-word mob produced things like
+        "The Burning Goblin Bomb Bard the Non-Disclosure Agreement"."""
+        longest = max(self.all_names, key=len)
+        self.assertLessEqual(len(longest), mg.BossNamer.MAX_LEN,
+                             f"{longest!r} is {len(longest)} characters")
+
+    # -- the banks themselves ------------------------------------------------
+
+    def test_every_shape_fills_without_a_missing_placeholder(self):
+        """A typo in a template would otherwise surface as a KeyError mid-build, on
+        whichever floor and seed happened to draw that shape."""
+        parts = {"first": "A", "second": "B", "surname": "C", "nick": "D",
+                 "title": "the E", "adj": "F", "noun": "G", "theme": "H"}
+        for shape, weight in mg.BOSS_NAME_FORM:
+            self.assertGreater(weight, 0, f"{shape!r} is weighted out of the deck")
+            self.assertTrue(shape.format(**parts))
+        for shape in mg.PARADE_BOSS_NAME:
+            self.assertIn("{theme}", shape, f"{shape!r} drops the parade theme")
+            self.assertTrue(shape.format(**parts))
+
+    def test_the_parade_marshal_is_not_always_the_same(self):
+        """Floor 11 fields one boss and used one shape, so the whole floor had as
+        many possible boss names as it has themes."""
+        names = {mg.generate(11, "medium", s, images=False).floor.boss.name
+                 for s in range(25)}
+        self.assertGreater(len(names), 20, f"25 seeds gave {len(names)} marshals")
+
+    def test_a_pair_is_two_different_bosses(self):
+        namer = mg.BossNamer(random.Random(3), mg.NBHD_ADJ)
+        pairs = 0
+        for _ in range(400):
+            name = namer.name("Goblins")
+            if " and " in name:
+                pairs += 1
+                left, right = name.split(" and ", 1)
+                self.assertNotEqual(left.strip(), right.split(",")[0].strip())
+        self.assertGreater(pairs, 5, "the pair shape never came up")
+
+
 class BossMechanicTest(unittest.TestCase):
     """A boss run should not be the same fight repeatedly.
 

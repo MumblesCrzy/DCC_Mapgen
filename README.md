@@ -17,7 +17,7 @@ A procedural floor/map generator in the style of the *Dungeon Crawler Carl* book
 - **Floor 11** (A Parade of Horribles) — parade route, judges, arena boss.
 - **Campaigns** — other crawler teams carry from floor to floor, keeping who they are and where they stand with the party, until their luck runs out. From Floor 3 they carry a party of named races and classes too. See [Campaigns](#campaigns).
 - A **desktop app** (`dcc_mapgen_gui.py`) wrapping all of the above: pick a floor and size, generate, and read the write-up and browse every map without leaving the window. See [Desktop app](#desktop-app).
-- Every floor supports `--seed` for reproducible maps — byte-for-byte, and [tested](#tests) as such — and `--image`/`--save` for SVG or PNG output (PNG needs the optional `resvg-py` package).
+- Every floor supports `--seed` for reproducible maps — byte-for-byte, and [tested](#tests) as such — and `--image`/`--save` for SVG or PNG output (PNG needs the optional `resvg-py` package). The seed is per floor: one seed carried across a whole campaign gives a different dungeon on each floor.
 - `--rooms-for` can (re)generate just the room-level detail for one neighborhood from a floor you already generated and are playing, without touching the rest of the data.
 
 Word banks (names, mobs, bosses, loot, room flavor, etc.) live in `data/*.json` — edit those to add or reskin content without touching the code.
@@ -41,6 +41,25 @@ draw only from `any`; borough, city and top-tier bosses take one `grand` mechani
 the arena-scale ones that reshape a room — plus one ordinary one. A floor deals them
 from a shuffled deck, so it runs through every mechanic before repeating any, and a
 boss run is not the same fight over and over.
+
+Boss *names* are built the same way. `BOSS_NAME_FORM` holds the shapes a name can
+take, with a weight each, and a floor deals them from a deck so it works through all
+of them before reusing one:
+
+```json
+["{first} {title}", 6],
+["The {adj} {noun} {title}", 4],
+["{first} \"{nick}\" {surname}", 2],
+["{first} and {second}, {title}", 1]
+```
+
+The placeholders are filled from `BOSS_FIRST` (137), `BOSS_TITLE` (152),
+`BOSS_SURNAME` (70) and `BOSS_NICKNAME` (36), plus the floor's own adjective bank
+and the mob the boss leads. A first name or a title spent on one boss is not reused
+on that floor, so no two bosses read as the same person, and a name longer than 50
+characters is rerolled — stacking a title onto an already multi-word mob produced
+*The Burning Goblin Bomb Bard the Non-Disclosure Agreement*. Floor 11's single
+Marshal has its own shapes in `PARADE_BOSS_NAME`.
 
 ## Examples
 
@@ -262,6 +281,14 @@ level 6 upgrade is taken on Floor 6 and never walked back, and no party doubles 
 on a race or a class. That last one goes wrong about twice in four thousand team
 reports, so it is checked against two hundred campaigns dealt without their maps
 rather than against the pinned corpus.
+
+A fifth is about bosses not sounding alike, which the pinned hashes cannot see at
+all: no floor repeats a boss name or recombines a first name or a title it has
+already used, no one name shape accounts for more than half the bosses in a
+montage, the banks are wide enough that no single first name or title lands on more
+than 4% of them, and two floors generated from the same seed field no boss in
+common. That last was a live bug — Floors 1 and 2 share a generator, so one seed
+described both floors identically, down to all 21 boss names.
 
 If you add a floor, the suite fails until `tests/corpus.py` covers it.
 

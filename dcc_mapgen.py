@@ -227,6 +227,74 @@ def make_mechanic_decks(rng) -> Tuple["Deck", "Deck"]:
     return Deck(rng, BOSS_MECHANICS["any"]), Deck(rng, BOSS_MECHANICS["grand"])
 
 
+class BossNamer:
+    """Names every boss on one floor, keeping them distinct in shape as well as in
+    wording.
+
+    Two shapes used to split the whole game between them -- "{first} {title}" or
+    "The {adj} {noun} {title}", on a coin flip -- so a boss montage fell into a
+    rhythm even on the floors where no two bosses shared a name. Shapes are dealt
+    from a deck now, so a floor runs through all of them before reusing one.
+
+    The old per-floor guards are kept: a first name or a title claimed by one boss
+    is never recombined into another on the same floor, which is what stops
+    "Vexnia the Auditor" standing two rooms from "Vexnia the Landlord"."""
+
+    MAX_LEN = 50     # past this a name stops fitting a map legend, or a sentence
+
+    def __init__(self, rng, adjs):
+        self.rng = rng
+        self.adjs = adjs
+        self.shapes = Deck(rng, [shape for shape, weight in BOSS_NAME_FORM
+                                 for _ in range(weight)])
+        self.names = set()
+        self.firsts = set()
+        self.titles = set()
+
+    def name(self, mob_noun: str) -> str:
+        """A fresh name for a boss of a given mob. Falls back to the last candidate
+        rather than looping forever once a small floor has drained the banks."""
+        for _ in range(8):
+            shape = self.shapes.draw()
+            for _ in range(25):
+                parts = self._parts(mob_noun)
+                cand = shape.format(**parts)
+                if not self._clashes(shape, parts, cand):
+                    self._claim(shape, parts, cand)
+                    return cand
+        self._claim(shape, parts, cand)
+        return cand
+
+    def _parts(self, mob_noun: str) -> dict:
+        first, second = self.rng.sample(BOSS_FIRST, 2)
+        return {"first": first, "second": second,
+                "surname": self.rng.choice(BOSS_SURNAME),
+                "nick": self.rng.choice(BOSS_NICKNAME),
+                "title": self.rng.choice(BOSS_TITLE),
+                "adj": self.rng.choice(self.adjs),
+                "noun": singular(mob_noun)}
+
+    def _clashes(self, shape: str, parts: dict, cand: str) -> bool:
+        # Length is checked because a shape that stacks a title onto an already
+        # multi-word mob produces things like "The Burning Goblin Bomb Bard the
+        # Non-Disclosure Agreement", which is nobody's idea of a name.
+        if cand in self.names or len(cand) > self.MAX_LEN:
+            return True
+        if "{first}" in shape and parts["first"] in self.firsts:
+            return True
+        if "{second}" in shape and parts["second"] in self.firsts:
+            return True
+        return "{title}" in shape and parts["title"] in self.titles
+
+    def _claim(self, shape: str, parts: dict, cand: str) -> None:
+        self.names.add(cand)
+        for key in ("first", "second"):
+            if "{%s}" % key in shape:
+                self.firsts.add(parts[key])
+        if "{title}" in shape:
+            self.titles.add(parts["title"])
+
+
 def mob_words(rng, floor: int) -> Tuple[str, str]:
     """An (adjective, noun) pair drawn from the pools a floor can host.
 
@@ -510,7 +578,13 @@ class Generator:
     def __init__(self, floor: int, size: str, scaling: str, seed: int,
                  days: Optional[int], boss_stairs: bool,
                  stair_chance: float = 1.0, borough_boss_rate: float = 1.0):
-        self.rng = random.Random(seed)
+        # Floors 1 and 2 share this generator, and sharing a seed with it meant
+        # sharing a dungeon: --floor 1 --seed 4242 and --floor 2 --seed 4242 came
+        # back with the same neighborhoods, the same mobs and -- the way this was
+        # noticed -- the same 21 bosses, name for name. The floor goes into the
+        # stream so that a campaign can carry one seed across both floors and get
+        # two different dungeons out of it.
+        self.rng = random.Random(f"floor{floor}|{seed}")
         self.seed = seed
         self.floor = floor
         self.size = size
@@ -524,9 +598,8 @@ class Generator:
         self.borough_boss_rate = borough_boss_rate
         self.used_mobs = set()
         self.mech_decks = make_mechanic_decks(self.rng)
+        self.namer = BossNamer(self.rng, NBHD_ADJ)
         self.used_names = set()
-        self.used_firsts = set()
-        self.used_titles = set()
         self.used_forms = set()
 
     # -- pieces --------------------------------------------------------------
@@ -552,33 +625,8 @@ class Generator:
         return describe_mob(self.rng, adj, noun)
 
     def make_boss(self, tier: str, mob: Mob, base_level: int) -> Boss:
-        # Retry until the name is new AND doesn't just recombine a first name or
-        # title already claimed by another boss on this floor (word-bank collision guard).
-        name = first = title = None
-        uses_first = False
-        for _ in range(200):
-            cand_first = self.rng.choice(BOSS_FIRST)
-            cand_title = self.rng.choice(BOSS_TITLE)
-            cand_uses_first = self.rng.random() < 0.5
-            if cand_uses_first:
-                cand_name = f"{cand_first} {cand_title}"
-            else:
-                cand_name = f"The {self.rng.choice(NBHD_ADJ)} {singular(mob.noun)} {cand_title}"
-            if cand_name in self.used_names:
-                continue
-            if cand_uses_first and cand_first in self.used_firsts:
-                continue
-            if cand_title in self.used_titles:
-                continue
-            name, first, title, uses_first = cand_name, cand_first, cand_title, cand_uses_first
-            break
-        if name is None:
-            # Word banks exhausted for this floor size; accept the last candidate.
-            name, first, title, uses_first = cand_name, cand_first, cand_title, cand_uses_first
-        self.used_names.add(name)
-        if uses_first:
-            self.used_firsts.add(first)
-        self.used_titles.add(title)
+        name = self.namer.name(mob.noun)
+        self.used_names.add(name)        # shared with the neighborhood names
         size = {"neighborhood": (8, 15), "borough": (15, 30), "city": (30, 60), "top": (60, 100)}[tier]
         for _ in range(200):
             sz = self.rng.randint(*size)
@@ -1576,6 +1624,7 @@ class Generator3:
         self.days_override = days
         self.used = set()
         self.mech_decks = make_mechanic_decks(self.rng)
+        self.namer = BossNamer(self.rng, RUIN_ADJ)
 
     def _unique(self, fn):
         for _ in range(100):
@@ -1596,9 +1645,8 @@ class Generator3:
         return describe_mob(self.rng, adj, noun)
 
     def make_boss(self, tier: str, mob: Mob, base: int) -> Boss:
-        name = self._unique(lambda: (f"{self.rng.choice(BOSS_FIRST)} {self.rng.choice(BOSS_TITLE)}"
-                                     if self.rng.random() < 0.5 else
-                                     f"The {self.rng.choice(RUIN_ADJ)} {singular(mob.noun)} {self.rng.choice(BOSS_TITLE)}"))
+        name = self.namer.name(mob.noun)
+        self.used.add(name)              # shared with the settlement and region names
         sizes = {"neighborhood": (10, 18), "borough": (18, 35), "city": (35, 70)}[tier]
         sz = self.rng.randint(*sizes)
         form = self.rng.choice(BOSS_FORMS).format(
@@ -3908,7 +3956,13 @@ class Generator11:
         c = FLOOR11_CFG
         events = sorted((round(self.rng.uniform(0.2, 2.9), 1), ev) for ev in self.rng.sample(ROUTE_EVENTS, 4))
         lo, hi = c["boss_level"]
-        boss = Boss(f"The {theme} Marshal", "floor", self.rng.randint(lo, hi), self.rng.choice(PARADE_BOSS_FORM),
+        # One boss, one name shape, eighteen themes: floor 11 had eighteen possible
+        # boss names in total. The shapes give the Marshal somebody to be.
+        first, second = self.rng.sample(BOSS_FIRST, 2)
+        boss_name = self.rng.choice(PARADE_BOSS_NAME).format(
+            theme=theme, first=first, second=second,
+            surname=self.rng.choice(BOSS_SURNAME), nick=self.rng.choice(BOSS_NICKNAME))
+        boss = Boss(boss_name, "floor", self.rng.randint(lo, hi), self.rng.choice(PARADE_BOSS_FORM),
                     " ".join(self.rng.sample(PARADE_BOSS_MECHANICS, 2)), "the arena", True)
         formers = []
         flo, fhi = c["former_level"]

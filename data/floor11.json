@@ -244,5 +244,15 @@
   "a headless titan in a marshal's uniform carrying its own head as a lantern",
   "a swarm of every tenth-floor mob type fused into one crowd-shaped mass",
   "a mirror-plated dragon that reflects the party's own floats back at them"
+ ],
+ "PARADE_BOSS_NAME": [
+  "The {theme} Marshal",
+  "The {theme} Grand Marshal",
+  "{first}, {theme} Marshal",
+  "{first} {surname}, {theme} Marshal",
+  "{first} the {theme} Marshal",
+  "The {theme} Marshal, \"{nick}\"",
+  "{first} and {second}, {theme} Marshals",
+  "{first} \"{nick}\" {surname}, {theme} Marshal"
  ]
 }
