@@ -850,17 +850,66 @@ class BossNameTest(unittest.TestCase):
     # -- across floors and seeds ---------------------------------------------
 
     def test_two_floors_at_one_seed_are_not_the_same_dungeon(self):
-        """Floors 1 and 2 are built by the same generator. The floor has to reach
-        its rng stream, or one seed describes both floors identically."""
-        for seed in (1, 77, 4242):
-            one = mg.generate(1, "large", seed, images=False).floor
-            two = mg.generate(2, "large", seed, images=False).floor
-            self.assertEqual({b.name for b in self._bosses(one)}
-                             & {b.name for b in self._bosses(two)}, set(),
-                             f"seed {seed}: floors 1 and 2 field the same bosses")
-            self.assertEqual({n.name for n in one.neighborhoods}
-                             & {n.name for n in two.neighborhoods}, set(),
-                             f"seed {seed}: floors 1 and 2 share neighborhood names")
+        """Floors 1 and 2 are built by the same generator, floors 3 and 6 by
+        another. The floor has to reach the rng stream, or one campaign seed
+        describes both of a pair identically."""
+        for a, b in ((1, 2), (3, 6)):
+            for seed in (1, 77, 4242):
+                one = mg.generate(a, "large", seed, images=False).floor
+                two = mg.generate(b, "large", seed, images=False).floor
+                # Bosses only, and strictly. The name space is in the millions, so
+                # a single collision is evidence of a shared stream rather than
+                # bad luck -- which is not true of the 225 settlement names, where
+                # one floor collides with itself at an unrelated seed. Place names
+                # are covered against a control in the next test.
+                self.assertEqual({x.name for x in self._bosses(one)}
+                                 & {x.name for x in self._bosses(two)}, set(),
+                                 f"seed {seed}: floors {a} and {b} field the same bosses")
+
+    @staticmethod
+    def _places(fl) -> set:
+        out = set()
+        for attr in ("neighborhoods", "cells"):
+            out |= {c.name for c in getattr(fl, attr, []) or [] if getattr(c, "name", None)}
+        return out
+
+    def test_no_floor_shares_a_stream_with_another(self):
+        """Every generator used to start at random.Random(seed), so any two floors
+        drawing on the same bank in the same order got the same values out of it.
+        Checked against a control, because two floors overlapping on a 15-entry
+        bank is arithmetic rather than a bug: a floor compared with *itself* at
+        another seed is the most overlap a small bank can be blamed for."""
+        for a in mg.FLOORS:
+            for b in mg.FLOORS:
+                if b <= a:
+                    continue
+                shared = control = 0
+                for seed in (11, 4242):
+                    fa = mg.generate(a, "medium", seed, images=False).floor
+                    fb = mg.generate(b, "medium", seed, images=False).floor
+                    other = mg.generate(a, "medium", seed + 9000, images=False).floor
+                    names_a, names_b = self._names(fa), self._names(fb)
+                    shared += len(names_a & names_b)
+                    control += len(names_a & self._names(other))
+                self.assertLessEqual(shared, control + 2,
+                                     f"floors {a} and {b} at one seed share {shared} "
+                                     f"generated names, against {control} for floor {a} "
+                                     f"against itself at an unrelated seed")
+
+    @classmethod
+    def _names(cls, fl) -> set:
+        """Generated proper nouns, which is where a shared stream shows. Loot and
+        room features are deliberately left out: those banks are small enough that
+        any two floors overlap on them whatever the seed."""
+        out = cls._places(fl) | {b.name for b in cls._bosses(fl)}
+        for attr in ("neighborhoods", "cells"):
+            for c in getattr(fl, attr, []) or []:
+                mob = getattr(c, "mob", None)
+                if mob is not None:
+                    out.add(getattr(mob, "name", str(mob)))
+                for m in getattr(c, "mobs", []) or []:
+                    out.add(getattr(m, "name", str(m)))
+        return {n for n in out if n}
 
     def test_a_montage_does_not_run_out_of_names(self):
         counts = collections.Counter(self.all_names)

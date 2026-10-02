@@ -287,8 +287,12 @@ all: no floor repeats a boss name or recombines a first name or a title it has
 already used, no one name shape accounts for more than half the bosses in a
 montage, the banks are wide enough that no single first name or title lands on more
 than 4% of them, and two floors generated from the same seed field no boss in
-common. That last was a live bug — Floors 1 and 2 share a generator, so one seed
-described both floors identically, down to all 21 boss names.
+common. That last was a live bug: every generator started from `random.Random(seed)`,
+so Floors 1 and 2 — which share a generator — described the same dungeon at the same
+seed, down to all 21 boss names, and Floors 3 and 6 came back with a third of their
+bosses in common. Each floor derives its own stream from the seed now. That check runs
+against a control, because two floors overlapping on a 15-entry bank is arithmetic,
+not a bug: the yardstick is how much a floor overlaps with *itself* at another seed.
 
 If you add a floor, the suite fails until `tests/corpus.py` covers it.
 

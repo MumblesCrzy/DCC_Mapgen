@@ -581,9 +581,8 @@ class Generator:
         # Floors 1 and 2 share this generator, and sharing a seed with it meant
         # sharing a dungeon: --floor 1 --seed 4242 and --floor 2 --seed 4242 came
         # back with the same neighborhoods, the same mobs and -- the way this was
-        # noticed -- the same 21 bosses, name for name. The floor goes into the
-        # stream so that a campaign can carry one seed across both floors and get
-        # two different dungeons out of it.
+        # noticed -- the same 21 bosses, name for name. Every generator mixes its
+        # floor into the stream for the same reason; see Generator3.
         self.rng = random.Random(f"floor{floor}|{seed}")
         self.seed = seed
         self.floor = floor
@@ -1614,8 +1613,17 @@ class Floor3:
     other_crawlers: List[CrawlerTeam] = field(default_factory=list)
 
 class Generator3:
+    FLOOR = 3
+
     def __init__(self, size, scaling, seed, days):
-        self.rng = random.Random(seed)
+        # Each floor gets its own stream off the shared seed. Without this every
+        # generator started from random.Random(seed), so two floors built from one
+        # campaign seed drew the same cards in the same order out of the banks they
+        # share: floors 3 and 6, which share this generator, came back at the same
+        # seed with 85% of their loot, 83% of their features and a third of their
+        # boss names in common. FLOOR is a class attribute so that a subclass can
+        # say which floor it is without reaching into its parent's constructor.
+        self.rng = random.Random(f"floor{self.FLOOR}|{seed}")
         self.seed = seed
         self.size = size
         self.scaling = scaling
@@ -2056,8 +2064,10 @@ class Floor4:
 
 
 class Generator4:
+    FLOOR = 4
+
     def __init__(self, size, seed, days):
-        self.rng = random.Random(seed)
+        self.rng = random.Random(f"floor{self.FLOOR}|{seed}")
         self.seed = seed
         self.size = size
         self.cfg = FLOOR4_CFG
@@ -2454,8 +2464,10 @@ class Floor5:
 
 
 class Generator5:
+    FLOOR = 5
+
     def __init__(self, size, seed, days):
-        self.rng = random.Random(seed)
+        self.rng = random.Random(f"floor{self.FLOOR}|{seed}")
         self.seed = seed
         self.size = size
         self.cfg = FLOOR5_CFG
@@ -2700,6 +2712,8 @@ class Floor6(Floor3):
 
 
 class Generator6(Generator3):
+    FLOOR = 6
+
     def __init__(self, size, scaling, seed, days):
         super().__init__(size, scaling, seed, days)
         self.cfg = FLOOR6_CFG
@@ -3137,8 +3151,10 @@ class Floor8:
 
 
 class Generator8:
+    FLOOR = 8
+
     def __init__(self, size, seed, days, region=None):
-        self.rng = random.Random(seed)
+        self.rng = random.Random(f"floor{self.FLOOR}|{seed}")
         self.seed = seed
         self.size = size
         self.cfg = FLOOR8_CFG
@@ -3416,8 +3432,10 @@ class Floor9:
 
 
 class Generator9:
+    FLOOR = 9
+
     def __init__(self, size, seed, days, warlords="canon", wildcard=False, winner=None, runner_up=None):
-        self.rng = random.Random(seed)
+        self.rng = random.Random(f"floor{self.FLOOR}|{seed}")
         self.seed = seed
         self.size = size
         self.sc = SIZE9_CFG[size]
@@ -3731,8 +3749,10 @@ class Floor10:
 
 
 class Generator10:
+    FLOOR = 10
+
     def __init__(self, size, seed, vehicle=None, party=2):
-        self.rng = random.Random(seed)
+        self.rng = random.Random(f"floor{self.FLOOR}|{seed}")
         self.seed = seed
         self.size = size
         self.sc = SIZE10_CFG[size]
@@ -3945,8 +3965,10 @@ class Floor11:
 
 
 class Generator11:
+    FLOOR = 11
+
     def __init__(self, size, seed):
-        self.rng = random.Random(seed)
+        self.rng = random.Random(f"floor{self.FLOOR}|{seed}")
         self.seed = seed
         self.size = size
 
