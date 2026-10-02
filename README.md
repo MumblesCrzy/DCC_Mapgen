@@ -216,6 +216,40 @@ are both in `data/common.json`. The classes are taken from the series' own list;
 the races are anchored on the ones the books name and filled out with picks the
 System would plausibly offer. Both are ordinary word banks — edit them.
 
+### Crawler stats
+
+Every floor's write-up ends with a **Crawler Stats** section: a one-page rules
+reference for running the party and the teams the campaign is tracking. Five stats,
+every effect given per point, no hidden modifier tables.
+
+| | per point |
+|---|---|
+| **STR** | comfortable lift `STR x 60 lb`, max lift `STR x 75 lb`, +1 melee damage per 3 |
+| **CON** | max health `CON x 15`, out-of-combat regeneration `CON x 2` per hour |
+| **DEX** | +1 ranged/thrown per 3, +1 dodge per 4, initiative is the raw score |
+| **INT** | mana *equals* INT, on a regeneration curve from 1/hour to effectively instant |
+| **CHA** | -2% shop prices per point to a floor of -60%, one pet per 10 |
+
+What comes from the books: the five stats, 3–5 as a typical starting range, 9–10 as
+the natural human ceiling, mana being equal to Intelligence rather than a multiple
+of it, and both ends of the mana regeneration curve (Intelligence 3 recovers one
+point an hour, Intelligence 17 one a minute). Everything else is this project's own
+arithmetic, sanity-checked against the anchors the books do give rather than derived
+from them — Strength 30 works out at seven and a half average humans' worth of lift
+here, against the books' "as strong as six ordinary humans", which is the right
+neighbourhood and not a match.
+
+All of it is tunable. `CRAWLER_STATS.knobs` in `data/common.json` holds every number
+the section prints, the per-stat prose is formatted from that same dict, and the
+at-a-glance table is computed from it — so changing `lift_comfortable` from 60 to 55
+moves the rules and the table together, and [a test](#tests) fails if it ever moves
+only one of them.
+
+The section also closes with a line on statting up the teams from Other Crawlers,
+which is the point of putting it in the campaign material rather than in a separate
+reference file: 4s across the board, plus two points per floor survived, weighted
+toward whatever the crawler's class is for.
+
 Standing is the part the party changes in play. Befriend the group that attacked
 them on Floor 2, or fall out with an ally:
 
@@ -328,6 +362,12 @@ repeats are even rather than clumped, and the banks are checked against the cell
 quest counts of a large floor so the first guard cannot quietly stop meaning anything.
 A quest title is also checked against its own objective, and Floor 6's Zockau is
 pinned at zero quests, that being deliberate rather than an oversight.
+
+A seventh group covers the stat rules, where the risk is drift rather than variety:
+the section renders identically on every floor and seed, it is the last section of
+every write-up, no `{placeholder}` survives into it, the prose and the at-a-glance
+table are checked against each other value by value, and the handful of figures that
+come from the books are pinned separately from the ones that are ours to retune.
 
 If you add a floor, the suite fails until `tests/corpus.py` covers it.
 

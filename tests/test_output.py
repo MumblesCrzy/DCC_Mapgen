@@ -999,6 +999,99 @@ class BossNameTest(unittest.TestCase):
         self.assertGreater(pairs, 5, "the pair shape never came up")
 
 
+class StatRulesTest(unittest.TestCase):
+    """The stat rules are reference text, so the risk is not variety but drift.
+
+    Every number in the section is computed from CRAWLER_STATS["knobs"], and the
+    point of that is that the prose and the at-a-glance table cannot disagree. If
+    a dial is retuned and only one of them moves, this is what says so."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.md = mg.generate(1, "small", 4242, images=False).markdown
+        cls.section = cls.md[cls.md.index("## Crawler Stats"):]
+        cls.k = mg.CRAWLER_STATS["knobs"]
+
+    def test_every_floor_ends_with_the_rules(self):
+        """Last section, on every floor. Appending them inside crawler_section put
+        them wherever that floor prints its roster, which on floors 1 and 2 is
+        halfway up, ahead of the loot boxes."""
+        for floor in mg.FLOORS:
+            md = mg.generate(floor, "small", 11, images=False).markdown
+            self.assertEqual(md.count("## Crawler Stats"), 1,
+                             f"floor {floor} does not carry the rules exactly once")
+            headings = [l for l in md.splitlines() if l.startswith("## ")]
+            self.assertEqual(headings[-1], "## Crawler Stats",
+                             f"floor {floor} ends on {headings[-1]!r}, not the rules")
+
+    def test_all_five_stats_are_covered(self):
+        for st in mg.CRAWLER_STATS["stats"]:
+            self.assertIn(f"**{st['name']} ({st['abbr']})**", self.section)
+        self.assertEqual(len(mg.CRAWLER_STATS["stats"]), 5,
+                         "the books have five adjustable stats")
+
+    def test_no_placeholder_survives_into_the_document(self):
+        """Every rule line is formatted with the knobs, so a knob renamed in the
+        bank without being renamed in the prose would print a raw {placeholder}."""
+        self.assertNotIn("{", self.section)
+        self.assertNotIn("}", self.section)
+
+    def test_the_prose_and_the_table_agree(self):
+        """The whole reason the numbers live in one dict. Retune a dial and both
+        the per-stat rules and the table have to move with it."""
+        k = self.k
+        for score in mg.CRAWLER_STATS["example_scores"]:
+            # Inside the At a glance table only: the benchmark table higher up
+            # also opens rows with "| 3 |", and matching that one proved nothing.
+            table = self.section[self.section.index("### At a glance"):]
+            row = next((ln for ln in table.splitlines()
+                        if ln.startswith(f"| {score} |")), None)
+            self.assertIsNotNone(row, f"no at-a-glance row for score {score}")
+            for expected in (f"{score * k['lift_comfortable']:,} lb",
+                             f"{score * k['lift_max']:,} lb",
+                             f"+{score // k['attack_per']}",
+                             f"{score * k['hp_per_con']:,}",
+                             f"-{min(score * k['discount_per'], k['discount_cap'])}%"):
+                self.assertIn(expected, row,
+                              f"score {score} row is missing {expected!r}: {row}")
+        self.assertIn(f"STR x {k['lift_comfortable']} lb", self.section)
+        self.assertIn(f"STR x {k['lift_max']} lb", self.section)
+        self.assertIn(f"CON x {k['hp_per_con']}", self.section)
+        self.assertIn(f"+1 per {k['attack_per']} full points", self.section)
+
+    def test_the_canon_anchors_are_not_quietly_edited(self):
+        """Four things here come straight out of the books. They are the part that
+        is not ours to retune, so they are pinned rather than left to a dial."""
+        regen = dict(mg.CRAWLER_STATS["mana_regen"])
+        self.assertEqual(regen[3], "1 per hour",
+                         "the books put Intelligence 3 at one mana an hour")
+        self.assertEqual(regen[17], "1 per minute",
+                         "the books put Intelligence 17 at one mana a minute")
+        self.assertIn("**Mana: equal to INT.**", self.section,
+                      "mana equals Intelligence; it is not a multiple of it")
+        marks = dict(mg.CRAWLER_STATS["benchmarks"])
+        self.assertIn(4, marks, "4 is the books' average adult human")
+        self.assertIn(10, marks, "10 is the books' natural human ceiling")
+
+    def test_the_regen_lookup_takes_the_row_at_or_below_the_score(self):
+        self.assertEqual(mg._mana_regen_for(3), "1 per hour")
+        self.assertEqual(mg._mana_regen_for(4), "1 per hour")
+        self.assertEqual(mg._mana_regen_for(17), "1 per minute")
+        self.assertEqual(mg._mana_regen_for(18), "1 per minute")
+        self.assertEqual(mg._mana_regen_for(1), "1 per hour")
+        top = mg.CRAWLER_STATS["mana_regen"][-1]
+        self.assertEqual(mg._mana_regen_for(top[0] + 50), top[1])
+
+    def test_the_rules_are_the_same_on_every_floor_and_seed(self):
+        """Reference text, so it must not drift with the dice."""
+        reference = "\n".join(mg.stat_rules_section()).rstrip("\n")
+        for floor, seed in ((1, 1), (3, 77), (9, 4242), (11, 5)):
+            md = mg.generate(floor, "small", seed, images=False).markdown
+            section = md[md.index("## Crawler Stats"):].rstrip("\n")
+            self.assertEqual(section, reference,
+                             f"floor {floor} seed {seed} renders different rules")
+
+
 class QuestTest(unittest.TestCase):
     """Floors 3 and 6 post three times the quests they used to.
 

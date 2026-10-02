@@ -868,6 +868,82 @@ class Generator:
 # Rendering
 # ---------------------------------------------------------------------------
 
+def _mana_regen_for(score: int) -> str:
+    """The regeneration row that applies at a score, which is the last row at or
+    below it -- the table is sparse on purpose."""
+    best = CRAWLER_STATS["mana_regen"][0][1]
+    for at, text in CRAWLER_STATS["mana_regen"]:
+        if score >= at:
+            best = text
+    return best
+
+
+def stat_rules_section() -> List[str]:
+    """The crawler stat rules, identical on every floor.
+
+    Reference rather than generated content, so it reads the same every time and
+    sits at the end of the write-up with the campaign material. Every number comes
+    out of CRAWLER_STATS["knobs"] -- the prose is formatted with it and the table
+    is computed from it, so retuning a dial moves both and they cannot disagree.
+
+    The five stats, the 3-5 starting range, the 9-10 natural ceiling, mana being
+    equal to Intelligence rather than a multiple of it, and the two ends of the
+    regeneration curve are all out of the books. Everything else is this project's
+    own arithmetic, sanity-checked against the anchors the books do give rather
+    than derived from them: Strength 30 comes out at seven and a half average
+    humans' worth of lift here, against the books' "as strong as six ordinary
+    humans", which is the right neighbourhood and not a match."""
+    cs = CRAWLER_STATS
+    k = cs["knobs"]
+    o = ["## Crawler Stats", ""]
+    o.append("Five stats, and the System sets them from what a crawler actually was "
+             "before the Collapse. Everything below is per point, with no hidden "
+             "modifier table — if a number is not here, it is not in the maths.")
+    o.append("")
+    o.append("| Score | What it means |")
+    o.append("|---:|---|")
+    for score, meaning in cs["benchmarks"]:
+        o.append(f"| {score} | {meaning} |")
+    o.append("")
+
+    for st in cs["stats"]:
+        o.append(f"**{st['name']} ({st['abbr']})** — {st['governs']}.")
+        o.append("")
+        for rule in st["rules"]:
+            o.append(f"- {rule.format(**k)}")
+        o.append("")
+
+    o.append("### Mana regeneration")
+    o.append("")
+    o.append("| INT | Recovers |")
+    o.append("|---:|---|")
+    for at, text in cs["mana_regen"]:
+        o.append(f"| {at} | {text} |")
+    o.append("")
+
+    o.append("### At a glance")
+    o.append("")
+    o.append("| Score | Comfortable lift | Max lift | Melee / ranged | Max health | "
+             "Mana | Regeneration | Shop |")
+    o.append("|---:|---:|---:|---:|---:|---:|---|---:|")
+    for s in cs["example_scores"]:
+        o.append(
+            f"| {s} | {s * k['lift_comfortable']:,} lb | {s * k['lift_max']:,} lb "
+            f"| +{s // k['attack_per']} | {s * k['hp_per_con']:,} | {s} "
+            f"| {_mana_regen_for(s)} "
+            f"| -{min(s * k['discount_per'], k['discount_cap'])}% |")
+    o.append("")
+
+    o.append("### Growing them")
+    o.append("")
+    for line in cs["growth"]:
+        o.append(f"- {line.format(**k)}")
+    o.append("")
+    o.append(cs["npc_note"].format(**k))
+    o.append("")
+    return o
+
+
 def crawler_section(fl) -> List[str]:
     """The Other Crawlers section, identical on every floor that has a roster.
 
@@ -4316,7 +4392,14 @@ def _render_floor(fl, floor: int) -> str:
     of floors cannot drift apart."""
     renderers = {3: render3, 4: render4, 5: render5, 6: render6, 8: render8,
                  9: render9, 10: render10, 11: render11}
-    return renderers.get(floor, render)(fl)
+    text = renderers.get(floor, render)(fl)
+    # The stat rules go on here rather than inside crawler_section, so that they
+    # land at the end of every floor instead of wherever that floor happens to
+    # print its roster -- on floors 1 and 2 that is halfway up, ahead of the loot
+    # boxes and the achievements, which is no place for a reference table.
+    if getattr(fl, "other_crawlers", None):
+        text = text.rstrip("\n") + "\n\n" + "\n".join(stat_rules_section())
+    return text
 
 
 def _team_rng(seed: int, floor: int) -> random.Random:

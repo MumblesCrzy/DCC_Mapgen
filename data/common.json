@@ -1234,5 +1234,162 @@
    "{first} and {second}, {title}",
    1
   ]
- ]
+ ],
+ "CRAWLER_STATS": {
+  "knobs": {
+   "lift_comfortable": 60,
+   "lift_max": 75,
+   "attack_per": 3,
+   "hp_per_con": 15,
+   "regen_per_con": 2,
+   "dodge_per": 4,
+   "acrobatics_at": 15,
+   "discount_per": 2,
+   "discount_cap": 60,
+   "pet_base": 1,
+   "pet_per": 10,
+   "points_per_level": 1
+  },
+  "benchmarks": [
+   [
+    0,
+    "unconscious, or no longer using that part of yourself"
+   ],
+   [
+    3,
+    "low end of normal for an adult human"
+   ],
+   [
+    4,
+    "average adult human"
+   ],
+   [
+    6,
+    "well above average; a fit, trained person"
+   ],
+   [
+    10,
+    "the top of the natural human range"
+   ],
+   [
+    20,
+    "visibly inhuman, and the point where other crawlers notice"
+   ]
+  ],
+  "mana_regen": [
+   [
+    3,
+    "1 per hour"
+   ],
+   [
+    5,
+    "1 per 35 minutes"
+   ],
+   [
+    7,
+    "1 per 20 minutes"
+   ],
+   [
+    9,
+    "1 per 11 minutes"
+   ],
+   [
+    11,
+    "1 per 6 minutes"
+   ],
+   [
+    13,
+    "1 per 4 minutes"
+   ],
+   [
+    15,
+    "1 per 2 minutes"
+   ],
+   [
+    17,
+    "1 per minute"
+   ],
+   [
+    20,
+    "1 per 25 seconds"
+   ],
+   [
+    25,
+    "1 per 5 seconds"
+   ],
+   [
+    30,
+    "effectively instant between fights"
+   ]
+  ],
+  "example_scores": [
+   3,
+   4,
+   6,
+   10,
+   20,
+   30
+  ],
+  "stats": [
+   {
+    "abbr": "STR",
+    "name": "Strength",
+    "governs": "lifting and hauling, and how hard a melee hit lands",
+    "rules": [
+     "**Comfortable lift: STR x {lift_comfortable} lb.** Picked up, carried and put down again without a roll.",
+     "**Maximum lift: STR x {lift_max} lb.** One effort, briefly, and a Strength check to do anything useful with it.",
+     "**Melee damage: +1 per {attack_per} full points.** Applies to anything swung, thrown by hand or used to hit someone.",
+     "Doors, grates, portcullises and loot boxes that have rusted shut are all Strength. So is holding one shut."
+    ]
+   },
+   {
+    "abbr": "CON",
+    "name": "Constitution",
+    "governs": "how much damage you can take and how fast you stop bleeding",
+    "rules": [
+     "**Maximum health: CON x {hp_per_con}.** This is the whole pool; nothing else adds to it, which is why veterans pour points in here.",
+     "**Out of combat regeneration: CON x {regen_per_con} health per hour**, doubled in a safe room.",
+     "Poison, disease, cold, heat, lack of air and lack of sleep are all resisted on Constitution."
+    ]
+   },
+   {
+    "abbr": "DEX",
+    "name": "Dexterity",
+    "governs": "accuracy at range, reflexes and footwork",
+    "rules": [
+     "**Ranged and thrown accuracy: +1 per {attack_per} full points.** Bows, guns, grenades, anything with an arc.",
+     "**Dodge: +1 per {dodge_per} full points** against anything you can see coming.",
+     "Dexterity sets initiative directly — the higher score acts first, ties broken by level.",
+     "At **DEX {acrobatics_at}+** the showy things become possible: running a wall, fighting from a rope, landing a drop that should have broken something."
+    ]
+   },
+   {
+    "abbr": "INT",
+    "name": "Intelligence",
+    "governs": "how much magic you can cast, and how fast you get it back",
+    "rules": [
+     "**Mana: equal to INT.** Not a multiple of it — a crawler with Intelligence 6 has six points of mana, which is why early spellcasting is rationed.",
+     "**Regeneration** runs on the table below; it starts at one point an hour and ends up faster than you can spend it.",
+     "Intelligence also sets how quickly a skill levels from use, and whether a crawler can read what is written on a wall down here."
+    ]
+   },
+   {
+    "abbr": "CHA",
+    "name": "Charisma",
+    "governs": "prices, persuasion, pets, and how much the audience likes you",
+    "rules": [
+     "**Shop prices: -{discount_per}% per point**, to a floor of -{discount_cap}%. Applies to buying and to what a broker will pay.",
+     "**Pets: {pet_base}, plus one per {pet_per} points.** Each one has to be bonded with separately.",
+     "Charm, intimidation and talking a hostile group down are all Charisma, and it is the stat Bard magic runs on.",
+     "It is also what sponsors and viewers respond to, so it decides what gets offered to the party between floors."
+    ]
+   }
+  ],
+  "growth": [
+   "**{points_per_level} stat point per level**, spent freely, plus whatever a race, a class or a boon hands over on top.",
+   "The race chosen on floor 3 is permanent and usually moves two or three stats at once. The class upgrade at level 6 tends to move one.",
+   "Nothing here caps out. A crawler who lives long enough leaves the human range behind entirely, which is the point."
+  ],
+  "npc_note": "To stat a team from Other Crawlers on the spot: give each crawler 4s across the board, then add a total of two points per floor they have survived, weighted toward whatever their class is for. That lands a group met on floor 3 at roughly 5s and a group that has lived to floor 9 somewhere near 10s, which is about where the books put them."
+ }
 }
