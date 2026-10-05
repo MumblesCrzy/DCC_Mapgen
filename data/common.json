@@ -1400,7 +1400,8 @@
    "A Benefactor box outranks every other type, tier for tier: a Bronze Benefactor box beats a Gold Adventurer box.",
    "Achievements usually name their own box after whatever earned it, so expect types this table does not list.",
    "One item in every box is at the box's own tier and of the box's type; everything else in it is a lesser item whose tier is rolled, by the table below.",
-   "From Floor 2, every box also holds gold: 1 to 10, times the floor number raised to the tier (Bronze 1, Celestial 6)."
+   "From Floor 2, every box also holds gold: 1 to 10, times the floor number raised to the tier (Bronze 1, Celestial 6).",
+   "Each lesser item is the same kind as the main item 15% of the time, another piece of equipment 35%, and a potion or scroll 50%, so a box is one great thing and support for it, not one great thing and a pile to pawn."
   ],
   "tier_guide": [
    [
@@ -1588,7 +1589,47 @@
      "a tin of beans",
      "a packet of painkillers",
      "a box of matches",
-     "a bar of soap"
+     "a bar of soap",
+     "a single minor healing potion",
+     "a vial of weak antidote",
+     "a scroll of light",
+     "a scroll of minor mending",
+     "a smudged scroll of detect traps",
+     "a jar of honey that has not gone off",
+     "a tin of sardines",
+     "a bag of trail mix with the good bits picked out",
+     "a canteen of lukewarm electrolyte drink",
+     "a packet of jerky of uncertain origin",
+     "a roll of gauze",
+     "a tube of antiseptic cream",
+     "a potion of minor stamina",
+     "a flask of cold coffee",
+     "a box of energy bars",
+     "a hand warmer",
+     "a scroll of minor shield",
+     "a splint and a bandage",
+     "a cough drop that grants a minor buff",
+     "a scroll of mapping, one room only",
+     "a potion of minor focus",
+     "a sachet of rehydration salts",
+     "a can of energy drink",
+     "a bottle of aspirin",
+     "a scroll of cleanse, which removes dirt and nothing else",
+     "a vial of night-eye drops",
+     "a scroll of minor sleep",
+     "a jar of tooth-numbing paste",
+     "a candy bar",
+     "a vial of glow-in-the-dark paint",
+     "a sandwich in a sealed bag",
+     "a scroll of minor fear",
+     "a potion of warmth",
+     "a packet of instant noodles",
+     "a flask of broth",
+     "a vial of eye drops",
+     "a potion of minor strength, good for a minute",
+     "a scroll of minor heal",
+     "a juice box",
+     "a tin of throat lozenges"
     ],
     "mid": [
      "two standard healing potions",
@@ -1610,7 +1651,32 @@
      "a scroll of haste",
      "a jar of bone-knit paste",
      "a potion of spider climbing",
-     "a scroll of dispel magic"
+     "a scroll of dispel magic",
+     "a potion of regeneration, good for ten minutes",
+     "a scroll of lightning bolt",
+     "a scroll of ice wall",
+     "a potion of stoneskin",
+     "a scroll of invisibility",
+     "a potion of feather fall",
+     "a scroll of summon minor ally",
+     "an elixir of speed, good for an hour",
+     "a potion of heroism",
+     "a scroll of remove curse",
+     "a scroll of silence",
+     "a potion of cold resistance",
+     "a potion of poison immunity, good for an hour",
+     "a scroll of mass light",
+     "an elixir of clear thinking",
+     "a potion of jumping",
+     "a scroll of reveal hidden doors",
+     "a ration that restores a little mana",
+     "a scroll of entangle",
+     "a potion of tracking",
+     "a medkit with a stimpack in it",
+     "a scroll of acid splash",
+     "a potion of quick reflexes",
+     "a scroll of party-wide short teleport",
+     "an elixir of iron stomach"
     ],
     "high": [
      "a greater healing potion",
@@ -1628,7 +1694,22 @@
      "a draught of dragon's blood",
      "a potion of true sight, good for an hour",
      "a scroll of time stop, three seconds long",
-     "a cask of Syndicate-grade ambrosia"
+     "a cask of Syndicate-grade ambrosia",
+     "a potion of permanent +1 Dexterity",
+     "a potion of permanent +1 Charisma",
+     "a scroll of meteor",
+     "a potion of invulnerability, ten seconds long",
+     "a scroll of mass resurrection",
+     "an elixir of youth, which the Syndicate finds very funny",
+     "a scroll of small wish",
+     "a potion that raises one skill three levels",
+     "a scroll of summon greater ally",
+     "a vial of liquid starlight",
+     "an elixir that doubles experience for a day",
+     "a scroll of banishment",
+     "a potion of flight, good for an hour",
+     "a bottle of god's blood",
+     "a scroll of true resurrection"
     ]
    },
    "tools": {
@@ -2858,6 +2939,21 @@
     "Legendary": 5,
     "Celestial": 6
    }
+  },
+  "secondary": {
+   "weights": {
+    "same": 15,
+    "equip": 35,
+    "consumable": 50
+   },
+   "equip_pools": [
+    "weapons",
+    "apparel",
+    "footwear"
+   ],
+   "consumable_pools": [
+    "consumables"
+   ]
   }
  }
 }

@@ -110,9 +110,9 @@ python dcc_mapgen.py --open-box "Gold Weapon" --count 3 --floor 6 --seed 7
 ```
 - **Celestial Weapon Box** — Celestial: **Marjorie's Mistake**, a meat cleaver (pauses
   the floor's countdown for its owner once; shows its owner every crawler on the floor;
-  turns one of its owner's achievements into its Platinum version). Platinum: a
-  boomerang (reflects the first spell cast at its owner each day; marks a target so the
-  whole party deals +2 to it); a hand cannon (...); a greataxe (...). **46,656 gold**.
+  turns one of its owner's achievements into its Platinum version). Platinum: a scroll
+  of short-range teleport; a potion of water breathing; a vial of liquid luck.
+  **279,936 gold**.
 ```
 
 In the desktop app the **Loot Boxes** tab does the same: it lists the current floor's
@@ -121,10 +121,21 @@ can be changed before **Open**. Because nothing about a box touches the floor,
 rolling one can never move a map.
 
 **What a box holds.** One item is at the box's own tier and of the box's type. Every
-other item is lesser, and rolls its own tier, evenly, from the box's range — so a
-Celestial Weapon box is one god-tier weapon and three good ones, never two
-Celestials. The line groups items under the tier each rolled, best first, since a
-potion or a tool says nothing about its own tier.
+other item is lesser, and rolls two things: its tier, evenly, from the box's range —
+so a Celestial box never holds a second Celestial — and what kind of thing it is.
+That second roll is what keeps a box from being one great item and a pile to pawn:
+
+| A lesser item is… | Chance |
+|---|---:|
+| the same kind as the main item (a Weapon box: another weapon) | 15% |
+| another piece of equipment — armor, accessories, weapons — other than that kind | 35% |
+| a consumable: a potion, a scroll | 50% |
+
+Equipment leaves out the main item's own kind, so a Weapon box reaches another weapon
+only through the 15% rather than about 27% of the time. For a Boss box, which mixes
+weapons, apparel and magic, "the same kind" is whatever its main item turned out to
+be. The line groups items under the tier each rolled, best first, since a potion or a
+tool says nothing about its own tier.
 
 | Tier | At the box's tier | Lesser items | Each rolled from | Gold, from Floor 2 |
 |---|---:|---:|---|---|
@@ -139,11 +150,14 @@ Floor 1 boxes hold no gold. A Benefactor box pays the gold of the tier it opens 
 and a Bounty or Venison box holds its bounty rather than a roll. Each floor's
 write-up prints the gold range for its own floor beside the tier table — on Floor 6
 a Bronze box holds 6–60 gold and a Celestial one 46,656–466,560. The counts, the
-filler tier and the gold formula are all in `LOOT_BOXES` in `data/common.json`.
+lesser tier ranges, the 15/35/50 split and the gold formula are all in `LOOT_BOXES` in
+`data/common.json`.
 
 Boxes are the most generated thing in the project — a large Floor 1 names about 37,
-a huge one about 100 — so the banks are sized for volume: 380 items in ten pools and
-154 enchantments. A roller keeps its decks for as long as it runs, so boxes opened
+a huge one about 100 — so the banks are sized for volume: 460 items in ten pools and
+154 enchantments. Consumables carry the most, being half of every lesser item, so
+they have the biggest bank: 136, most of them in the low band that early floors'
+Bronze and Silver items draw from. A roller keeps its decks for as long as it runs, so boxes opened
 together with `--count`, or in one app session, work through a whole pool before
 repeating anything; every box a large Floor 1 names comes out of one session with no
 item twice.
@@ -469,7 +483,9 @@ parses straight back into the roller, and opening a hundred boxes leaves a floor
 byte-identical. On the box side: no effect sits on an item that cannot carry it, no
 box holds anything but its tier's count — one item at its tier, the rest rolled
 across exactly the lesser range the house rule gives, every tier in it coming up and
-none outside it — each item carries its own tier's power, plain items follow the
+none outside it — lesser items split 15/35/50 between the main item's own kind, other
+equipment and consumables, a Weapon box reaches another weapon only through the 15%,
+each item carries its own tier's power, plain items follow the
 band of the tier they rolled, gold is (1–10) × Floor ^ Tier
 from Floor 2 and none on Floor 1, a Bronze Benefactor box beats a Gold Adventurer
 box, Weapon boxes opened back to back repeat no weapon until the pool is spent, and

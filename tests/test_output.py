@@ -1288,13 +1288,13 @@ class LootBoxTest(unittest.TestCase):
                                    f"{tier} lesser tiers are lopsided: {dict(seen)}")
 
     def test_a_celestial_weapon_box_is_one_god_tier_weapon(self):
-        """The case the rule was written for: four weapons, one of them Celestial,
-        the other three Gold to Legendary."""
+        """The case the rule was written for: four items, one of them a Celestial
+        weapon, the other three Gold to Legendary and mostly not weapons."""
         weapons = set(self.lb["items"]["weapons"])
         for seed in range(8):
             box = mg.LootRoller(seed).open("Celestial", "Weapon")
             self.assertEqual(len(box.items), 4)
-            self.assertTrue(all(self._parse(l)[0] in weapons for l in box.items))
+            self.assertIn(self._parse(box.items[0])[0], weapons, "the main item is a weapon")
             self.assertEqual(box.item_tiers.count("Celestial"), 1, box.markdown())
             celestial = [l for l in box.items
                          if any(self.fx_tier[e] == "Celestial" for e in self._parse(l)[1])]
@@ -1382,14 +1382,65 @@ class LootBoxTest(unittest.TestCase):
         self.assertNotIn("Gold on Floor", md1)
         self.assertIn("Boxes hold no gold until Floor 2.", md1)
 
-    def test_a_themed_box_holds_what_its_name_promises(self):
-        """A Shoe box -- which a floor 1 achievement already awards -- holds shoes."""
+    def test_a_themed_box_leads_with_what_its_name_promises(self):
+        """A Shoe box -- which a floor 1 achievement already awards -- leads with
+        shoes. What sits beside them follows the same split as every other box."""
         roller = mg.LootRoller(8)
         footwear = set(self.lb["items"]["footwear"])
         for tier in mg.LOOT_BOX_TIERS:
             box = roller.open(tier, "Shoe")
-            for line in box.items:
-                self.assertIn(self._parse(line)[0], footwear, f"{box.label}: {line}")
+            self.assertIn(self._parse(box.items[0])[0], footwear, box.markdown())
+
+    # -- what the lesser items are ---------------------------------------------
+
+    # The house rule, stated here rather than read from LOOT_BOXES["secondary"]:
+    # each lesser item is the main item's own kind 15% of the time, another piece
+    # of equipment (armor, accessories, weapons) 35%, a consumable 50%.
+    SPLIT = {"same": 0.15, "equip": 0.35, "consumable": 0.50}
+    EQUIP = {"weapons", "apparel", "footwear"}
+    CONSUMABLE = {"consumables"}
+
+    def _kind(self, main_pool, line):
+        pool = self.item_pool[self._parse(line)[0]]
+        if pool == main_pool:
+            return "same"
+        if pool in self.EQUIP:
+            return "equip"
+        if pool in self.CONSUMABLE:
+            return "consumable"
+        return f"other ({pool})"
+
+    def test_lesser_items_split_fifteen_thirty_five_fifty(self):
+        """Without this a box was one great thing and a pile to pawn. Checked for a
+        box whose main item is equipment, one whose main item is not, and one whose
+        main item is itself a consumable."""
+        for tier, kind in (("Gold", "Weapon"), ("Legendary", "Boss"), ("Gold", "Quest"),
+                           ("Platinum", "Survivor's")):
+            roller = mg.LootRoller(31)
+            seen = collections.Counter()
+            for _ in range(1200):
+                box = roller.open(tier, kind)
+                main = self.item_pool[self._parse(box.items[0])[0]]
+                seen.update(self._kind(main, l) for l in box.items[1:])
+            total = sum(seen.values())
+            others = [k for k in seen if k.startswith("other")]
+            self.assertEqual(others, [], f"{tier} {kind}: lesser items from {others}")
+            for k, want in self.SPLIT.items():
+                got = seen[k] / total
+                if kind == "Survivor's" and k != "equip":
+                    continue        # its main item may itself be a consumable
+                self.assertAlmostEqual(got, want, delta=0.04,
+                                       msg=f"{tier} {kind}: {k} is {got:.0%}, want {want:.0%}")
+
+    def test_a_weapon_box_reaches_another_weapon_only_through_the_fifteen(self):
+        """Equipment leaves out the main item's own pool. Counted as equipment too,
+        a Weapon box's lesser items would be weapons about 27% of the time."""
+        roller = mg.LootRoller(5)
+        weapons = set(self.lb["items"]["weapons"])
+        lesser = [l for _ in range(1500) for l in roller.open("Gold", "Weapon").items[1:]]
+        share = sum(self._parse(l)[0] in weapons for l in lesser) / len(lesser)
+        self.assertAlmostEqual(share, 0.15, delta=0.03,
+                               msg=f"{share:.0%} of a Weapon box's lesser items are weapons")
 
     def test_an_unknown_type_still_opens(self):
         """Achievements name their own boxes after whatever earned them. A name the
@@ -1438,11 +1489,18 @@ class LootBoxTest(unittest.TestCase):
                 "footwear": 12}
     MIN_BAND = 8
     MIN_EFFECTS = 20
+    # Half of every lesser item is a consumable, and early floors' lesser items are
+    # mostly Bronze or Silver, so the low band carries the most: at 20 it put the
+    # same ration pack in six boxes on one huge floor.
+    MIN_CONSUMABLES = {"low": 50, "mid": 35, "high": 25}
 
     def test_the_banks_stay_big(self):
         for pool, floor in self.MIN_POOL.items():
             self.assertGreaterEqual(len(self.lb["items"][pool]), floor,
                                     f"the {pool} pool shrank below {floor}")
+        for band, floor in self.MIN_CONSUMABLES.items():
+            self.assertGreaterEqual(len(self.lb["items"]["consumables"][band]), floor,
+                                    f"consumables/{band} shrank below {floor}")
         for pool, bank in self.lb["items"].items():
             if isinstance(bank, dict):
                 for band, items in bank.items():
@@ -1460,11 +1518,13 @@ class LootBoxTest(unittest.TestCase):
         Counted in weapons, not boxes: how many a box holds is a house rule that
         changes, and a Gold box went from two weapons to five."""
         floor = self.MIN_POOL["weapons"]
+        weapons = set(self.lb["items"]["weapons"])
         for seed in (3, 4, 5):
             roller = mg.LootRoller(seed)
             seen = []
             while len(seen) < floor:
-                seen += [self._parse(l)[0] for l in roller.open("Gold", "Weapon").items]
+                seen += [b for b in (self._parse(l)[0] for l in
+                                     roller.open("Gold", "Weapon").items) if b in weapons]
             seen = seen[:floor]
             self.assertEqual(len(seen), len(set(seen)),
                              f"seed {seed}: a weapon came round twice in the first "

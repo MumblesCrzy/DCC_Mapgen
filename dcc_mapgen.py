@@ -1033,6 +1033,28 @@ class LootRoller:
                 item = f"**{name}'s {epithet}**, {item}"
         return item
 
+    def _lesser_pool(self, main_pool: str) -> str:
+        """Which pool a lesser item comes from, by LOOT_BOXES["secondary"]: the
+        main item's own pool 15% of the time, other equipment 35%, consumables 50%.
+
+        Equipment leaves out the main item's pool, so a Weapon box reaches another
+        weapon only through the 15% -- counted twice, it would be closer to 27%.
+        Within a category a pool is picked in proportion to its size, so every
+        item in it is equally likely and the 16 pairs of shoes do not turn up as
+        often as the 50 weapons."""
+        sec = LOOT_BOXES["secondary"]
+        kinds = list(sec["weights"])
+        kind = self.rng.choices(kinds, weights=[sec["weights"][k] for k in kinds])[0]
+        if kind == "same":
+            return main_pool
+        pools = (sec["equip_pools"] if kind == "equip" else sec["consumable_pools"])
+        pools = [p for p in pools if p != main_pool] or pools
+        sizes = []
+        for p in pools:
+            bank = LOOT_BOXES["items"][p]
+            sizes.append(sum(map(len, bank.values())) if isinstance(bank, dict) else len(bank))
+        return self.rng.choices(pools, weights=sizes)[0]
+
     def open(self, tier: str, box_type, floor: int = 1) -> OpenedBox:
         """Open one box. `box_type` is a type dict or a name; unknown names are
         achievement boxes and open from the Adventurer pools. `floor` sets the
@@ -1069,13 +1091,16 @@ class LootRoller:
         # The headline comes from a pool that can carry the tier, so a Gold box
         # always shows it is Gold instead of turning out to be all rope.
         lead = enchantable if enchantable and lb["effects_per_item"][top] else pools
-        items = [self._make(self.rng.choice(lead), top, headline=True)]
+        main_pool = self.rng.choice(lead)
+        items = [self._make(main_pool, top, headline=True)]
         tiers = [top]
-        # Each lesser item rolls its own tier, evenly, from the box's list.
+        # Each lesser item rolls its own tier, evenly, from the box's list, and
+        # its own kind: mostly support for the main item rather than more of it.
         lesser = []
         for _ in range(contents["extras"]):
             t = self.rng.choice(contents["extra_tiers"])
-            lesser.append((t, self._make(self.rng.choice(pools), t, headline=False)))
+            pool = self._lesser_pool(main_pool)
+            lesser.append((t, self._make(pool, t, headline=False)))
         # Best first, so the line reads down the tiers; sorting after the rolls
         # changes nothing about what was rolled.
         lesser.sort(key=lambda pair: -LOOT_BOX_TIERS.index(pair[0]))
