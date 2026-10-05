@@ -1001,37 +1001,52 @@ class BossNameTest(unittest.TestCase):
 
 
 class LootBoxTest(unittest.TestCase):
-    """Loot boxes used to be one sentence listing six tiers, while achievements and
-    quests promised Adventurer, Weapon, Apparel and Quest boxes nobody defined.
+    """Loot boxes: what a floor suggests, and what a box holds once opened.
 
-    Every floor now gets a section with the canon rules, the box types that exist
-    by that floor, and a handful of boxes opened in advance; every boss names the
-    box it drops. The checks below are about the parts that read wrong when they
-    slip: effects on items that cannot carry them, power leaking up a tier, a box
-    type turning up before the floor that introduces it, and a tier that is not
-    one of the six."""
+    The two are separate on purpose. A floor names its boxes -- every boss's drop,
+    every quest's and achievement's reward -- and rolls nothing; a LootRoller opens
+    a box on demand, after a DM has decided what it is. Most checks here are about
+    the parts that read wrong when they slip: effects on items that cannot carry
+    them, power leaking up a tier, a low-tier item in a high-tier box, a box type
+    turning up before its floor, and a tier that is not one of the six."""
+
+    # Stated here rather than read from LOOT_BOXES["effect_kinds"]. Read from the
+    # bank, the fit test approved whatever the bank said: a probe that let magic
+    # items take worn effects again passed it. These are the design rules.
+    NEVER = {
+        "weapons": {"worn"},             # a sword does not silence footsteps
+        "apparel": {"weapon"},           # a jacket does not deal damage on a hit
+        "footwear": {"weapon"},
+        "pet": {"weapon"},
+        "magic": {"weapon", "worn"},     # a scroll is carried, not worn or swung
+        "offworld": {"weapon"},
+    }
 
     @classmethod
     def setUpClass(cls):
         cls.lb = mg.LOOT_BOXES
         cls.fx_kind = {e: k for tier in cls.lb["effects"].values() for e, k in tier}
         cls.fx_tier = {e: t for t, tier in cls.lb["effects"].items() for e, _ in tier}
-        cls.item_pool = {i: p for p, items in cls.lb["items"].items() for i in items}
-        cls.opened = []                         # (floor, label, item lines)
-        for floor in mg.FLOORS:
-            for seed in range(1, 21):
-                fl = mg.generate(floor, "small", seed, images=False).floor
-                for label, _, items in mg.ready_boxes(fl):
-                    cls.opened.append((floor, seed, label, items))
+        cls.item_pool, cls.item_band = {}, {}
+        for pool, bank in cls.lb["items"].items():
+            for band, items in (bank.items() if isinstance(bank, dict) else [(None, bank)]):
+                for item in items:
+                    cls.item_pool[item], cls.item_band[item] = pool, band
+        # A spread of boxes: every rollable type at every tier, several times over.
+        roller = mg.LootRoller(2024)
+        types = [t for t in cls.lb["types"] + cls.lb["themed_types"] if not t.get("special")]
+        cls.opened = [roller.open(tier, t["name"])
+                      for _ in range(6) for t in types for tier in mg.LOOT_BOX_TIERS]
 
-    def _parse(self, line):
+    @staticmethod
+    def _parse(line):
         """An item line back into (base item, [effects])."""
         body = re.sub(r"^\*\*.*?\*\*, ", "", line)
         base = body.split(" (")[0]
         effects = body[len(base) + 2:-1].split("; ") if " (" in body else []
         return base, effects
 
-    # -- the section ------------------------------------------------------------
+    # -- the floor suggests, and rolls nothing -----------------------------------
 
     def test_every_floor_has_the_section_once(self):
         for floor in mg.FLOORS:
@@ -1039,16 +1054,40 @@ class LootBoxTest(unittest.TestCase):
             self.assertEqual(md.count("## Loot Boxes"), 1,
                              f"floor {floor} carries the loot section "
                              f"{md.count('## Loot Boxes')} times")
-            self.assertIn("### Ready to hand out", md)
+            self.assertIn("### Opening a box", md)
+            self.assertIn("--open-box", md)
             self.assertNotIn("Box tiers, lowest to highest", md,
                              "the old one-line section came back")
+
+    def test_a_floor_rolls_no_box_contents(self):
+        """Decoupled means the write-up holds suggestions only. If an enchantment
+        turns up in a floor's loot section, something is rolling boxes again."""
+        effects = set(self.fx_tier)
+        for floor in mg.FLOORS:
+            md = mg.generate(floor, "medium", 4242, images=False).markdown
+            section = md[md.index("## Loot Boxes"):md.index("## Crawler Stats")]
+            self.assertNotIn("Ready to hand out", section)
+            leaked = [e for e in effects if e in section]
+            self.assertEqual(leaked, [], f"floor {floor} rolled contents: {leaked[:3]}")
+
+    def test_rolling_boxes_never_touches_a_floor(self):
+        """A roller has no floor to reach. Opening a hundred boxes between two
+        generations of the same floor must leave every byte of it alone."""
+        before = mg.generate(1, "medium", 4242)
+        roller = mg.LootRoller(5)
+        for _ in range(100):
+            roller.open("Gold", "Boss")
+        after = mg.generate(1, "medium", 4242)
+        self.assertEqual(before.markdown, after.markdown)
+        self.assertEqual([s for _, s in before.svgs], [s for _, s in after.svgs])
 
     def test_types_arrive_on_their_floor(self):
         """Sponsors start on Floor 4, so Benefactor boxes do; the leaderboard
         starts there too, so Bounty boxes do; Venison needs a ranked crawler to
         survive a floor, so it starts a floor later."""
         def table_types(md):
-            sec = md[md.index("| Box | Earned for |"):md.index("### Ready to hand out")]
+            sec = md[md.index("| Box | Earned for |"):md.index("### Opening a box")]
+            sec = sec.split("### What this floor hands out")[0]
             return {ln.split("|")[1].strip() for ln in sec.splitlines()
                     if ln.startswith("| ") and "---" not in ln} - {"Box"}
         for floor in mg.FLOORS:
@@ -1064,24 +1103,12 @@ class LootBoxTest(unittest.TestCase):
         self.assertEqual(next(t for t in self.lb["types"]
                               if t["name"] == "Benefactor")["from_floor"], 4)
 
-    def test_no_ready_box_is_a_type_that_does_not_exist_yet(self):
-        firsts = {t["name"]: t["from_floor"] for t in self.lb["types"]}
-        for floor, seed, label, _ in self.opened:
-            kind = label.split(" ", 1)[1].rsplit(" Box", 1)[0]
-            self.assertLessEqual(firsts[kind], floor,
-                                 f"floor {floor} seed {seed} hands out a {label}")
-            self.assertFalse(next(t for t in self.lb["types"]
-                                  if t["name"] == kind).get("special"),
-                             f"{label} has no contents to roll; it holds a bounty")
-
-    # -- boss drops ------------------------------------------------------------
-
     def test_every_boss_names_its_drop(self):
         for floor in (1, 2, 3, 5, 6, 11):
             res = mg.generate(floor, "medium", 4242, images=False)
             md, fl = res.markdown, res.floor
-            # Floor 5's bosses are the castle rulers, one per quadrant, which the
-            # boss-name helper has no reason to know about.
+            # Counted independently of mg.floor_bosses, which the suggestions use:
+            # floor 5's bosses are the castle rulers, one per quadrant.
             bosses = BossNameTest._bosses(fl) + [
                 q.castle.boss for q in getattr(fl, "quadrants", []) or []
                 if getattr(q, "castle", None)]
@@ -1090,6 +1117,50 @@ class LootBoxTest(unittest.TestCase):
             self.assertEqual(len(drops), len(bosses),
                              f"floor {floor} has {len(bosses)} bosses and "
                              f"{len(drops)} drop lines")
+
+    def test_the_suggestion_table_counts_every_named_box(self):
+        """Every box the write-up names is in the table, and nothing else is."""
+        for floor in (1, 3, 6, 11):
+            md = mg.generate(floor, "large" if floor != 11 else "medium", 4242,
+                             images=False).markdown
+            section = md[md.index("### What this floor hands out"):
+                         md.index("### Opening a box")]
+            rows = [ln for ln in section.splitlines()
+                    if ln.startswith("| ") and "---" not in ln and "How many" not in ln]
+            listed = sum(int(r.split("|")[2]) for r in rows)
+            drops = sum(1 for ln in md.splitlines() if "  - Drops: a " in ln)
+            self.assertGreaterEqual(listed, drops,
+                                    f"floor {floor}: {drops} boss drops, {listed} in table")
+            self.assertEqual(listed, len(mg.floor_box_suggestions(
+                mg.generate(floor, "large" if floor != 11 else "medium", 4242,
+                            images=False).floor)))
+
+    def test_every_suggestion_can_be_pasted_back_in(self):
+        """The point of the split: whatever a floor names, a DM can hand to the
+        roller as written. Every suggestion's label must parse to itself."""
+        for floor in mg.FLOORS:
+            fl = mg.generate(floor, "medium", 4242, images=False).floor
+            for sg in mg.floor_box_suggestions(fl):
+                tier, box_type = mg.parse_box(f"a {sg.label}")
+                self.assertEqual((tier, box_type["name"]), (sg.tier, sg.box_type),
+                                 f"floor {floor}: {sg.label!r} parses as "
+                                 f"{tier} {box_type['name']}")
+                self.assertFalse(box_type.get("unknown"),
+                                 f"floor {floor} suggests a {sg.label}, which the "
+                                 f"roller does not know and would open as generic")
+
+    def test_parse_reads_a_box_the_ways_a_dm_writes_one(self):
+        for text in ("a Silver Boss Box", "Silver Boss", "silver boss box",
+                     "  A SILVER BOSS BOX.  ", "the Silver Boss Box"):
+            tier, t = mg.parse_box(text)
+            self.assertEqual((tier, t["name"]), ("Silver", "Boss"), text)
+        tier, t = mg.parse_box("Platinum Lucky Bastard")
+        self.assertEqual((tier, t["name"]), ("Platinum", "Lucky Bastard"))
+        for bad in ("Boss", "Shiny Boss", "Gold", ""):
+            with self.assertRaises(mg.MapgenError, msg=bad):
+                mg.parse_box(bad)
+
+    # -- boss drops ---------------------------------------------------------------
 
     def test_boss_drops_climb_with_tier_and_depth(self):
         tiers = mg.LOOT_BOX_TIERS
@@ -1109,31 +1180,20 @@ class LootBoxTest(unittest.TestCase):
                 self.assertNotIn("Celestial", mg.boss_box(tier, floor),
                                  f"a {tier} boss on floor {floor} drops Celestial")
 
-    # -- what is in a box -----------------------------------------------------
-
-    # Stated here rather than read from LOOT_BOXES["effect_kinds"]. Read from the
-    # bank, this test approved whatever the bank said: a probe that let magic items
-    # take worn effects again passed it. These are the design rules themselves.
-    NEVER = {
-        "weapons": {"worn"},             # a sword does not silence footsteps
-        "apparel": {"weapon"},           # a jacket does not deal damage on a hit
-        "pet": {"weapon"},
-        "magic": {"weapon", "worn"},     # a scroll is carried, not worn or swung
-        "offworld": {"weapon"},
-    }
+    # -- what is in a box ------------------------------------------------------
 
     def test_effects_fit_the_item_they_are_on(self):
         """A leather jacket that "deals extra damage to undead", or a spell scroll
         that "silences its owner's footsteps", was what the first draft produced."""
         checked = 0
-        for floor, seed, label, items in self.opened:
-            for line in items:
+        for box in self.opened:
+            for line in box.items:
                 base, effects = self._parse(line)
                 barred = self.NEVER.get(self.item_pool[base], set())
                 for e in effects:
                     checked += 1
                     self.assertNotIn(self.fx_kind[e], barred,
-                                     f"{label} on floor {floor}: {base} cannot carry {e!r}")
+                                     f"{box.label}: {base} cannot carry {e!r}")
         self.assertGreater(checked, 1000)
 
     def test_every_enchantable_pool_has_a_rule(self):
@@ -1145,103 +1205,172 @@ class LootBoxTest(unittest.TestCase):
     def test_no_celestial_power_outside_a_celestial_box(self):
         """The first draft let a Gold Benefactor box open at Celestial, with every
         item carrying three world-breaking effects."""
-        for floor, seed, label, items in self.opened:
-            if label.startswith("Celestial"):
+        for box in self.opened:
+            if box.opened_at == "Celestial":
                 continue
-            for line in items:
+            for line in box.items:
                 for e in self._parse(line)[1]:
                     self.assertNotEqual(self.fx_tier[e], "Celestial",
-                                        f"{label} on floor {floor} seed {seed} "
-                                        f"carries {e!r}")
+                                        f"{box.label} carries {e!r}")
 
     def test_one_headline_item_per_box(self):
         """A Legendary box is one named item and good gear around it, not a pile of
         legendaries. Only the first item may carry the box's own tier."""
-        tiers = mg.LOOT_BOX_TIERS
-        cap = tiers.index(self.lb["benefactor_cap"])
-        for floor, seed, label, items in self.opened:
-            # The tier the box actually opened at: a Benefactor box opens above
-            # its label, so its supporting items may sit at the label's own tier.
-            idx = tiers.index(label.split()[0])
-            if " Benefactor " in label:
-                idx = max(idx, min(idx + self.lb["benefactor_bonus"], cap))
-            tier = tiers[idx]
-            if tier == "Bronze":
+        for box in self.opened:
+            if box.opened_at == "Bronze":
                 continue
-            for line in items[1:]:
+            for line in box.items[1:]:
                 for e in self._parse(line)[1]:
-                    self.assertNotEqual(self.fx_tier[e], tier,
-                                        f"{label}: a second item carries {tier} "
-                                        f"power: {line}")
-            named = sum(1 for line in items if line.startswith("**"))
-            self.assertLessEqual(named, 1, f"{label} names {named} items")
+                    self.assertNotEqual(self.fx_tier[e], box.opened_at,
+                                        f"{box.label}: a second item carries "
+                                        f"{box.opened_at} power: {line}")
+            named = sum(1 for line in box.items if line.startswith("**"))
+            self.assertLessEqual(named, 1, f"{box.label} names {named} items")
+
+    def test_plain_items_scale_with_the_box(self):
+        """Potions, tools, explosives and oddities take no enchantment, so they come
+        in bands. Before that, a Celestial box could hold a ten-foot pole and three
+        minor healing potions."""
+        bands = mg.LOOT_BANDS
+        tiers = mg.LOOT_BOX_TIERS
+        checked = 0
+        for box in self.opened:
+            top = tiers.index(box.opened_at)
+            for i, line in enumerate(box.items):
+                base, _ = self._parse(line)
+                band = self.item_band[base]
+                if band is None:
+                    continue
+                checked += 1
+                slot = box.opened_at if i == 0 else tiers[max(top - 1, 0)]
+                self.assertEqual(band, bands[slot],
+                                 f"{box.label}: {base!r} is a {band} item in a "
+                                 f"{slot} slot")
+            if box.opened_at in ("Legendary", "Celestial"):
+                lows = [self._parse(l)[0] for l in box.items
+                        if self.item_band[self._parse(l)[0]] == "low"]
+                self.assertEqual(lows, [], f"{box.label} holds {lows}")
+        self.assertGreater(checked, 300)
+
+    def test_a_themed_box_holds_what_its_name_promises(self):
+        """A Shoe box -- which a floor 1 achievement already awards -- holds shoes."""
+        roller = mg.LootRoller(8)
+        footwear = set(self.lb["items"]["footwear"])
+        for tier in mg.LOOT_BOX_TIERS:
+            box = roller.open(tier, "Shoe")
+            for line in box.items:
+                self.assertIn(self._parse(line)[0], footwear, f"{box.label}: {line}")
+
+    def test_an_unknown_type_still_opens(self):
+        """Achievements name their own boxes after whatever earned them. A name the
+        bank does not know opens from the Adventurer pools and says so."""
+        box = mg.LootRoller(1).open_text("Gold Podiatrist")
+        self.assertEqual(box.label, "Gold Podiatrist Box")
+        self.assertTrue(box.items)
+        self.assertIn("Adventurer pools", box.note)
+
+    def test_special_boxes_hold_what_they_hold(self):
+        for name in ("Bounty", "Venison"):
+            box = mg.LootRoller(1).open("Legendary", name)
+            self.assertEqual(len(box.items), 1)
+            self.assertIn("bounty", box.items[0])
 
     def test_a_bronze_benefactor_box_beats_a_gold_adventurer_box(self):
         """Straight from the books, and the reason Benefactor boxes open above
         their label."""
-        decks = self._decks(5)
-        types = {t["name"]: t for t in self.lb["types"]}
         tiers = mg.LOOT_BOX_TIERS
-        rng = random.Random(5)
-        bronze_benefactor = mg.open_box(rng, decks, types["Benefactor"], 0)
-        gold_adventurer = mg.open_box(rng, decks, types["Adventurer"], 2)
-        best = lambda items: max(tiers.index(self.fx_tier[e])
-                                 for line in items for e in self._parse(line)[1])
-        self.assertGreater(best(bronze_benefactor), best(gold_adventurer))
+        for seed in range(5):
+            roller = mg.LootRoller(seed)
+            benefactor = roller.open("Bronze", "Benefactor")
+            adventurer = roller.open("Gold", "Adventurer")
+            self.assertGreater(tiers.index(benefactor.opened_at),
+                               tiers.index(adventurer.opened_at))
+            best = lambda box: max(tiers.index(self.fx_tier[e]) for line in box.items
+                                   for e in self._parse(line)[1])
+            self.assertGreater(best(benefactor), best(adventurer))
 
     def test_the_benefactor_cap_limits_promotion_not_the_box(self):
         """Capping the promotion at Legendary once demoted a Celestial Benefactor
         box to Legendary."""
-        decks = self._decks(9)
-        benefactor = next(t for t in self.lb["types"] if t["name"] == "Benefactor")
-        items = mg.open_box(random.Random(9), decks, benefactor, 5)
-        tiers = [self.fx_tier[e] for e in self._parse(items[0])[1]]
-        self.assertTrue(tiers and all(t == "Celestial" for t in tiers),
-                        f"a Celestial Benefactor box opened as {tiers}")
+        box = mg.LootRoller(9).open("Celestial", "Benefactor")
+        self.assertEqual(box.opened_at, "Celestial")
+        effects = self._parse(box.items[0])[1]
+        self.assertTrue(effects and all(self.fx_tier[e] == "Celestial" for e in effects))
+        self.assertEqual(mg.LootRoller(9).open("Gold", "Benefactor").opened_at, "Legendary")
 
-    def _decks(self, seed):
-        rng = random.Random(seed)
-        decks = {p: mg.Deck(rng, items) for p, items in self.lb["items"].items()}
-        kinds = sorted({"+".join(k) for k in self.lb["effect_kinds"].values()})
+    # -- volume: boxes are the most-generated thing in the project -------------
+
+    # The floor under each bank, stated here rather than read from it -- a test
+    # that took the bank's own size let a probe shrink weapons back to 16 and
+    # pass. Sized against measured volume: a large Floor 1 names about 37 boxes,
+    # a huge one about 100, and a DM opens them one after another.
+    MIN_POOL = {"weapons": 45, "apparel": 45, "magic": 35, "offworld": 25, "pet": 25,
+                "footwear": 12}
+    MIN_BAND = 8
+    MIN_EFFECTS = 20
+
+    def test_the_banks_stay_big(self):
+        for pool, floor in self.MIN_POOL.items():
+            self.assertGreaterEqual(len(self.lb["items"][pool]), floor,
+                                    f"the {pool} pool shrank below {floor}")
+        for pool, bank in self.lb["items"].items():
+            if isinstance(bank, dict):
+                for band, items in bank.items():
+                    self.assertGreaterEqual(len(items), self.MIN_BAND,
+                                            f"{pool}/{band} shrank below {self.MIN_BAND}")
         for tier, effects in self.lb["effects"].items():
-            for kind in kinds:
-                decks[f"fx:{tier}:{kind}"] = mg.Deck(
-                    rng, [t for t, fits in effects if fits in kind.split("+")])
-        decks["first"] = mg.Deck(rng, mg.BOSS_FIRST)
-        decks["epithet"] = mg.Deck(rng, self.lb["epithets"])
-        return decks
+            self.assertGreaterEqual(len(effects), self.MIN_EFFECTS,
+                                    f"{tier} enchantments shrank below {self.MIN_EFFECTS}")
 
-    def test_a_floors_boxes_do_not_repeat_an_item(self):
-        by_floor = collections.defaultdict(list)
-        for floor, seed, _, items in self.opened:
-            by_floor[(floor, seed)] += [self._parse(line)[0] for line in items]
-        for key, bases in by_floor.items():
-            self.assertEqual(len(bases), len(set(bases)),
-                             f"floor/seed {key} hands out the same item twice")
+    def test_fifteen_weapon_boxes_in_a_row_repeat_nothing(self):
+        """One roller holds its decks, so the CLI's --count and an app session do
+        not repeat an item until the pool runs out. Before the banks grew, a
+        Weapon box repeated its first item by the eighth box."""
+        for seed in (3, 4, 5):
+            roller = mg.LootRoller(seed)
+            seen = [self._parse(l)[0] for _ in range(15)
+                    for l in roller.open("Gold", "Weapon").items]
+            self.assertEqual(len(seen), len(set(seen)),
+                             f"seed {seed}: a weapon came round twice in 15 boxes")
 
-    # -- what it must not touch ------------------------------------------------
+    def test_the_banks_are_big_enough_for_a_whole_floor(self):
+        """Every box a large Floor 1 names, opened in one session, without a repeat.
+        A huge floor names about a hundred boxes; the banks are not sized for
+        that, and repeats are allowed there, but not clumped."""
+        fl = mg.generate(1, "large", 4242, images=False).floor
+        roller = mg.LootRoller(9)
+        bases = [self._parse(l)[0] for sg in mg.floor_box_suggestions(fl)
+                 for l in roller.open(sg.tier, sg.box_type).items]
+        self.assertGreater(len(bases), 40)
+        self.assertEqual(len(bases), len(set(bases)),
+                         "a large floor's boxes repeat an item within one session")
+        fl = mg.generate(1, "huge", 77, images=False).floor
+        roller = mg.LootRoller(9)
+        counts = collections.Counter(self._parse(l)[0] for sg in mg.floor_box_suggestions(fl)
+                                     for l in roller.open(sg.tier, sg.box_type).items)
+        self.assertLessEqual(max(counts.values()), 3,
+                             f"a huge floor's boxes clump: {counts.most_common(2)}")
 
-    def test_rolling_loot_never_moves_a_map(self):
-        """Ready-made boxes run on their own stream, and drops are worked out at
-        render time, so every map generated before this feature is still valid.
-        Changing how much loot is rolled must not move a single wall."""
-        before = mg.generate(1, "medium", 4242).svgs
-        saved = self.lb["sample_count"]
-        try:
-            self.lb["sample_count"] = 13
-            after = mg.generate(1, "medium", 4242).svgs
-        finally:
-            self.lb["sample_count"] = saved
-        self.assertEqual([s for _, s in before], [s for _, s in after])
+    def test_a_seeded_roller_replays_exactly(self):
+        def run(seed):
+            r = mg.LootRoller(seed)
+            return [r.open(t, k).markdown() for t, k in
+                    (("Gold", "Boss"), ("Bronze", "Pet"), ("Legendary", "Weapon"))]
+        self.assertEqual(run(42), run(42))
+        self.assertNotEqual(run(42), run(43))
+
+    # -- canon -----------------------------------------------------------------
 
     def test_every_named_box_uses_a_canon_tier(self):
         """"Iron Quest Box" shipped in the quest rewards and is not one of the six.
         Checked across every word bank and every floor's output, so the next one
         is caught wherever it is written."""
         pattern = re.compile(r"\b([A-Z][a-z]+) [A-Z][\w']+(?: [A-Z][\w']+)? Box\b")
-        texts = [open(path, encoding="utf-8").read()
-                 for path in glob.glob(os.path.join(os.path.dirname(os.path.dirname(
-                     os.path.abspath(__file__))), "data", "*.json"))]
+        texts = []
+        for path in glob.glob(os.path.join(os.path.dirname(os.path.dirname(
+                os.path.abspath(__file__))), "data", "*.json")):
+            with open(path, encoding="utf-8") as f:
+                texts.append(f.read())
         texts += [mg.generate(f, "medium", 4242, images=False).markdown
                   for f in mg.FLOORS]
         found = 0
@@ -1251,6 +1380,43 @@ class LootBoxTest(unittest.TestCase):
                 self.assertIn(m.group(1), mg.LOOT_BOX_TIERS,
                               f"{m.group(0)!r} names a tier that is not one of the six")
         self.assertGreater(found, 50, "the pattern stopped matching anything")
+
+
+class LootCommandLineTest(unittest.TestCase):
+    """--open-box, run as a subprocess the way a DM would."""
+
+    ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+    def _run(self, *args):
+        env = dict(os.environ, PYTHONIOENCODING="utf-8")
+        return subprocess.run([sys.executable, os.path.join(self.ROOT, "dcc_mapgen.py"),
+                               *args], capture_output=True, text=True, env=env,
+                              encoding="utf-8")
+
+    def test_a_pasted_drops_line_opens(self):
+        r = self._run("--open-box", "a Silver Boss Box", "--seed", "7")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertTrue(r.stdout.startswith("- **Silver Boss Box**"), r.stdout)
+        self.assertIn("--seed 7", r.stderr)
+
+    def test_count_and_several_boxes(self):
+        r = self._run("--open-box", "Gold Weapon", "--open-box", "Bronze Pet",
+                      "--count", "3", "--seed", "1")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        lines = r.stdout.strip().splitlines()
+        self.assertEqual(sum("Gold Weapon Box" in l for l in lines), 3)
+        self.assertEqual(sum("Bronze Pet Box" in l for l in lines), 3)
+
+    def test_the_same_seed_opens_the_same_boxes(self):
+        a = self._run("--open-box", "Platinum Boss", "--count", "2", "--seed", "11")
+        b = self._run("--open-box", "Platinum Boss", "--count", "2", "--seed", "11")
+        self.assertEqual(a.stdout, b.stdout)
+
+    def test_a_box_without_a_tier_is_refused_plainly(self):
+        r = self._run("--open-box", "Shiny Boss")
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("expected a tier", r.stderr)
+        self.assertNotIn("Traceback", r.stderr)
 
 
 class NightThreatTest(unittest.TestCase):

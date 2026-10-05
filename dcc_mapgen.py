@@ -906,81 +906,208 @@ def _fit_kind(pool: str) -> str:
     return "+".join(LOOT_BOXES["effect_kinds"].get(pool, ["any"]))
 
 
-def open_box(rng, decks: dict, box_type: dict, tier_idx: int) -> List[str]:
-    """What is in one box, as item lines.
+# Plain pools (potions, tools, explosives, oddities) take no enchantment, so they
+# scale by band instead: a Celestial box does not hold a ten-foot pole.
+LOOT_BANDS = {"Bronze": "low", "Silver": "low", "Gold": "mid", "Platinum": "mid",
+              "Legendary": "high", "Celestial": "high"}
 
-    One headline item carries the box's full tier; everything else in it sits a
-    tier below. A Legendary box is one named item and good gear around it, not a
-    pile of legendaries. A Benefactor box opens three tiers above its label,
-    which is how the books put a Bronze one ahead of a Gold Adventurer box, but
-    never past Legendary: Celestial is something a box is, not something it
-    becomes."""
-    lb = LOOT_BOXES
-    if box_type["name"] == "Benefactor":
-        # The cap limits the promotion, not the box: a Celestial Benefactor box
-        # is still Celestial, it just was not promoted there.
-        cap = LOOT_BOX_TIERS.index(lb["benefactor_cap"])
-        tier_idx = max(tier_idx, min(tier_idx + lb["benefactor_bonus"], cap))
-    top = LOOT_BOX_TIERS[tier_idx]
-    lo, hi = lb["counts"][top]
-    pools = box_type["pools"]
-    enchantable = [p for p in pools if p in lb["enchantable"]]
+_BOX_RE = re.compile(r"\b(" + "|".join(LOOT_BOX_TIERS) +
+                     r")\s+((?:[A-Z][\w']*\s+)*?[A-Z][\w']*)\s+Box\b")
+
+
+def find_box_type(name: str) -> dict:
+    """A box type by name, case-insensitively.
+
+    A name the bank does not know is still a box: achievements name their own
+    after whatever earned them, so "Podiatrist" is a perfectly good box type. It
+    opens from the Adventurer pools and keeps the name it was given."""
+    wanted = name.strip().lower()
+    for t in LOOT_BOXES["types"] + LOOT_BOXES["themed_types"]:
+        if t["name"].lower() == wanted:
+            return t
+    base = next(t for t in LOOT_BOXES["types"] if t["name"] == "Adventurer")
+    return {"name": cap_words(name.strip()), "pools": base["pools"],
+            "earned": "an achievement of its own", "unknown": True}
+
+
+def parse_box(text: str) -> Tuple[str, dict]:
+    """Read a box the way a DM would write it, or paste it off a write-up:
+    "a Silver Boss Box", "Silver Boss", "gold weapon box". Returns (tier, type).
+    Raises MapgenError when there is no tier to read."""
+    words = text.strip().rstrip(".").split()
+    if words and words[0].lower() in ("a", "an", "the"):
+        words = words[1:]
+    if words and words[-1].lower() == "box":
+        words = words[:-1]
+    tiers = {t.lower(): t for t in LOOT_BOX_TIERS}
+    if len(words) < 2 or words[0].lower() not in tiers:
+        raise MapgenError(f"cannot read a box from {text!r}: expected a tier "
+                          f"({', '.join(LOOT_BOX_TIERS)}) then a type, "
+                          f"as in \"Silver Boss\" or \"a Gold Weapon Box\"")
+    return tiers[words[0].lower()], find_box_type(" ".join(words[1:]))
+
+
+@dataclass
+class OpenedBox:
+    tier: str                  # what the label says
+    box_type: str
+    opened_at: str             # what the contents were rolled at
+    items: List[str]
+    note: str = ""
+
+    @property
+    def label(self) -> str:
+        return f"{self.tier} {self.box_type} Box"
+
+    def markdown(self) -> str:
+        note = f" *({self.note})*" if self.note else ""
+        return f"- **{self.label}**{note} — " + "; ".join(self.items) + "."
+
+
+class LootRoller:
+    """Opens loot boxes on demand, with no floor involved.
+
+    Boxes are generated apart from the map so that what a floor suggests -- "a
+    Silver Boss Box" -- is a suggestion: a DM can hand it out as it stands, or
+    make it Gold, or make it a Weapon box, and only then roll it. The decks live
+    as long as the roller does, so a session of rolls works through each bank
+    before it repeats anything. Seeded, a roller reproduces its whole sequence."""
+
+    def __init__(self, seed: Optional[int] = None):
+        self.seed = seed if seed is not None else random.randrange(1_000_000)
+        self.rng = random.Random(f"boxes|{self.seed}")
+        self._decks = {}
+
+    def _deck(self, key: str, items) -> Deck:
+        # Made on first use. The order decks are made in depends only on the order
+        # of the rolls, so a seeded roller replays exactly.
+        if key not in self._decks:
+            self._decks[key] = Deck(self.rng, items)
+        return self._decks[key]
+
+    def _item(self, pool: str, quality: str) -> str:
+        items = LOOT_BOXES["items"][pool]
+        if isinstance(items, dict):
+            band = LOOT_BANDS[quality]
+            return self._deck(f"{pool}:{band}", items[band]).draw()
+        return self._deck(pool, items).draw()
+
+    def _effects(self, quality: str, pool: str, count: int) -> List[str]:
+        kind = _fit_kind(pool)
+        deck = self._deck(f"fx:{quality}:{kind}",
+                          [text for text, fits in LOOT_BOXES["effects"][quality]
+                           if fits in kind.split("+")])
+        out = []
+        while len(out) < count:                   # distinct even across a reshuffle
+            effect = deck.draw()
+            if effect not in out:
+                out.append(effect)
+        return out
+
+    def open(self, tier: str, box_type) -> OpenedBox:
+        """Open one box. `box_type` is a type dict or a name; unknown names are
+        achievement boxes and open from the Adventurer pools.
+
+        One headline item carries the box's full tier; everything else sits a
+        tier below. A Benefactor box opens three tiers above its label, which is
+        how the books put a Bronze one ahead of a Gold Adventurer box -- but the
+        promotion stops at Legendary, and never demotes a box already above it."""
+        lb = LOOT_BOXES
+        if isinstance(box_type, str):
+            box_type = find_box_type(box_type)
+        if tier not in LOOT_BOX_TIERS:
+            raise MapgenError(f"{tier!r} is not a tier: {', '.join(LOOT_BOX_TIERS)}")
+        if box_type.get("special"):
+            return OpenedBox(tier, box_type["name"], tier, [box_type["holds"]],
+                             box_type.get("note", ""))
+        idx = LOOT_BOX_TIERS.index(tier)
+        if box_type["name"] == "Benefactor":
+            cap = LOOT_BOX_TIERS.index(lb["benefactor_cap"])
+            idx = max(idx, min(idx + lb["benefactor_bonus"], cap))
+        top = LOOT_BOX_TIERS[idx]
+        pools = box_type["pools"]
+        enchantable = [p for p in pools if p in lb["enchantable"]]
+        lo, hi = lb["counts"][top]
+        items = []
+        for i in range(self.rng.randint(lo, hi)):
+            quality = top if i == 0 else LOOT_BOX_TIERS[max(idx - 1, 0)]
+            fx_count = lb["effects_per_item"][quality]
+            # The headline comes from a pool that can carry the tier, so a Gold
+            # box always shows it is Gold instead of turning out to be all rope.
+            pool = self.rng.choice(enchantable if i == 0 and fx_count and enchantable
+                                   else pools)
+            item = self._item(pool, quality)
+            if fx_count and pool in lb["enchantable"]:
+                item = f"{item} ({'; '.join(self._effects(quality, pool, fx_count))})"
+                if i == 0 and quality in ("Legendary", "Celestial"):
+                    name = self._deck("first", BOSS_FIRST).draw()
+                    epithet = self._deck("epithet", lb["epithets"]).draw()
+                    item = f"**{name}'s {epithet}**, {item}"
+            items.append(item)
+        note = box_type.get("note", "")
+        if box_type.get("unknown"):
+            note = "an achievement box; opened from the Adventurer pools"
+        return OpenedBox(tier, box_type["name"], top, items, note)
+
+    def open_text(self, text: str) -> OpenedBox:
+        """Open a box written the way a write-up names it: "a Silver Boss Box"."""
+        tier, box_type = parse_box(text)
+        return self.open(tier, box_type)
+
+
+@dataclass
+class BoxSuggestion:
+    tier: str
+    box_type: str
+    kind: str          # what hands it out: "neighborhood boss", "quest", "achievement"
+    source: str        # which one
+
+    @property
+    def label(self) -> str:
+        return f"{self.tier} {self.box_type} Box"
+
+
+def floor_bosses(fl) -> List[Boss]:
+    """Every boss on a floor, wherever that floor keeps it."""
     out = []
-    for i in range(rng.randint(lo, hi)):
-        quality = top if i == 0 else LOOT_BOX_TIERS[max(tier_idx - 1, 0)]
-        fx_count = lb["effects_per_item"][quality]
-        # The headline comes from a pool that can carry the tier, so a Gold box
-        # always shows it is Gold instead of turning out to be all rope.
-        pool = rng.choice(enchantable if i == 0 and fx_count and enchantable else pools)
-        item = decks[pool].draw()
-        if fx_count and pool in lb["enchantable"]:
-            deck = decks[f"fx:{quality}:{_fit_kind(pool)}"]
-            fx = []
-            while len(fx) < fx_count:        # distinct even across a reshuffle
-                effect = deck.draw()
-                if effect not in fx:
-                    fx.append(effect)
-            item = f"{item} ({'; '.join(fx)})"
-            if i == 0 and quality in ("Legendary", "Celestial"):
-                item = f"**{decks['first'].draw()}'s {decks['epithet'].draw()}**, {item}"
-        out.append(item)
+    for attr in ("neighborhoods", "cells"):
+        out += [c.boss for c in getattr(fl, attr, None) or [] if getattr(c, "boss", None)]
+    for group in ("borough_bosses", "city_bosses"):
+        out += list((getattr(fl, group, None) or {}).values())
+    out += [q.castle.boss for q in getattr(fl, "quadrants", None) or []
+            if getattr(q, "castle", None)]
+    for attr in ("top_boss", "boss"):
+        if getattr(fl, attr, None):
+            out.append(getattr(fl, attr))
     return out
 
 
-def ready_boxes(fl) -> List[Tuple[str, dict, List[str]]]:
-    """A handful of boxes rolled for this floor, opened in advance.
-
-    On their own stream, like the crawler teams: rolling loot here must not move a
-    single wall of the floor it is rolled for."""
-    floor = fl.number
-    lb = LOOT_BOXES
-    rng = random.Random(f"loot|{fl.seed}|{floor}")
-    decks = {pool: Deck(rng, items) for pool, items in lb["items"].items()}
-    # One deck per tier per kind of item, in a fixed order so the stream is the
-    # same in every interpreter.
-    kinds = sorted({"+".join(k) for k in lb["effect_kinds"].values()})
-    for tier, effects in lb["effects"].items():
-        for kind in kinds:
-            decks[f"fx:{tier}:{kind}"] = Deck(
-                rng, [text for text, fits in effects if fits in kind.split("+")])
-    decks["first"] = Deck(rng, BOSS_FIRST)
-    decks["epithet"] = Deck(rng, lb["epithets"])
-    types = [t for t in box_types_for(floor) if not t.get("special")]
-    by_name = {t["name"]: t for t in types}
-    type_deck = Deck(rng, [t["name"] for t in types])
-    weights = lb["sample_tier_weights"][lb["depth_band"][str(floor)]]
-    boxes = []
-    for _ in range(lb["sample_count"]):
-        box_type = by_name[type_deck.draw()]
-        tier_idx = rng.choices(range(len(LOOT_BOX_TIERS)), weights=weights)[0]
-        boxes.append((tier_idx, box_type, open_box(rng, decks, box_type, tier_idx)))
-    boxes.sort(key=lambda b: (b[0], b[1]["name"]))
-    return [(f"{LOOT_BOX_TIERS[i]} {t['name']} Box", t, items) for i, t, items in boxes]
+def floor_box_suggestions(fl) -> List[BoxSuggestion]:
+    """The boxes a floor itself names: what each boss drops, what each quest pays,
+    what each achievement listed on it awards. These are what the write-up hands
+    a DM as starting points; nothing about them is rolled."""
+    out = []
+    for b in floor_bosses(fl):
+        tier = boss_box(b.tier, fl.number).split()[0]
+        out.append(BoxSuggestion(tier, "Boss", f"{b.tier} boss", b.name))
+    for cell in getattr(fl, "cells", None) or []:
+        for q in getattr(cell, "quests", None) or []:
+            m = _BOX_RE.search(q.reward)
+            if m:
+                out.append(BoxSuggestion(m.group(1), m.group(2), "quest",
+                                         f"{q.title}, {cell.name}"))
+    if getattr(fl, "neighborhoods", None):           # floors 1 and 2 list them
+        for name, _, reward in ACHIEVEMENTS:
+            m = _BOX_RE.search(reward)
+            if m:
+                out.append(BoxSuggestion(m.group(1), m.group(2), "achievement", name))
+    return out
 
 
 def loot_box_section(fl) -> List[str]:
     """Loot boxes on this floor: the rules, the tiers, the types that exist yet,
-    and a handful opened in advance."""
+    and the boxes the floor itself names as suggestions. Nothing here is rolled:
+    a box is opened apart from the floor, after a DM has decided what it is."""
     floor = fl.number
     lb = LOOT_BOXES
     o = ["## Loot Boxes", ""]
@@ -1007,15 +1134,40 @@ def loot_box_section(fl) -> List[str]:
         o.append("Not on this floor yet: " + ", ".join(
             f"{t['name']} (from Floor {t['from_floor']})" for t in later) + ".")
         o.append("")
-    o.append("### Ready to hand out")
+
+    suggestions = floor_box_suggestions(fl)
+    if suggestions:
+        o.append("### What this floor hands out")
+        o.append("")
+        o.append("Every box this write-up names, grouped. Treat them as suggestions: "
+                 "hand one out as it stands, or change its tier or type first.")
+        o.append("")
+        o.append("| Box | How many | From |")
+        o.append("|---|---:|---|")
+        groups = {}
+        for sg in suggestions:
+            key = (LOOT_BOX_TIERS.index(sg.tier), sg.label, sg.kind)
+            groups.setdefault(key, []).append(sg)
+        for (_, label, kind), members in sorted(groups.items()):
+            src = (f"{kind}: {members[0].source}" if len(members) == 1
+                   else f"{len(members)} {kind}{'es' if kind.endswith('s') else 's'}")
+            o.append(f"| {label} | {len(members)} | {src} |")
+        o.append("")
+
+    o.append("### Opening a box")
     o.append("")
-    count = _COUNT_WORD.get(lb["sample_count"], str(lb["sample_count"])).capitalize()
-    o.append(f"{count} boxes opened in advance, for whenever the party earns something "
-             f"nobody planned for.")
+    o.append("Boxes are rolled on their own, not with the floor, so a DM decides what "
+             "a box is before anything is in it, and rolling one never changes the map. "
+             "Paste any box from this write-up, as written or edited:")
     o.append("")
-    for label, box_type, items in ready_boxes(fl):
-        note = f" *({box_type['note']})*" if box_type.get("note") else ""
-        o.append(f"- **{label}**{note} — " + "; ".join(items) + ".")
+    o.append("```")
+    o.append('python dcc_mapgen.py --open-box "a Silver Boss Box"')
+    o.append('python dcc_mapgen.py --open-box "Gold Weapon" --count 3')
+    o.append("```")
+    o.append("")
+    o.append("In the desktop app, the **Loot Boxes** tab lists this floor's boxes to "
+             "start from. Boxes opened together, or in one app session, work through "
+             "the whole bank before repeating an item.")
     o.append("")
     return o
 
@@ -5043,6 +5195,14 @@ def main(argv=None):
                         "detail -- useful for adding rooms to a floor you already generated and are playing")
     p.add_argument("--rooms-for-label", type=str, default=None, metavar="LABEL",
                    help="--rooms-for: which neighborhood letter to use if FILE has more than one (default: the first found)")
+    p.add_argument("--open-box", action="append", default=None, metavar='"TIER TYPE"',
+                   help='skip floor generation and open loot boxes instead, e.g. "Silver Boss" '
+                        'or "a Gold Weapon Box" -- a Drops line pasted straight off a write-up '
+                        'works. Repeatable. Unknown types are achievement boxes and open from '
+                        'the Adventurer pools. --seed makes the rolls repeatable')
+    p.add_argument("--count", type=int, default=1, metavar="N",
+                   help="--open-box: how many of each box to open (default 1). Boxes opened "
+                        "together work through each bank before repeating an item")
     a = p.parse_args(argv)
 
     try:
@@ -5051,9 +5211,32 @@ def main(argv=None):
         sys.exit(str(e))
 
 
+def _open_boxes(a) -> None:
+    """--open-box: roll boxes with no floor at all. One roller for the whole run,
+    so asking for ten Gold Weapon boxes gets ten different weapons."""
+    if a.count < 1:
+        raise MapgenError("--count must be at least 1")
+    roller = LootRoller(a.seed)
+    lines = [roller.open_text(spec).markdown() for spec in a.open_box
+             for _ in range(a.count)]
+    text = "\n".join(lines)
+    if a.out:
+        with open(a.out, "w", encoding="utf-8") as f:
+            f.write(text + "\n")
+        print(f"wrote {a.out}", file=sys.stderr)
+    else:
+        print(text)
+    print(f"opened {len(lines)} box(es) with seed {roller.seed}; "
+          f"--seed {roller.seed} opens the same ones again", file=sys.stderr)
+
+
 def _run(a) -> None:
     """The CLI body, split out so every MapgenError lands in one place."""
     import os
+
+    if a.open_box:
+        _open_boxes(a)
+        return
 
     if a.rooms_for:
         seed = a.seed if a.seed is not None else random.randrange(1_000_000)

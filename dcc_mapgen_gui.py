@@ -438,6 +438,114 @@ class CampaignView(ttk.Frame):
                              + ("" if known else " (no reaction text for that one)"))
 
 
+class LootView(ttk.Frame):
+    """Open loot boxes on demand, apart from any floor.
+
+    A floor names its boxes -- "Drops: a Silver Boss Box" -- as suggestions. Pick
+    one from the list to start from, change its tier or type if the table wants
+    something else, then open it. Nothing here touches the floor: rolling boxes
+    never changes a map. One roller serves the whole app session, so boxes opened
+    one after another work through each bank before repeating an item."""
+
+    def __init__(self, master, app):
+        super().__init__(master)
+        self.app = app
+        self.roller = mg.LootRoller()
+        self.suggestions = []
+
+        sugg = ttk.Labelframe(self, text="Boxes this floor names - pick one to start from",
+                              padding=PAD)
+        sugg.pack(fill="x", padx=PAD, pady=(PAD, 0))
+        self.sugg_list = tk.Listbox(sugg, height=8, activestyle="none", exportselection=False)
+        sb = ttk.Scrollbar(sugg, orient="vertical", command=self.sugg_list.yview)
+        self.sugg_list.configure(yscrollcommand=sb.set)
+        self.sugg_list.pack(side="left", fill="both", expand=True)
+        sb.pack(side="right", fill="y")
+        self.sugg_list.bind("<<ListboxSelect>>", lambda e: self._pick())
+        self.sugg_list.insert("end", "Generate a floor to list the boxes it names.")
+
+        row = ttk.Frame(self)
+        row.pack(fill="x", padx=PAD, pady=PAD)
+        ttk.Label(row, text="Tier").pack(side="left")
+        self.tier = tk.StringVar(value="Silver")
+        self.tier_cb = ttk.Combobox(row, textvariable=self.tier, values=mg.LOOT_BOX_TIERS,
+                                    state="readonly", width=10)
+        self.tier_cb.pack(side="left", padx=(4, PAD))
+        ttk.Label(row, text="Type").pack(side="left")
+        self.box_type = tk.StringVar(value="Boss")
+        names = [t["name"] for t in mg.LOOT_BOXES["types"] + mg.LOOT_BOXES["themed_types"]]
+        # Not readonly: achievements name their own boxes, so any name opens --
+        # an unknown one draws from the Adventurer pools.
+        self.type_cb = ttk.Combobox(row, textvariable=self.box_type, values=names, width=16)
+        self.type_cb.pack(side="left", padx=(4, PAD))
+        self.type_cb.bind("<Return>", lambda e: self.open_boxes())
+        ttk.Label(row, text="How many").pack(side="left")
+        self.count = tk.StringVar(value="1")
+        ttk.Spinbox(row, from_=1, to=20, textvariable=self.count, width=4).pack(
+            side="left", padx=(4, PAD))
+        self.open_btn = ttk.Button(row, text="Open", command=self.open_boxes)
+        self.open_btn.pack(side="left")
+        ttk.Button(row, text="Clear", command=self.clear).pack(side="right")
+        ttk.Button(row, text="Copy", command=self.copy).pack(side="right", padx=(0, 4))
+
+        wrap = ttk.Frame(self)
+        wrap.pack(fill="both", expand=True, padx=PAD, pady=(0, PAD))
+        self.out = tk.Text(wrap, wrap="word", font=("Consolas", 10), background="#fbfbfb",
+                           relief="flat", padx=10, pady=10, height=10)
+        vs = ttk.Scrollbar(wrap, orient="vertical", command=self.out.yview)
+        self.out.configure(yscrollcommand=vs.set)
+        vs.pack(side="right", fill="y")
+        self.out.pack(side="left", fill="both", expand=True)
+        ttk.Label(self, text=f"Session seed {self.roller.seed}. Newest boxes at the top.",
+                  foreground="#666", font=("Segoe UI", 8)).pack(anchor="w", padx=PAD,
+                                                                pady=(0, PAD))
+
+    def load_floor(self, res):
+        """List the boxes a freshly generated floor names."""
+        self.suggestions = mg.floor_box_suggestions(res.floor)
+        self.sugg_list.delete(0, "end")
+        if not self.suggestions:
+            self.sugg_list.insert("end", "This floor names no boxes. Pick a tier and type below.")
+            return
+        for sg in self.suggestions:
+            self.sugg_list.insert("end", f"{sg.label}   -   {sg.kind}: {sg.source}")
+
+    def _pick(self):
+        sel = self.sugg_list.curselection()
+        if not sel or sel[0] >= len(self.suggestions):
+            return
+        sg = self.suggestions[sel[0]]
+        self.tier.set(sg.tier)
+        self.box_type.set(sg.box_type)
+
+    def open_boxes(self):
+        kind = self.box_type.get().strip()
+        if not kind:
+            messagebox.showerror("Which box?", "Give the box a type, such as Boss or Weapon.",
+                                 parent=self)
+            return
+        try:
+            count = max(1, min(20, int(self.count.get())))
+        except ValueError:
+            count = 1
+        try:
+            boxes = [self.roller.open(self.tier.get(), kind) for _ in range(count)]
+        except mg.MapgenError as e:
+            messagebox.showerror("Could not open that box", str(e), parent=self)
+            return
+        text = "\n".join(b.markdown() for b in boxes)
+        self.out.insert("1.0", text + "\n\n")
+        self.app._set_status(f"Opened {count} x {boxes[0].label}")
+
+    def clear(self):
+        self.out.delete("1.0", "end")
+
+    def copy(self):
+        self.clipboard_clear()
+        self.clipboard_append(self.out.get("1.0", "end").strip())
+        self.app._set_status("Opened boxes copied to the clipboard")
+
+
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -479,6 +587,8 @@ class App(tk.Tk):
         self.text.pack(side="left", fill="both", expand=True)
         self.campaign_tab = CampaignView(right, self)
         right.add(self.campaign_tab, text="Campaign")
+        self.loot_tab = LootView(right, self)
+        right.add(self.loot_tab, text="Loot Boxes")
         self.notebook = right
 
         ttk.Label(self, textvariable=self.status, relief="sunken", anchor="w",
@@ -753,6 +863,7 @@ class App(tk.Tk):
         if self.campaign_path:
             self.roster = res.roster       # carry this floor's outcome to the next
         self.campaign_tab.refresh()
+        self.loot_tab.load_floor(res)
         carried = sum(1 for t in res.floor.other_crawlers if t.first_seen != t.floor)
         note = f" - {carried} team(s) carried in" if carried else ""
         self._set_status(f"{res.basename()} - {len(res.svgs)} map(s){note}")
@@ -967,6 +1078,25 @@ def selftest() -> int:
           "selecting a team names its crawlers")
     app.roster = None
     app.campaign_tab.refresh()
+
+    # The Loot Boxes tab: the floor's own boxes listed, one picked, edited, opened.
+    loot = app.loot_tab
+    check(len(loot.suggestions) > 10,
+          f"loot tab lists the floor's boxes ({len(loot.suggestions)})")
+    loot.sugg_list.selection_clear(0, "end")
+    loot.sugg_list.selection_set(0)
+    loot._pick()
+    picked = loot.suggestions[0]
+    check(loot.tier.get() == picked.tier and loot.box_type.get() == picked.box_type,
+          f"picking a suggestion fills tier and type ({picked.label})")
+    loot.tier.set("Gold")                 # the DM's edit, before rolling
+    loot.box_type.set("Weapon")
+    loot.count.set("3")
+    loot.open_boxes()
+    app.update()
+    opened = loot.out.get("1.0", "end")
+    check(opened.count("**Gold Weapon Box**") == 3,
+          "three edited boxes opened as Gold Weapon Boxes")
 
     # An option combination the generator must reject rather than crash on.
     errs = []

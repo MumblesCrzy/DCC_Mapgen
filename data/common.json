@@ -1461,45 +1461,6 @@
    "Celestial": 3
   },
   "benefactor_bonus": 3,
-  "sample_count": 6,
-  "sample_tier_weights": {
-   "shallow": [
-    5,
-    4,
-    2,
-    1,
-    0,
-    0
-   ],
-   "middle": [
-    2,
-    4,
-    4,
-    2,
-    1,
-    0
-   ],
-   "deep": [
-    1,
-    2,
-    4,
-    3,
-    2,
-    1
-   ]
-  },
-  "depth_band": {
-   "1": "shallow",
-   "2": "shallow",
-   "3": "middle",
-   "4": "middle",
-   "5": "middle",
-   "6": "middle",
-   "8": "deep",
-   "9": "deep",
-   "10": "deep",
-   "11": "deep"
-  },
   "boss_box": {
    "base": {
     "neighborhood": 0,
@@ -1610,57 +1571,138 @@
     "name": "Bounty",
     "from_floor": 4,
     "earned": "killing one of the Top Ten; it holds that crawler's bounty",
-    "special": true
+    "special": true,
+    "holds": "the slain crawler's bounty, paid in gold; the leaderboard has the figure"
    },
    {
     "name": "Venison",
     "from_floor": 5,
     "earned": "a Top Ten crawler living to the next floor; it holds a tenth of their own bounty",
-    "special": true
+    "special": true,
+    "holds": "a tenth of the crawler's own bounty, paid in gold"
    }
   ],
   "enchantable": [
    "weapons",
    "apparel",
+   "footwear",
    "magic",
    "offworld",
    "pet"
   ],
   "items": {
-   "consumables": [
-    "three minor healing potions",
-    "a minor mana potion",
-    "a roll of bandages",
-    "a bundle of torches",
-    "a ration pack, flavour unknown",
-    "two antidote vials",
-    "a single-dose potion of speed",
-    "a smoke bomb",
-    "a jar of burn salve",
-    "a canteen of clean water",
-    "a scroll of identify",
-    "a bottle of liquid courage, which is gin",
-    "a flask of lamp oil",
-    "a stamina tonic",
-    "a pouch of smelling salts",
-    "a potion whose label has worn off"
-   ],
-   "tools": [
-    "a coil of rope",
-    "a crowbar",
-    "a set of lockpicks",
-    "a grappling hook",
-    "a folding shovel",
-    "a hand lantern",
-    "a pocket compass",
-    "a tinderbox",
-    "a hammer and a bag of pitons",
-    "a ten-foot pole",
-    "a spyglass",
-    "a box of chalk for marking walls",
-    "a bedroll",
-    "a mirror on a stick"
-   ],
+   "consumables": {
+    "low": [
+     "three minor healing potions",
+     "a minor mana potion",
+     "a roll of bandages",
+     "a bundle of torches",
+     "a ration pack, flavour unknown",
+     "two antidote vials",
+     "a single-dose potion of speed",
+     "a smoke bomb",
+     "a jar of burn salve",
+     "a canteen of clean water",
+     "a scroll of identify",
+     "a bottle of liquid courage, which is gin",
+     "a flask of lamp oil",
+     "a stamina tonic",
+     "a pouch of smelling salts",
+     "a potion whose label has worn off",
+     "a tin of beans",
+     "a packet of painkillers",
+     "a box of matches",
+     "a bar of soap"
+    ],
+    "mid": [
+     "two standard healing potions",
+     "a full mana potion",
+     "a potion of giant strength, good for an hour",
+     "a potion of invisibility, good for ten minutes",
+     "a scroll of fireball",
+     "a regeneration tonic",
+     "a potion of water breathing",
+     "a vial of liquid luck",
+     "a scroll of short-range teleport",
+     "a field surgery kit",
+     "a potion of night vision",
+     "a flask of troll blood",
+     "a scroll of magic missile",
+     "an elixir of focus",
+     "a cure for potion sickness, one dose",
+     "a potion of fire resistance",
+     "a scroll of haste",
+     "a jar of bone-knit paste",
+     "a potion of spider climbing",
+     "a scroll of dispel magic"
+    ],
+    "high": [
+     "a greater healing potion",
+     "a full restoration elixir",
+     "a potion of permanent +1 Strength",
+     "a potion of permanent +1 Constitution",
+     "a potion of permanent +1 Intelligence",
+     "a scroll of resurrection",
+     "a vial of phoenix tears",
+     "a scroll of mass heal",
+     "a skill potion that raises one skill a level",
+     "an elixir of second wind",
+     "a potion that resets every cooldown",
+     "a scroll of greater teleport",
+     "a draught of dragon's blood",
+     "a potion of true sight, good for an hour",
+     "a scroll of time stop, three seconds long",
+     "a cask of Syndicate-grade ambrosia"
+    ]
+   },
+   "tools": {
+    "low": [
+     "a coil of rope",
+     "a crowbar",
+     "a set of lockpicks",
+     "a grappling hook",
+     "a folding shovel",
+     "a hand lantern",
+     "a pocket compass",
+     "a tinderbox",
+     "a hammer and a bag of pitons",
+     "a ten-foot pole",
+     "a spyglass",
+     "a box of chalk for marking walls",
+     "a bedroll",
+     "a mirror on a stick",
+     "a roll of duct tape",
+     "a whistle"
+    ],
+    "mid": [
+     "a masterwork lockpick set",
+     "a climbing kit",
+     "a folding ladder",
+     "a portable forge",
+     "an alchemy kit",
+     "a trap-disarming kit",
+     "a set of masonry tools",
+     "a deluxe tent",
+     "a pair of binoculars",
+     "a hand-cranked drill",
+     "a set of magnifying loupes",
+     "a block and tackle",
+     "a cartographer's kit",
+     "a field kitchen"
+    ],
+    "high": [
+     "a personal space voucher",
+     "a crafting table, folded flat",
+     "a portable safe-room door",
+     "a master key ring with no keys missing",
+     "a trap-maker's workshop in a case",
+     "a map of this floor with the stairwells marked",
+     "an alchemist's workbench, flat-packed",
+     "a set of tools that sharpen themselves",
+     "a bag that holds a cart's worth",
+     "a key to a guild's back door"
+    ]
+   },
    "weapons": [
     "a short sword",
     "a war pick",
@@ -1677,7 +1719,41 @@
     "a sling and a pouch of lead shot",
     "a flail",
     "a tomahawk",
-    "a whip"
+    "a whip",
+    "a cavalry sabre",
+    "a morning star",
+    "a trident",
+    "a pair of sai",
+    "a war hammer",
+    "a glaive",
+    "a rapier",
+    "a recurve bow",
+    "a blunderbuss",
+    "a pair of kukri",
+    "a scythe",
+    "a quarterstaff",
+    "a bastard sword",
+    "a set of throwing stars",
+    "a boomerang",
+    "a harpoon gun",
+    "a pair of hatchets",
+    "a katana",
+    "a falchion",
+    "a meat cleaver",
+    "a cricket bat with nails through it",
+    "a riot baton",
+    "a fire axe",
+    "a pair of nunchaku",
+    "a bolas",
+    "a javelin and two spares",
+    "a greataxe",
+    "a sickle",
+    "a cattle prod",
+    "a slingshot",
+    "a lance",
+    "a dirk",
+    "a crowbar sharpened at one end",
+    "a pair of tonfa"
    ],
    "apparel": [
     "a pair of boots",
@@ -1695,7 +1771,59 @@
     "a tabard",
     "a pair of trousers",
     "a ring",
-    "an amulet"
+    "an amulet",
+    "a pair of bracers",
+    "a set of greaves",
+    "a hooded robe",
+    "a hi-vis vest",
+    "a motorcycle jacket",
+    "a pair of pauldrons",
+    "a bandolier",
+    "a kilt",
+    "a gambeson",
+    "a fur-lined coat",
+    "a pair of knee pads",
+    "a bucket hat",
+    "a domino mask",
+    "a cape",
+    "a signet ring",
+    "a pendant on a chain",
+    "a pair of earrings",
+    "a sash",
+    "a poncho",
+    "a set of scale mail",
+    "a padded vest",
+    "a bowler hat",
+    "a pair of sunglasses",
+    "a gorget",
+    "a tunic",
+    "a pair of overalls",
+    "a backpack",
+    "a utility harness",
+    "a bathrobe",
+    "a pair of fingerless gloves",
+    "a bow tie",
+    "a circlet",
+    "a hard hat",
+    "a wristwatch"
+   ],
+   "footwear": [
+    "a pair of hiking boots",
+    "a pair of sandals",
+    "a pair of high heels",
+    "a pair of steel-toed boots",
+    "a pair of slippers",
+    "a pair of running shoes",
+    "a pair of wading boots",
+    "a pair of cowboy boots",
+    "a pair of clogs",
+    "a pair of ballet flats",
+    "a pair of combat boots",
+    "a pair of moccasins",
+    "a pair of roller skates",
+    "a pair of snow boots",
+    "a pair of loafers",
+    "a pair of platform shoes"
    ],
    "pet": [
     "a bag of pet biscuits",
@@ -1709,7 +1837,25 @@
     "a collapsible scratching post",
     "a leash",
     "a pet bed",
-    "a pet-sized cloak"
+    "a pet-sized cloak",
+    "a pet-sized pair of boots",
+    "a travelling water bowl",
+    "a pet-sized sweater",
+    "a laser pointer",
+    "a feather wand",
+    "a chew bone",
+    "a pet-sized backpack",
+    "a name tag",
+    "a pet-sized pair of goggles",
+    "a catnip mouse",
+    "a pet-sized life vest",
+    "a muzzle",
+    "a pet-sized crown",
+    "a ball launcher",
+    "a heated pet mat",
+    "a pet-sized saddle",
+    "a bell for the collar",
+    "a pet first-aid kit"
    ],
    "magic": [
     "a spell scroll",
@@ -1723,7 +1869,35 @@
     "a candle that burns blue",
     "a charm on a cord",
     "a bottle of bottled lightning",
-    "an hourglass"
+    "an hourglass",
+    "a scrying bowl",
+    "a rune stone",
+    "a bundle of incense",
+    "a pouch of spell components",
+    "a ouija board",
+    "a crystal ball",
+    "a book of hours",
+    "a prayer wheel",
+    "a set of divination bones",
+    "an orb",
+    "a sigil carved in bone",
+    "a jar of fireflies",
+    "a hand mirror",
+    "a music box",
+    "a witchlight lantern",
+    "a feather quill",
+    "a moonstone",
+    "a pocket grimoire",
+    "a box of summoning chalk",
+    "a talisman",
+    "a dowsing rod",
+    "a bell, a book and a candle",
+    "a vial of stardust",
+    "a pocket watch with no hands",
+    "a puzzle box",
+    "a stuffed raven",
+    "a ritual dagger",
+    "a phylactery"
    ],
    "offworld": [
     "a plasma cutter",
@@ -1735,34 +1909,112 @@
     "a gravity-assist harness",
     "a holographic decoy projector",
     "a stasis grenade",
-    "a self-heating ration cube"
+    "a self-heating ration cube",
+    "a cloaking patch",
+    "a jump pack",
+    "a neural lace",
+    "a pocket fabricator",
+    "a sonic lance",
+    "a rebreather mask",
+    "a smart-cloth poncho",
+    "a pair of mag boots",
+    "a field medic drone",
+    "a force-field belt",
+    "a reel of monomolecular wire",
+    "a heads-up display visor",
+    "an arm exo-frame",
+    "a portable teleport beacon",
+    "a quantum lockpick",
+    "a memory crystal",
+    "a hardlight shield",
+    "a pop-up survival shelter",
+    "a bio-scanner",
+    "a rail pistol"
    ],
-   "explosives": [
-    "a stick of dynamite",
-    "a pipe bomb",
-    "a satchel charge",
-    "a fragmentation grenade",
-    "a jar of alchemist's fire",
-    "a flashbang",
-    "a length of det cord",
-    "a landmine",
-    "a sack of black powder",
-    "a sticky bomb"
-   ],
-   "oddities": [
-    "a snow globe of a city that no longer exists",
-    "a signed headshot of a Syndicate celebrity",
-    "a rubber duck",
-    "a deck of cards missing the queen of hearts",
-    "a tin of pre-Collapse mints",
-    "a novelty mug",
-    "a VHS tape",
-    "a framed participation certificate",
-    "a single roller skate",
-    "a bag of marbles",
-    "a trophy for something nobody remembers",
-    "a whoopee cushion"
-   ]
+   "explosives": {
+    "low": [
+     "a stick of dynamite",
+     "a pipe bomb",
+     "a fragmentation grenade",
+     "a flashbang",
+     "a sack of black powder",
+     "a jar of alchemist's fire",
+     "a string of firecrackers",
+     "a smoke grenade",
+     "a molotov cocktail",
+     "a tin can bomb",
+     "a bag of caltrops",
+     "a coil of fuse"
+    ],
+    "mid": [
+     "a satchel charge",
+     "a length of det cord",
+     "a landmine",
+     "a sticky bomb",
+     "a cluster grenade",
+     "a shaped charge",
+     "a remote detonator and two charges",
+     "a crate of mining charges",
+     "a thermite grenade",
+     "a gas grenade",
+     "a proximity mine",
+     "a bundle of dynamite on a long fuse"
+    ],
+    "high": [
+     "a demolition charge rated for castle walls",
+     "a portable siege mortar",
+     "a goblin-made nuke, allegedly",
+     "a crate of plasma grenades",
+     "a time bomb with a choice of timer",
+     "a void grenade",
+     "a chain of linked mines",
+     "a barrel of something the label calls 'MORE'"
+    ]
+   },
+   "oddities": {
+    "low": [
+     "a snow globe of a city that no longer exists",
+     "a signed headshot of a Syndicate celebrity",
+     "a rubber duck",
+     "a deck of cards missing the queen of hearts",
+     "a tin of pre-Collapse mints",
+     "a novelty mug",
+     "a VHS tape",
+     "a framed participation certificate",
+     "a single roller skate",
+     "a bag of marbles",
+     "a trophy for something nobody remembers",
+     "a whoopee cushion",
+     "a lava lamp",
+     "a fridge magnet"
+    ],
+    "mid": [
+     "a bobblehead of the party's favourite crawler",
+     "a signed copy of a book that has not been written yet",
+     "a jar of pickled eyes that follow you",
+     "a talking fish on a plaque",
+     "a scale model of the floor",
+     "a crown made of bottle caps",
+     "a gold-plated toilet seat",
+     "a fortune cookie with a true fortune",
+     "a boombox with one tape stuck in it",
+     "a stuffed jackalope",
+     "a broadcast-quality microphone",
+     "a fan letter from a Syndicate viewer"
+    ],
+    "high": [
+     "a Syndicate award statuette",
+     "a front-row ticket to the finale",
+     "the party's own obituary, pre-written",
+     "a framed still of the party's best moment on the show",
+     "a royalty contract for the party's likeness",
+     "a sealed letter to the party from a god",
+     "a key to a city that no longer exists",
+     "a director's chair with the party leader's name on it",
+     "a bottle of champagne from the show's wrap party",
+     "a signed confession from a sponsor"
+    ]
+   }
   },
   "effects": {
    "Silver": [
@@ -1820,6 +2072,94 @@
     ],
     [
      "floats",
+     "any"
+    ],
+    [
+     "changes colour with its owner's mood",
+     "any"
+    ],
+    [
+     "glows on command, about candle-bright",
+     "any"
+    ],
+    [
+     "rings like a bell when a mob is within ten feet",
+     "any"
+    ],
+    [
+     "repairs one scratch a day",
+     "any"
+    ],
+    [
+     "turns up in its owner's inventory overnight if lost",
+     "any"
+    ],
+    [
+     "is fireproof",
+     "any"
+    ],
+    [
+     "is waterproof",
+     "any"
+    ],
+    [
+     "makes a pleasant noise when used",
+     "any"
+    ],
+    [
+     "shows up clearly on the minimap",
+     "any"
+    ],
+    [
+     "+1 to Charisma while visible",
+     "any"
+    ],
+    [
+     "chills any drink held near it",
+     "any"
+    ],
+    [
+     "+1 damage",
+     "weapon"
+    ],
+    [
+     "sings faintly on a clean hit",
+     "weapon"
+    ],
+    [
+     "knocks small mobs back a step",
+     "weapon"
+    ],
+    [
+     "never sticks in a wound",
+     "weapon"
+    ],
+    [
+     "sheds blood without being wiped",
+     "weapon"
+    ],
+    [
+     "keeps its owner dry",
+     "worn"
+    ],
+    [
+     "keeps its owner's hair perfect",
+     "worn"
+    ],
+    [
+     "+1 to Dexterity while worn",
+     "worn"
+    ],
+    [
+     "cushions a fall of up to ten feet",
+     "worn"
+    ],
+    [
+     "keeps its owner's place in any book",
+     "any"
+    ],
+    [
+     "is lighter than air while its owner is jumping",
      "any"
     ]
    ],
@@ -1899,6 +2239,74 @@
     [
      "glows when its owner's sponsor is watching",
      "any"
+    ],
+    [
+     "+3 damage",
+     "weapon"
+    ],
+    [
+     "deals cold damage on a hit",
+     "weapon"
+    ],
+    [
+     "deals lightning damage on a hit",
+     "weapon"
+    ],
+    [
+     "drains 2 health from every hit into its owner",
+     "weapon"
+    ],
+    [
+     "staggers anything its owner's size or smaller",
+     "weapon"
+    ],
+    [
+     "+2 to Constitution while worn",
+     "worn"
+    ],
+    [
+     "halves fall damage",
+     "worn"
+    ],
+    [
+     "resists fire",
+     "worn"
+    ],
+    [
+     "doubles regeneration out of combat",
+     "worn"
+    ],
+    [
+     "+2 to Intelligence while carried",
+     "any"
+    ],
+    [
+     "casts a level 1 shield spell once a fight",
+     "any"
+    ],
+    [
+     "pings when its owner is being tracked",
+     "any"
+    ],
+    [
+     "+2 to Strength while equipped",
+     "any"
+    ],
+    [
+     "lets its owner hold their breath for ten minutes",
+     "worn"
+    ],
+    [
+     "finds the nearest safe room once a day",
+     "any"
+    ],
+    [
+     "+1 to every roll against traps",
+     "any"
+    ],
+    [
+     "cuts potion cooldown by a quarter",
+     "worn"
     ]
    ],
    "Platinum": [
@@ -1912,7 +2320,7 @@
     ],
     [
      "halves its owner's potion cooldown",
-     "any"
+     "worn"
     ],
     [
      "grants a new skill at level 3",
@@ -1948,6 +2356,86 @@
     ],
     [
      "turns a killing blow into a near miss once per day",
+     "any"
+    ],
+    [
+     "+6 damage",
+     "weapon"
+    ],
+    [
+     "chains each hit to a second target",
+     "weapon"
+    ],
+    [
+     "ignores half of any armor",
+     "weapon"
+    ],
+    [
+     "throws back any spell blocked with it",
+     "weapon"
+    ],
+    [
+     "lands a critical hit every fifth swing",
+     "weapon"
+    ],
+    [
+     "marks a target so the whole party deals +2 to it",
+     "weapon"
+    ],
+    [
+     "+4 to Constitution while worn",
+     "worn"
+    ],
+    [
+     "resists every element",
+     "worn"
+    ],
+    [
+     "regenerates 2 health a minute in combat",
+     "worn"
+    ],
+    [
+     "a free dodge once per fight",
+     "worn"
+    ],
+    [
+     "immunity to poison",
+     "worn"
+    ],
+    [
+     "casts a level 5 healing spell once a day",
+     "any"
+    ],
+    [
+     "stores three spells for later",
+     "any"
+    ],
+    [
+     "+2 to every combat skill while held",
+     "any"
+    ],
+    [
+     "doubles the length of every buff on its owner",
+     "any"
+    ],
+    [
+     "halves the cooldown on one chosen skill",
+     "any"
+    ],
+    [
+     "points to the floor's nearest stairwell once per floor",
+     "any"
+    ],
+    [
+     "lets its owner talk to one kind of mob",
+     "any"
+    ],
+    [
+     "+4 to Charisma while visible",
+     "any"
+    ],
+    [
+     "teleports back to its owner if stolen",
      "any"
     ]
    ],
@@ -1991,6 +2479,78 @@
     [
      "cannot miss",
      "weapon"
+    ],
+    [
+     "+12 damage",
+     "weapon"
+    ],
+    [
+     "kills anything below a tenth of its health on a hit",
+     "weapon"
+    ],
+    [
+     "hits every enemy in reach at once, once a fight",
+     "weapon"
+    ],
+    [
+     "deals true damage that no armor stops",
+     "weapon"
+    ],
+    [
+     "levels up alongside its owner",
+     "weapon"
+    ],
+    [
+     "+8 to Constitution while worn",
+     "worn"
+    ],
+    [
+     "takes 10 off every hit its owner suffers",
+     "worn"
+    ],
+    [
+     "regrows a lost limb overnight",
+     "worn"
+    ],
+    [
+     "immunity to two damage types",
+     "worn"
+    ],
+    [
+     "casts a level 10 healing spell once a day",
+     "any"
+    ],
+    [
+     "a level 10 spell of the owner's choice, once a floor",
+     "any"
+    ],
+    [
+     "+10 to Charisma while visible, which sponsors notice",
+     "any"
+    ],
+    [
+     "halves every cooldown its owner has",
+     "any"
+    ],
+    [
+     "sees through walls within thirty feet",
+     "any"
+    ],
+    [
+     "spares its owner one floor's worth of potion sickness",
+     "any"
+    ],
+    [
+     "remembers the last ten rooms its owner walked through and can show them",
+     "any"
+    ],
+    [
+     "comes with a pet-class companion of its own",
+     "any"
+    ],
+    [
+     "doubles the experience its owner earns from bosses",
+     "any"
     ]
    ],
    "Celestial": [
@@ -2025,6 +2585,62 @@
     [
      "turns one box this crawler opens into a box one tier higher",
      "any"
+    ],
+    [
+     "+10 to every stat for one fight per floor",
+     "any"
+    ],
+    [
+     "its owner keeps one item through death",
+     "any"
+    ],
+    [
+     "grants a second race on top of the first",
+     "any"
+    ],
+    [
+     "raises every skill its owner has by a level",
+     "any"
+    ],
+    [
+     "casts a level 20 spell once per campaign",
+     "any"
+    ],
+    [
+     "lets its owner talk to the System, which sometimes answers",
+     "any"
+    ],
+    [
+     "renames a boss, and the boss becomes what it is called",
+     "any"
+    ],
+    [
+     "shows its owner every crawler on the floor",
+     "any"
+    ],
+    [
+     "pauses the floor's countdown for its owner once",
+     "any"
+    ],
+    [
+     "its owner's sponsors cannot be outbid",
+     "any"
+    ],
+    [
+     "doubles every box its owner opens for one floor",
+     "any"
+    ],
+    [
+     "draws a god's attention, for good or ill",
+     "any"
+    ],
+    [
+     "turns one of its owner's achievements into its Platinum version",
+     "any"
+    ],
+    [
+     "its owner's next death is reported but does not happen",
+     "any"
     ]
    ]
   },
@@ -2048,7 +2664,47 @@
    "Encore",
    "Alibi",
    "Small Mercy",
-   "Leftovers"
+   "Leftovers",
+   "Overtime",
+   "Grudge",
+   "Inheritance",
+   "Retirement Plan",
+   "Plus One",
+   "Warranty",
+   "Restraining Order",
+   "Spare",
+   "Confession",
+   "Testimony",
+   "Hangover",
+   "Second Wind",
+   "Divorce",
+   "Severance",
+   "Overdraft",
+   "Bedtime Story",
+   "Last Supper",
+   "Nest Egg",
+   "Wake-Up Call",
+   "Housewarming",
+   "Exit Strategy",
+   "Detour",
+   "Long Weekend",
+   "Sick Day",
+   "Comeback",
+   "Cliffhanger",
+   "Plot Twist",
+   "Rerun",
+   "Wedding Gift",
+   "Payback",
+   "Pension",
+   "Deposit",
+   "Refund",
+   "Signature",
+   "Footnote",
+   "Punchline",
+   "Understudy",
+   "Retainer",
+   "Calling Card",
+   "Swan Song"
   ],
   "effect_kinds": {
    "weapons": [
@@ -2056,6 +2712,10 @@
     "weapon"
    ],
    "apparel": [
+    "any",
+    "worn"
+   ],
+   "footwear": [
     "any",
     "worn"
    ],
@@ -2071,6 +2731,97 @@
     "worn"
    ]
   },
-  "benefactor_cap": "Legendary"
+  "benefactor_cap": "Legendary",
+  "themed_types": [
+   {
+    "name": "Shoe",
+    "pools": [
+     "footwear"
+    ],
+    "earned": "achievements",
+    "from_floor": 1
+   },
+   {
+    "name": "Sapper's",
+    "pools": [
+     "explosives",
+     "tools"
+    ],
+    "earned": "achievements",
+    "from_floor": 1
+   },
+   {
+    "name": "Mechanic's",
+    "pools": [
+     "tools",
+     "offworld"
+    ],
+    "earned": "achievements",
+    "from_floor": 1
+   },
+   {
+    "name": "Goblin",
+    "pools": [
+     "explosives",
+     "oddities"
+    ],
+    "earned": "achievements",
+    "from_floor": 1
+   },
+   {
+    "name": "Lucky Bastard",
+    "pools": [
+     "oddities",
+     "magic"
+    ],
+    "earned": "achievements",
+    "from_floor": 1
+   },
+   {
+    "name": "Hunter",
+    "pools": [
+     "weapons",
+     "tools"
+    ],
+    "earned": "achievements",
+    "from_floor": 1
+   },
+   {
+    "name": "Survivor's",
+    "pools": [
+     "consumables",
+     "tools"
+    ],
+    "earned": "achievements",
+    "from_floor": 1
+   },
+   {
+    "name": "Brawler",
+    "pools": [
+     "weapons",
+     "apparel"
+    ],
+    "earned": "achievements",
+    "from_floor": 1
+   },
+   {
+    "name": "Looter",
+    "pools": [
+     "oddities",
+     "tools"
+    ],
+    "earned": "achievements",
+    "from_floor": 1
+   },
+   {
+    "name": "Crowd Control",
+    "pools": [
+     "explosives",
+     "magic"
+    ],
+    "earned": "achievements",
+    "from_floor": 1
+   }
+  ]
  }
 }

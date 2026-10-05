@@ -96,22 +96,43 @@ leaderboard on Floor 4, Venison a floor later. Boss drops climb with both the bo
 tier and the floor's depth — Floor 1's neighborhood bosses drop Bronze, as the books'
 first one did; Floor 11's Marshal drops Legendary — and no boss drops Celestial.
 
-Each floor also opens six boxes in advance, for whenever the party earns something
-nobody planned for:
+A floor **suggests** boxes and never rolls them. Its write-up ends the loot section
+with a table of every box it names — boss drops, quest rewards, achievement
+rewards — grouped, so a DM can see the floor's loot at a glance. What goes *in* a
+box is rolled separately, after the DM has decided what the box is: hand out the
+Silver Boss Box as suggested, or make it Gold, or make it a Weapon box, then open it.
 
 ```
-- **Platinum Boss Box** — a deck of tarot cards (doubles mana regeneration;
-  reveals every trap within thirty feet); a spell scroll (+2 to one stat while
-  equipped); a tomahawk (deals fire damage on a hit).
+python dcc_mapgen.py --open-box "a Silver Boss Box"          # pasted straight off a write-up
+python dcc_mapgen.py --open-box "Gold Weapon" --count 3 --seed 7
 ```
+
+```
+- **Gold Weapon Box** — a blunderbuss (+3 damage); a flail (sings faintly on a clean
+  hit); a pair of hatchets (makes a pleasant noise when used).
+```
+
+In the desktop app the **Loot Boxes** tab does the same: it lists the current floor's
+boxes, picking one fills in the tier and type, and either can be changed before
+**Open**. Because nothing about a box touches the floor, rolling one can never move
+a map.
+
+Boxes are the most generated thing in the project — a large Floor 1 names about 37,
+a huge one about 100 — so the banks are sized for volume: 380 items in ten pools and
+154 enchantments. A roller keeps its decks for as long as it runs, so boxes opened
+together with `--count`, or in one app session, work through a whole pool before
+repeating anything; every box a large Floor 1 names comes out of one session with no
+item twice.
 
 One headline item carries the box's full tier and everything else in it sits a tier
 below, so a Legendary box is one named item and good gear around it. Enchantments
 are tagged by what they can sit on (`weapon`, `worn` or `any`), so a jacket never
 "deals extra damage on a hit" and a scroll never "silences its owner's footsteps".
-The ready-made boxes run on their own random stream and drops are worked out at
-render time, so adding loot moved no map — any map generated before this still
-comes back from its seed.
+Items that take no enchantment — potions, tools, explosives, oddities — come in
+low, mid and high bands that follow the tier, so a Celestial box holds phoenix
+tears rather than a ten-foot pole. Achievement boxes the banks already award (Shoe,
+Sapper's, Goblin, Lucky Bastard…) open from pools that match their names, and any
+name the bank does not know still opens, from the Adventurer pools.
 
 Floors 3 and 6 give every region a day mob and a `NIGHT_THREATS` line saying what
 changes after dark. Most of those lines are the same mob behaving differently, but
@@ -189,6 +210,8 @@ same `floorN_size_seedS.md` plus map files that `--save` produces on the command
   re-rolled or tweaked without hunting for it.
 - **File → Re-roll rooms from a saved floor** is `--rooms-for` in the GUI: point it at a
   floor 1–2 Markdown file this app wrote and re-roll one neighborhood's rooms.
+- The **Loot Boxes** tab lists every box the current floor names; pick one, change its
+  tier or type if you like, and open it. See [Loot boxes](#loot-boxes).
 - The **Campaign** tab carries crawler teams between floors and is where you change
   where a team stands with the party. See [Campaigns](#campaigns).
 
@@ -416,12 +439,17 @@ pinned at zero quests, that being deliberate rather than an oversight.
 The night-threat bank was 8 entries against 18 regions, which put the same line on
 four of them, so it grew to 47 and is dealt from a deck like the rest.
 
-An eighth covers loot boxes: every boss names its drop, box types never turn up
-before the floor that introduces them, boss drops climb with tier and depth and
-never reach Celestial, no effect sits on an item that cannot carry it, no box
-carries power above its own tier outside its one headline item, a Bronze Benefactor
-box beats a Gold Adventurer box, rolling loot moves no map, and every box named
-anywhere — in any word bank or any floor's output — uses one of the six canon tiers.
+An eighth covers loot boxes. On the floor side: every boss names its drop, box types
+never turn up before the floor that introduces them, boss drops climb with tier and
+depth and never reach Celestial, the floor rolls no box contents, every box it names
+parses straight back into the roller, and opening a hundred boxes leaves a floor
+byte-identical. On the box side: no effect sits on an item that cannot carry it, no
+box carries power above its own tier outside its one headline item, plain items
+follow the tier's band, a Bronze Benefactor box beats a Gold Adventurer box, fifteen
+Weapon boxes in a row repeat nothing, and each pool has a floor stated in the test —
+not read from the bank — so the banks cannot quietly shrink back. And every box
+named anywhere, in any word bank or any floor's output, uses one of the six canon
+tiers.
 
 A seventh group covers the stat rules, where the risk is drift rather than variety:
 the section renders identically on every floor and seed, it is the last section of
