@@ -479,6 +479,12 @@ class LootView(ttk.Frame):
         self.type_cb = ttk.Combobox(row, textvariable=self.box_type, values=names, width=16)
         self.type_cb.pack(side="left", padx=(4, PAD))
         self.type_cb.bind("<Return>", lambda e: self.open_boxes())
+        # The floor sets the gold: none on Floor 1, then (1-10) x floor ^ tier.
+        # Filled in from whichever floor was generated last, and editable.
+        ttk.Label(row, text="Floor").pack(side="left")
+        self.floor = tk.StringVar(value="1")
+        ttk.Spinbox(row, from_=1, to=18, textvariable=self.floor, width=4).pack(
+            side="left", padx=(4, PAD))
         ttk.Label(row, text="How many").pack(side="left")
         self.count = tk.StringVar(value="1")
         ttk.Spinbox(row, from_=1, to=20, textvariable=self.count, width=4).pack(
@@ -503,6 +509,7 @@ class LootView(ttk.Frame):
     def load_floor(self, res):
         """List the boxes a freshly generated floor names."""
         self.suggestions = mg.floor_box_suggestions(res.floor)
+        self.floor.set(str(res.number))
         self.sugg_list.delete(0, "end")
         if not self.suggestions:
             self.sugg_list.insert("end", "This floor names no boxes. Pick a tier and type below.")
@@ -529,13 +536,19 @@ class LootView(ttk.Frame):
         except ValueError:
             count = 1
         try:
-            boxes = [self.roller.open(self.tier.get(), kind) for _ in range(count)]
+            floor = int(self.floor.get())
+        except ValueError:
+            messagebox.showerror("Which floor?", "The floor sets the gold, so it needs "
+                                 "to be a number.", parent=self)
+            return
+        try:
+            boxes = [self.roller.open(self.tier.get(), kind, floor) for _ in range(count)]
         except mg.MapgenError as e:
             messagebox.showerror("Could not open that box", str(e), parent=self)
             return
         text = "\n".join(b.markdown() for b in boxes)
         self.out.insert("1.0", text + "\n\n")
-        self.app._set_status(f"Opened {count} x {boxes[0].label}")
+        self.app._set_status(f"Opened {count} x {boxes[0].label} for Floor {floor}")
 
     def clear(self):
         self.out.delete("1.0", "end")
@@ -1097,6 +1110,13 @@ def selftest() -> int:
     opened = loot.out.get("1.0", "end")
     check(opened.count("**Gold Weapon Box**") == 3,
           "three edited boxes opened as Gold Weapon Boxes")
+    check(loot.floor.get() == "1" and " gold**" not in opened,
+          "a Floor 1 floor fills in Floor 1, and its boxes hold no gold")
+    loot.floor.set("6")
+    loot.count.set("1")
+    loot.open_boxes()
+    app.update()
+    check(" gold**" in loot.out.get("1.0", "2.0"), "a Floor 6 box holds gold")
 
     # An option combination the generator must reject rather than crash on.
     errs = []

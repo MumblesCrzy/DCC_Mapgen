@@ -1398,60 +1398,36 @@
    "Opening is all or nothing: once a crawler starts, every box they are holding opens in sequence.",
    "The type says what kind of thing is inside; the tier says how good it is.",
    "A Benefactor box outranks every other type, tier for tier: a Bronze Benefactor box beats a Gold Adventurer box.",
-   "Achievements usually name their own box after whatever earned it, so expect types this table does not list."
+   "Achievements usually name their own box after whatever earned it, so expect types this table does not list.",
+   "One item in every box is at the box's own tier and of the box's type; everything else in it is Bronze.",
+   "From Floor 2, every box also holds gold: 1 to 10, times the floor number raised to the tier (Bronze 1, Celestial 6)."
   ],
   "tier_guide": [
    [
     "Bronze",
-    "mundane and useful: nothing enchanted, everything needed"
+    "three ordinary items, nothing enchanted"
    ],
    [
     "Silver",
-    "solid kit, one piece of it lightly enchanted"
+    "one lightly enchanted item, and three ordinary ones"
    ],
    [
     "Gold",
-    "one enchanted piece worth building a fight around, and lesser enchantments beside it"
+    "one enchanted item worth building a fight around, and one ordinary one"
    ],
    [
     "Platinum",
-    "one rare piece with two properties, and enchanted gear beside it"
+    "one rare item with two properties, and one ordinary one"
    ],
    [
     "Legendary",
-    "one named, unique item that changes how its owner plays, and rare gear beside it"
+    "one named, unique item that changes how its owner plays, and two ordinary ones"
    ],
    [
     "Celestial",
-    "something the Syndicate would rather stayed in the box; no boss on these floors drops one"
+    "one god-tier item and three ordinary ones; no boss on these floors drops one"
    ]
   ],
-  "counts": {
-   "Bronze": [
-    1,
-    2
-   ],
-   "Silver": [
-    2,
-    2
-   ],
-   "Gold": [
-    2,
-    3
-   ],
-   "Platinum": [
-    3,
-    3
-   ],
-   "Legendary": [
-    3,
-    3
-   ],
-   "Celestial": [
-    4,
-    4
-   ]
-  },
   "effects_per_item": {
    "Bronze": 0,
    "Silver": 1,
@@ -2822,6 +2798,47 @@
     "earned": "achievements",
     "from_floor": 1
    }
-  ]
+  ],
+  "contents": {
+   "Bronze": {
+    "extras": 2,
+    "extra_tier": "Bronze"
+   },
+   "Silver": {
+    "extras": 3,
+    "extra_tier": "Bronze"
+   },
+   "Gold": {
+    "extras": 1,
+    "extra_tier": "Bronze"
+   },
+   "Platinum": {
+    "extras": 1,
+    "extra_tier": "Bronze"
+   },
+   "Legendary": {
+    "extras": 2,
+    "extra_tier": "Bronze"
+   },
+   "Celestial": {
+    "extras": 3,
+    "extra_tier": "Bronze"
+   }
+  },
+  "gold": {
+   "from_floor": 2,
+   "roll": [
+    1,
+    10
+   ],
+   "tier_power": {
+    "Bronze": 1,
+    "Silver": 2,
+    "Gold": 3,
+    "Platinum": 4,
+    "Legendary": 5,
+    "Celestial": 6
+   }
+  }
  }
 }

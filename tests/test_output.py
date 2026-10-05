@@ -1194,7 +1194,8 @@ class LootBoxTest(unittest.TestCase):
                     checked += 1
                     self.assertNotIn(self.fx_kind[e], barred,
                                      f"{box.label}: {base} cannot carry {e!r}")
-        self.assertGreater(checked, 1000)
+        # Only headline items are enchanted now, so there are fewer to check.
+        self.assertGreater(checked, 500)
 
     def test_every_enchantable_pool_has_a_rule(self):
         """A pool added to the bank without a line in NEVER would be checked
@@ -1213,44 +1214,113 @@ class LootBoxTest(unittest.TestCase):
                     self.assertNotEqual(self.fx_tier[e], "Celestial",
                                         f"{box.label} carries {e!r}")
 
-    def test_one_headline_item_per_box(self):
-        """A Legendary box is one named item and good gear around it, not a pile of
-        legendaries. Only the first item may carry the box's own tier."""
+    # The house rule, stated here rather than read from LOOT_BOXES["contents"]:
+    # one item at the box's own tier, then Bronze filler -- 3 more for Celestial,
+    # 2 for Legendary, 1 for Gold (and Platinum, which the rule left out), 3 beside
+    # a Silver item, 3 Bronze items in all for a Bronze box.
+    ITEMS = {"Bronze": 3, "Silver": 4, "Gold": 2, "Platinum": 2, "Legendary": 3,
+             "Celestial": 4}
+
+    def test_a_box_holds_exactly_its_tiers_count(self):
         for box in self.opened:
-            if box.opened_at == "Bronze":
-                continue
+            self.assertEqual(len(box.items), self.ITEMS[box.opened_at],
+                             f"{box.label} (opened at {box.opened_at}) holds "
+                             f"{len(box.items)} items")
+
+    def test_one_item_at_the_boxs_tier_and_the_rest_bronze(self):
+        """A Celestial Weapon box used to hold four overpowered weapons: one at
+        Celestial and three at Legendary. Only the first item may carry any
+        enchantment now; everything after it is Bronze, which carries none."""
+        for box in self.opened:
             for line in box.items[1:]:
-                for e in self._parse(line)[1]:
-                    self.assertNotEqual(self.fx_tier[e], box.opened_at,
-                                        f"{box.label}: a second item carries "
-                                        f"{box.opened_at} power: {line}")
+                self.assertEqual(self._parse(line)[1], [],
+                                 f"{box.label}: a filler item is enchanted: {line}")
             named = sum(1 for line in box.items if line.startswith("**"))
             self.assertLessEqual(named, 1, f"{box.label} names {named} items")
+            effects = self._parse(box.items[0])[1]
+            for e in effects:
+                self.assertEqual(self.fx_tier[e], box.opened_at,
+                                 f"{box.label}: its headline carries {e!r}")
 
-    def test_plain_items_scale_with_the_box(self):
+    def test_a_celestial_weapon_box_is_one_god_tier_weapon(self):
+        """The case the rule was written for."""
+        for seed in range(5):
+            box = mg.LootRoller(seed).open("Celestial", "Weapon")
+            self.assertEqual(len(box.items), 4)
+            weapons = set(self.lb["items"]["weapons"])
+            self.assertTrue(all(self._parse(l)[0] in weapons for l in box.items))
+            powered = [l for l in box.items if self._parse(l)[1]]
+            self.assertEqual(len(powered), 1, f"seed {seed}: {box.markdown()}")
+            self.assertTrue(powered[0].startswith("**"), "the god-tier one is named")
+
+    def test_plain_items_follow_their_slot(self):
         """Potions, tools, explosives and oddities take no enchantment, so they come
-        in bands. Before that, a Celestial box could hold a ten-foot pole and three
-        minor healing potions."""
+        in bands: a plain headline sits in its box's band, so a Gold Sapper's box
+        leads with mid-band kit; the Bronze filler draws from the low band."""
         bands = mg.LOOT_BANDS
-        tiers = mg.LOOT_BOX_TIERS
         checked = 0
         for box in self.opened:
-            top = tiers.index(box.opened_at)
             for i, line in enumerate(box.items):
                 base, _ = self._parse(line)
                 band = self.item_band[base]
                 if band is None:
                     continue
                 checked += 1
-                slot = box.opened_at if i == 0 else tiers[max(top - 1, 0)]
+                slot = box.opened_at if i == 0 else "Bronze"
                 self.assertEqual(band, bands[slot],
                                  f"{box.label}: {base!r} is a {band} item in a "
                                  f"{slot} slot")
-            if box.opened_at in ("Legendary", "Celestial"):
-                lows = [self._parse(l)[0] for l in box.items
-                        if self.item_band[self._parse(l)[0]] == "low"]
-                self.assertEqual(lows, [], f"{box.label} holds {lows}")
         self.assertGreater(checked, 300)
+
+    # -- gold ------------------------------------------------------------------
+
+    # (1-10) x Floor ^ Tier, with Bronze counting as 1. Stated here, not read from
+    # the bank, so a change to the formula has to be made in both places.
+    POWER = {"Bronze": 1, "Silver": 2, "Gold": 3, "Platinum": 4, "Legendary": 5,
+             "Celestial": 6}
+
+    def test_floor_1_boxes_hold_no_gold(self):
+        roller = mg.LootRoller(1)
+        for tier in mg.LOOT_BOX_TIERS:
+            box = roller.open(tier, "Boss", floor=1)
+            self.assertEqual(box.gold, 0, f"a Floor 1 {box.label} holds gold")
+            self.assertNotIn(" gold**", box.markdown())
+
+    def test_gold_is_one_to_ten_times_floor_to_the_tier(self):
+        roller = mg.LootRoller(2)
+        for floor in (2, 3, 6, 9, 11):
+            for tier in mg.LOOT_BOX_TIERS:
+                scale = floor ** self.POWER[tier]
+                seen = set()
+                for _ in range(40):
+                    box = roller.open(tier, "Adventurer", floor=floor)
+                    self.assertEqual(box.gold % scale, 0,
+                                     f"{box.gold} is not a multiple of {floor}^{self.POWER[tier]}")
+                    self.assertTrue(1 <= box.gold // scale <= 10,
+                                    f"Floor {floor} {tier}: {box.gold} is outside 1-10 x {scale}")
+                    seen.add(box.gold // scale)
+                self.assertGreater(len(seen), 5, "the 1-10 roll is not varying")
+                self.assertIn(f"**{box.gold:,} gold**", box.markdown())
+
+    def test_a_benefactor_box_pays_gold_at_the_tier_it_opens_at(self):
+        box = mg.LootRoller(4).open("Bronze", "Benefactor", floor=5)
+        self.assertEqual(box.opened_at, "Platinum")
+        self.assertEqual(box.gold % 5 ** self.POWER["Platinum"], 0)
+        self.assertGreaterEqual(box.gold, 5 ** self.POWER["Platinum"])
+
+    def test_a_bounty_box_is_its_bounty_not_a_roll(self):
+        for name in ("Bounty", "Venison"):
+            box = mg.LootRoller(1).open("Legendary", name, floor=9)
+            self.assertEqual(box.gold, 0, f"a {name} box added rolled gold to the bounty")
+
+    def test_the_floor_table_shows_that_floors_gold(self):
+        md = mg.generate(6, "small", 4242, images=False).markdown
+        self.assertIn("| Gold on Floor 6 |", md)
+        self.assertIn(f"| Celestial | 4 | {6 ** 6:,}–{10 * 6 ** 6:,} |", md)
+        self.assertIn('--open-box "a Silver Boss Box" --floor 6', md)
+        md1 = mg.generate(1, "small", 4242, images=False).markdown
+        self.assertNotIn("Gold on Floor", md1)
+        self.assertIn("Boxes hold no gold until Floor 2.", md1)
 
     def test_a_themed_box_holds_what_its_name_promises(self):
         """A Shoe box -- which a floor 1 achievement already awards -- holds shoes."""
@@ -1411,6 +1481,15 @@ class LootCommandLineTest(unittest.TestCase):
         a = self._run("--open-box", "Platinum Boss", "--count", "2", "--seed", "11")
         b = self._run("--open-box", "Platinum Boss", "--count", "2", "--seed", "11")
         self.assertEqual(a.stdout, b.stdout)
+
+    def test_the_floor_sets_the_gold(self):
+        deep = self._run("--open-box", "Gold Boss", "--floor", "6", "--seed", "3")
+        self.assertEqual(deep.returncode, 0, deep.stderr)
+        self.assertRegex(deep.stdout, r"\*\*[\d,]+ gold\*\*")
+        self.assertIn("Floor 6", deep.stderr)
+        top = self._run("--open-box", "Gold Boss", "--seed", "3")
+        self.assertNotIn(" gold**", top.stdout)
+        self.assertIn("no gold", top.stderr)
 
     def test_a_box_without_a_tier_is_refused_plainly(self):
         r = self._run("--open-box", "Shiny Boss")

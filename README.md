@@ -103,19 +103,40 @@ box is rolled separately, after the DM has decided what the box is: hand out the
 Silver Boss Box as suggested, or make it Gold, or make it a Weapon box, then open it.
 
 ```
-python dcc_mapgen.py --open-box "a Silver Boss Box"          # pasted straight off a write-up
-python dcc_mapgen.py --open-box "Gold Weapon" --count 3 --seed 7
+python dcc_mapgen.py --open-box "a Silver Boss Box" --floor 3   # pasted straight off a write-up
+python dcc_mapgen.py --open-box "Gold Weapon" --count 3 --floor 6 --seed 7
 ```
 
 ```
-- **Gold Weapon Box** — a blunderbuss (+3 damage); a flail (sings faintly on a clean
-  hit); a pair of hatchets (makes a pleasant noise when used).
+- **Celestial Weapon Box** — **Marjorie's Mistake**, a meat cleaver (pauses the floor's
+  countdown for its owner once; shows its owner every crawler on the floor; turns one
+  of its owner's achievements into its Platinum version); a boomerang; a hand cannon;
+  a greataxe; **373,248 gold**.
 ```
 
 In the desktop app the **Loot Boxes** tab does the same: it lists the current floor's
-boxes, picking one fills in the tier and type, and either can be changed before
-**Open**. Because nothing about a box touches the floor, rolling one can never move
-a map.
+boxes and fills in the floor, picking one fills in the tier and type, and any of them
+can be changed before **Open**. Because nothing about a box touches the floor,
+rolling one can never move a map.
+
+**What a box holds.** One item is at the box's own tier and of the box's type; the
+rest are Bronze — plain, unenchanted. A Celestial Weapon box is one god-tier weapon
+and three ordinary ones, not four overpowered weapons.
+
+| Tier | At the box's tier | Bronze beside it | Gold, from Floor 2 |
+|---|---:|---:|---|
+| Bronze | 1 | 2 | (1–10) × Floor |
+| Silver | 1 | 3 | (1–10) × Floor² |
+| Gold | 1 | 1 | (1–10) × Floor³ |
+| Platinum | 1 | 1 | (1–10) × Floor⁴ |
+| Legendary | 1 | 2 | (1–10) × Floor⁵ |
+| Celestial | 1 | 3 | (1–10) × Floor⁶ |
+
+Floor 1 boxes hold no gold. A Benefactor box pays the gold of the tier it opens at,
+and a Bounty or Venison box holds its bounty rather than a roll. Each floor's
+write-up prints the gold range for its own floor beside the tier table — on Floor 6
+a Bronze box holds 6–60 gold and a Celestial one 46,656–466,560. The counts, the
+filler tier and the gold formula are all in `LOOT_BOXES` in `data/common.json`.
 
 Boxes are the most generated thing in the project — a large Floor 1 names about 37,
 a huge one about 100 — so the banks are sized for volume: 380 items in ten pools and
@@ -124,13 +145,12 @@ together with `--count`, or in one app session, work through a whole pool before
 repeating anything; every box a large Floor 1 names comes out of one session with no
 item twice.
 
-One headline item carries the box's full tier and everything else in it sits a tier
-below, so a Legendary box is one named item and good gear around it. Enchantments
-are tagged by what they can sit on (`weapon`, `worn` or `any`), so a jacket never
-"deals extra damage on a hit" and a scroll never "silences its owner's footsteps".
-Items that take no enchantment — potions, tools, explosives, oddities — come in
-low, mid and high bands that follow the tier, so a Celestial box holds phoenix
-tears rather than a ten-foot pole. Achievement boxes the banks already award (Shoe,
+Enchantments are tagged by what they can sit on (`weapon`, `worn` or `any`), so a
+jacket never "deals extra damage on a hit" and a scroll never "silences its owner's
+footsteps". Items that take no enchantment — potions, tools, explosives, oddities —
+come in low, mid and high bands: a plain headline item sits in its box's band, so a
+Gold Sapper's box leads with mid-band kit, while the Bronze filler draws from the low
+band. Achievement boxes the banks already award (Shoe,
 Sapper's, Goblin, Lucky Bastard…) open from pools that match their names, and any
 name the bank does not know still opens, from the Adventurer pools.
 
@@ -444,8 +464,10 @@ never turn up before the floor that introduces them, boss drops climb with tier 
 depth and never reach Celestial, the floor rolls no box contents, every box it names
 parses straight back into the roller, and opening a hundred boxes leaves a floor
 byte-identical. On the box side: no effect sits on an item that cannot carry it, no
-box carries power above its own tier outside its one headline item, plain items
-follow the tier's band, a Bronze Benefactor box beats a Gold Adventurer box, fifteen
+box holds anything but its tier's count — one item at its tier, the rest Bronze and
+unenchanted — plain items follow their slot's band, gold is (1–10) × Floor ^ Tier
+from Floor 2 and none on Floor 1, a Bronze Benefactor box beats a Gold Adventurer
+box, fifteen
 Weapon boxes in a row repeat nothing, and each pool has a floor stated in the test —
 not read from the bank — so the banks cannot quietly shrink back. And every box
 named anywhere, in any word bank or any floor's output, uses one of the six canon
