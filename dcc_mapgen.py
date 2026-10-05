@@ -956,15 +956,26 @@ class OpenedBox:
     note: str = ""
     gold: int = 0              # none on Floor 1
     floor: int = 1
+    item_tiers: List[str] = field(default_factory=list)   # one per item, headline first
 
     @property
     def label(self) -> str:
         return f"{self.tier} {self.box_type} Box"
 
     def markdown(self) -> str:
+        """The box on one line, its items grouped under the tier each rolled at:
+        a plain potion or tool says nothing about its own tier, and a DM handing
+        it out needs to know."""
         note = f" *({self.note})*" if self.note else ""
-        gold = [f"**{self.gold:,} gold**"] if self.gold else []
-        return f"- **{self.label}**{note} — " + "; ".join(self.items + gold) + "."
+        if self.item_tiers:
+            groups = {}
+            for tier, item in zip(self.item_tiers, self.items):
+                groups.setdefault(tier, []).append(item)
+            body = ". ".join(f"{tier}: " + "; ".join(items) for tier, items in groups.items())
+        else:
+            body = "; ".join(self.items)           # a bounty, not a set of items
+        gold = f". **{self.gold:,} gold**" if self.gold else ""
+        return f"- **{self.label}**{note} — {body}{gold}."
 
 
 class LootRoller:
@@ -1028,12 +1039,13 @@ class LootRoller:
         gold: none on Floor 1, then (1-10) x floor ^ tier.
 
         Exactly one item is at the box's tier, and it is of the box's type: a
-        Celestial Weapon box is one god-tier weapon, not four. Everything else
-        is Bronze -- three of them in a Celestial box, two in a Legendary, one in
-        a Gold or Platinum, three beside a Silver item, three in all in a Bronze
-        box. A Benefactor box opens three tiers above its label, which is how the
-        books put a Bronze one ahead of a Gold Adventurer box -- but the promotion
-        stops at Legendary, and never demotes a box already above it."""
+        Celestial Weapon box is one god-tier weapon, not four. Every other item
+        is lesser, and rolls its own tier from LOOT_BOXES["contents"] -- a
+        Celestial box's three from Gold to Legendary, a Legendary box's two from
+        Silver to Platinum, a Gold box's four from Bronze or Silver. A Benefactor
+        box opens three tiers above its label, which is how the books put a
+        Bronze one ahead of a Gold Adventurer box -- but the promotion stops at
+        Legendary, and never demotes a box already above it."""
         lb = LOOT_BOXES
         if isinstance(box_type, str):
             box_type = find_box_type(box_type)
@@ -1058,8 +1070,17 @@ class LootRoller:
         # always shows it is Gold instead of turning out to be all rope.
         lead = enchantable if enchantable and lb["effects_per_item"][top] else pools
         items = [self._make(self.rng.choice(lead), top, headline=True)]
-        items += [self._make(self.rng.choice(pools), contents["extra_tier"], headline=False)
-                  for _ in range(contents["extras"])]
+        tiers = [top]
+        # Each lesser item rolls its own tier, evenly, from the box's list.
+        lesser = []
+        for _ in range(contents["extras"]):
+            t = self.rng.choice(contents["extra_tiers"])
+            lesser.append((t, self._make(self.rng.choice(pools), t, headline=False)))
+        # Best first, so the line reads down the tiers; sorting after the rolls
+        # changes nothing about what was rolled.
+        lesser.sort(key=lambda pair: -LOOT_BOX_TIERS.index(pair[0]))
+        tiers += [t for t, _ in lesser]
+        items += [item for _, item in lesser]
 
         gold = 0
         if floor >= lb["gold"]["from_floor"]:
@@ -1068,7 +1089,8 @@ class LootRoller:
         note = box_type.get("note", "")
         if box_type.get("unknown"):
             note = "an achievement box; opened from the Adventurer pools"
-        return OpenedBox(tier, box_type["name"], top, items, note, gold=gold, floor=floor)
+        return OpenedBox(tier, box_type["name"], top, items, note, gold=gold, floor=floor,
+                         item_tiers=tiers)
 
     def open_text(self, text: str, floor: int = 1) -> OpenedBox:
         """Open a box written the way a write-up names it: "a Silver Boss Box"."""

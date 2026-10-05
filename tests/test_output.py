@@ -1214,62 +1214,122 @@ class LootBoxTest(unittest.TestCase):
                     self.assertNotEqual(self.fx_tier[e], "Celestial",
                                         f"{box.label} carries {e!r}")
 
-    # The house rule, stated here rather than read from LOOT_BOXES["contents"]:
-    # one item at the box's own tier, then Bronze filler -- 3 more for Celestial,
-    # 2 for Legendary, 1 for Gold (and Platinum, which the rule left out), 3 beside
-    # a Silver item, 3 Bronze items in all for a Bronze box.
-    ITEMS = {"Bronze": 3, "Silver": 4, "Gold": 2, "Platinum": 2, "Legendary": 3,
+    # The house rule, stated here rather than read from LOOT_BOXES["contents"].
+    # One item at the box's own tier; every other item lesser, its tier rolled:
+    #   Celestial  3 more, each Gold to Legendary -- never a second Celestial
+    #   Legendary  2 more, each Silver to Platinum -- never above or equal to it
+    #   Gold       4 more, each Bronze or Silver
+    #   Silver     3 more, Bronze
+    #   Bronze     3 in all, Bronze
+    # Platinum was left out of the rule: 3 more, each Bronze to Gold, between
+    # Gold's four and Legendary's two and, like the rest, at most three tiers down.
+    ITEMS = {"Bronze": 3, "Silver": 4, "Gold": 5, "Platinum": 4, "Legendary": 3,
              "Celestial": 4}
+    LESSER = {"Bronze": {"Bronze"}, "Silver": {"Bronze"}, "Gold": {"Bronze", "Silver"},
+              "Platinum": {"Bronze", "Silver", "Gold"},
+              "Legendary": {"Silver", "Gold", "Platinum"},
+              "Celestial": {"Gold", "Platinum", "Legendary"}}
 
     def test_a_box_holds_exactly_its_tiers_count(self):
         for box in self.opened:
             self.assertEqual(len(box.items), self.ITEMS[box.opened_at],
                              f"{box.label} (opened at {box.opened_at}) holds "
                              f"{len(box.items)} items")
+            self.assertEqual(len(box.item_tiers), len(box.items))
 
-    def test_one_item_at_the_boxs_tier_and_the_rest_bronze(self):
+    def test_one_item_at_the_boxs_tier_and_the_rest_rolled_lower(self):
         """A Celestial Weapon box used to hold four overpowered weapons: one at
-        Celestial and three at Legendary. Only the first item may carry any
-        enchantment now; everything after it is Bronze, which carries none."""
+        Celestial and three at Legendary. Now one item is at the box's tier and
+        every other one rolls its tier from the box's lesser range."""
         for box in self.opened:
-            for line in box.items[1:]:
-                self.assertEqual(self._parse(line)[1], [],
-                                 f"{box.label}: a filler item is enchanted: {line}")
-            named = sum(1 for line in box.items if line.startswith("**"))
-            self.assertLessEqual(named, 1, f"{box.label} names {named} items")
-            effects = self._parse(box.items[0])[1]
-            for e in effects:
-                self.assertEqual(self.fx_tier[e], box.opened_at,
-                                 f"{box.label}: its headline carries {e!r}")
+            self.assertEqual(box.item_tiers[0], box.opened_at,
+                             f"{box.label}: the first item is {box.item_tiers[0]}")
+            for t in box.item_tiers[1:]:
+                self.assertIn(t, self.LESSER[box.opened_at],
+                              f"{box.label}: a lesser item rolled {t}")
+            named = [line for line in box.items if line.startswith("**")]
+            self.assertLessEqual(len(named), 1, f"{box.label} names {len(named)} items")
+            if named:
+                self.assertEqual(named[0], box.items[0], "only the headline is named")
+
+    def test_every_item_carries_its_own_tiers_power(self):
+        """The tier each item says it rolled is the tier its enchantments are from:
+        a Platinum lesser item in a Celestial box carries Platinum effects, two of
+        them, and a Bronze one carries none."""
+        per_item = {"Bronze": 0, "Silver": 1, "Gold": 1, "Platinum": 2, "Legendary": 2,
+                    "Celestial": 3}
+        checked = 0
+        for box in self.opened:
+            for tier, line in zip(box.item_tiers, box.items):
+                base, effects = self._parse(line)
+                if self.item_pool[base] not in self.lb["enchantable"]:
+                    self.assertEqual(effects, [])
+                    continue
+                checked += 1
+                self.assertEqual(len(effects), per_item[tier],
+                                 f"{box.label}: a {tier} {base} carries {effects}")
+                for e in effects:
+                    self.assertEqual(self.fx_tier[e], tier,
+                                     f"{box.label}: a {tier} {base} carries {e!r}")
+        self.assertGreater(checked, 500)
+
+    def test_lesser_tiers_roll_across_their_whole_range(self):
+        """A roll, not a fixed step: across many boxes every tier a range allows
+        comes up, and over-weighting any one of them would show here."""
+        roller = mg.LootRoller(77)
+        for tier, allowed in self.LESSER.items():
+            seen = collections.Counter()
+            for _ in range(150):
+                seen.update(roller.open(tier, "Boss").item_tiers[1:])
+            self.assertEqual(set(seen), allowed, f"{tier} lesser tiers: {dict(seen)}")
+            if len(allowed) > 1:
+                share = min(seen.values()) / sum(seen.values())
+                self.assertGreater(share, 0.6 / len(allowed),
+                                   f"{tier} lesser tiers are lopsided: {dict(seen)}")
 
     def test_a_celestial_weapon_box_is_one_god_tier_weapon(self):
-        """The case the rule was written for."""
-        for seed in range(5):
+        """The case the rule was written for: four weapons, one of them Celestial,
+        the other three Gold to Legendary."""
+        weapons = set(self.lb["items"]["weapons"])
+        for seed in range(8):
             box = mg.LootRoller(seed).open("Celestial", "Weapon")
             self.assertEqual(len(box.items), 4)
-            weapons = set(self.lb["items"]["weapons"])
             self.assertTrue(all(self._parse(l)[0] in weapons for l in box.items))
-            powered = [l for l in box.items if self._parse(l)[1]]
-            self.assertEqual(len(powered), 1, f"seed {seed}: {box.markdown()}")
-            self.assertTrue(powered[0].startswith("**"), "the god-tier one is named")
+            self.assertEqual(box.item_tiers.count("Celestial"), 1, box.markdown())
+            celestial = [l for l in box.items
+                         if any(self.fx_tier[e] == "Celestial" for e in self._parse(l)[1])]
+            self.assertEqual(len(celestial), 1, f"seed {seed}: {box.markdown()}")
+            self.assertTrue(celestial[0].startswith("**"), "the god-tier one is named")
+            self.assertTrue(set(box.item_tiers[1:]) <= {"Gold", "Platinum", "Legendary"})
+
+    def test_the_line_reads_down_the_tiers(self):
+        """Grouped under the tier each item rolled, best first, because a plain
+        potion or tool says nothing about its own tier."""
+        order = mg.LOOT_BOX_TIERS
+        for box in self.opened[:200]:
+            line = box.markdown()
+            shown = [t for t in reversed(order) if f" {t}: " in line or f"— {t}: " in line]
+            self.assertEqual(shown, sorted(set(box.item_tiers), key=order.index,
+                                           reverse=True), line)
+            ranks = [order.index(t) for t in box.item_tiers]
+            self.assertEqual(ranks, sorted(ranks, reverse=True), line)
 
     def test_plain_items_follow_their_slot(self):
         """Potions, tools, explosives and oddities take no enchantment, so they come
-        in bands: a plain headline sits in its box's band, so a Gold Sapper's box
-        leads with mid-band kit; the Bronze filler draws from the low band."""
+        in bands, chosen by the tier the item rolled: a Gold Sapper's box leads with
+        mid-band kit, a Legendary lesser item in a Celestial box is high-band."""
         bands = mg.LOOT_BANDS
         checked = 0
         for box in self.opened:
-            for i, line in enumerate(box.items):
+            for tier, line in zip(box.item_tiers, box.items):
                 base, _ = self._parse(line)
                 band = self.item_band[base]
                 if band is None:
                     continue
                 checked += 1
-                slot = box.opened_at if i == 0 else "Bronze"
-                self.assertEqual(band, bands[slot],
+                self.assertEqual(band, bands[tier],
                                  f"{box.label}: {base!r} is a {band} item in a "
-                                 f"{slot} slot")
+                                 f"{tier} slot")
         self.assertGreater(checked, 300)
 
     # -- gold ------------------------------------------------------------------
@@ -1392,16 +1452,23 @@ class LootBoxTest(unittest.TestCase):
             self.assertGreaterEqual(len(effects), self.MIN_EFFECTS,
                                     f"{tier} enchantments shrank below {self.MIN_EFFECTS}")
 
-    def test_fifteen_weapon_boxes_in_a_row_repeat_nothing(self):
+    def test_weapon_boxes_in_a_row_repeat_nothing_until_the_pool_is_spent(self):
         """One roller holds its decks, so the CLI's --count and an app session do
         not repeat an item until the pool runs out. Before the banks grew, a
-        Weapon box repeated its first item by the eighth box."""
+        Weapon box repeated its first item by the eighth box.
+
+        Counted in weapons, not boxes: how many a box holds is a house rule that
+        changes, and a Gold box went from two weapons to five."""
+        floor = self.MIN_POOL["weapons"]
         for seed in (3, 4, 5):
             roller = mg.LootRoller(seed)
-            seen = [self._parse(l)[0] for _ in range(15)
-                    for l in roller.open("Gold", "Weapon").items]
+            seen = []
+            while len(seen) < floor:
+                seen += [self._parse(l)[0] for l in roller.open("Gold", "Weapon").items]
+            seen = seen[:floor]
             self.assertEqual(len(seen), len(set(seen)),
-                             f"seed {seed}: a weapon came round twice in 15 boxes")
+                             f"seed {seed}: a weapon came round twice in the first "
+                             f"{floor} drawn")
 
     def test_the_banks_are_big_enough_for_a_whole_floor(self):
         """Every box a large Floor 1 names, opened in one session, without a repeat.

@@ -108,10 +108,11 @@ python dcc_mapgen.py --open-box "Gold Weapon" --count 3 --floor 6 --seed 7
 ```
 
 ```
-- **Celestial Weapon Box** — **Marjorie's Mistake**, a meat cleaver (pauses the floor's
-  countdown for its owner once; shows its owner every crawler on the floor; turns one
-  of its owner's achievements into its Platinum version); a boomerang; a hand cannon;
-  a greataxe; **373,248 gold**.
+- **Celestial Weapon Box** — Celestial: **Marjorie's Mistake**, a meat cleaver (pauses
+  the floor's countdown for its owner once; shows its owner every crawler on the floor;
+  turns one of its owner's achievements into its Platinum version). Platinum: a
+  boomerang (reflects the first spell cast at its owner each day; marks a target so the
+  whole party deals +2 to it); a hand cannon (...); a greataxe (...). **46,656 gold**.
 ```
 
 In the desktop app the **Loot Boxes** tab does the same: it lists the current floor's
@@ -119,18 +120,20 @@ boxes and fills in the floor, picking one fills in the tier and type, and any of
 can be changed before **Open**. Because nothing about a box touches the floor,
 rolling one can never move a map.
 
-**What a box holds.** One item is at the box's own tier and of the box's type; the
-rest are Bronze — plain, unenchanted. A Celestial Weapon box is one god-tier weapon
-and three ordinary ones, not four overpowered weapons.
+**What a box holds.** One item is at the box's own tier and of the box's type. Every
+other item is lesser, and rolls its own tier, evenly, from the box's range — so a
+Celestial Weapon box is one god-tier weapon and three good ones, never two
+Celestials. The line groups items under the tier each rolled, best first, since a
+potion or a tool says nothing about its own tier.
 
-| Tier | At the box's tier | Bronze beside it | Gold, from Floor 2 |
-|---|---:|---:|---|
-| Bronze | 1 | 2 | (1–10) × Floor |
-| Silver | 1 | 3 | (1–10) × Floor² |
-| Gold | 1 | 1 | (1–10) × Floor³ |
-| Platinum | 1 | 1 | (1–10) × Floor⁴ |
-| Legendary | 1 | 2 | (1–10) × Floor⁵ |
-| Celestial | 1 | 3 | (1–10) × Floor⁶ |
+| Tier | At the box's tier | Lesser items | Each rolled from | Gold, from Floor 2 |
+|---|---:|---:|---|---|
+| Bronze | 1 | 2 | Bronze | (1–10) × Floor |
+| Silver | 1 | 3 | Bronze | (1–10) × Floor² |
+| Gold | 1 | 4 | Bronze, Silver | (1–10) × Floor³ |
+| Platinum | 1 | 3 | Bronze to Gold | (1–10) × Floor⁴ |
+| Legendary | 1 | 2 | Silver to Platinum | (1–10) × Floor⁵ |
+| Celestial | 1 | 3 | Gold to Legendary | (1–10) × Floor⁶ |
 
 Floor 1 boxes hold no gold. A Benefactor box pays the gold of the tier it opens at,
 and a Bounty or Venison box holds its bounty rather than a roll. Each floor's
@@ -464,11 +467,13 @@ never turn up before the floor that introduces them, boss drops climb with tier 
 depth and never reach Celestial, the floor rolls no box contents, every box it names
 parses straight back into the roller, and opening a hundred boxes leaves a floor
 byte-identical. On the box side: no effect sits on an item that cannot carry it, no
-box holds anything but its tier's count — one item at its tier, the rest Bronze and
-unenchanted — plain items follow their slot's band, gold is (1–10) × Floor ^ Tier
+box holds anything but its tier's count — one item at its tier, the rest rolled
+across exactly the lesser range the house rule gives, every tier in it coming up and
+none outside it — each item carries its own tier's power, plain items follow the
+band of the tier they rolled, gold is (1–10) × Floor ^ Tier
 from Floor 2 and none on Floor 1, a Bronze Benefactor box beats a Gold Adventurer
-box, fifteen
-Weapon boxes in a row repeat nothing, and each pool has a floor stated in the test —
+box, Weapon boxes opened back to back repeat no weapon until the pool is spent, and
+each pool has a floor stated in the test —
 not read from the bank — so the banks cannot quietly shrink back. And every box
 named anywhere, in any word bank or any floor's output, uses one of the six canon
 tiers.
