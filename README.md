@@ -82,6 +82,37 @@ get *The Price of the Town Charter* over a boundary dispute with no charter in i
 Note that `{settlement}` in an objective means *somewhere else* while `{town}` in a
 title means the place posting the quest.
 
+### Loot boxes
+
+Every floor's write-up has a **Loot Boxes** section, and every boss names the box it
+drops. The rules are canon: boxes open only in a safe room or a guildhall, opening
+is all or nothing, the type says what is inside and the tier says how good it is,
+and a Benefactor box outranks every other type tier for tier — a Bronze Benefactor
+box beats a Gold Adventurer box.
+
+`LOOT_BOXES` in `data/common.json` holds eleven box types, each with the floor it
+first appears on: Benefactor and Bounty boxes arrive with sponsors and the
+leaderboard on Floor 4, Venison a floor later. Boss drops climb with both the boss's
+tier and the floor's depth — Floor 1's neighborhood bosses drop Bronze, as the books'
+first one did; Floor 11's Marshal drops Legendary — and no boss drops Celestial.
+
+Each floor also opens six boxes in advance, for whenever the party earns something
+nobody planned for:
+
+```
+- **Platinum Boss Box** — a deck of tarot cards (doubles mana regeneration;
+  reveals every trap within thirty feet); a spell scroll (+2 to one stat while
+  equipped); a tomahawk (deals fire damage on a hit).
+```
+
+One headline item carries the box's full tier and everything else in it sits a tier
+below, so a Legendary box is one named item and good gear around it. Enchantments
+are tagged by what they can sit on (`weapon`, `worn` or `any`), so a jacket never
+"deals extra damage on a hit" and a scroll never "silences its owner's footsteps".
+The ready-made boxes run on their own random stream and drops are worked out at
+render time, so adding loot moved no map — any map generated before this still
+comes back from its seed.
+
 Floors 3 and 6 give every region a day mob and a `NIGHT_THREATS` line saying what
 changes after dark. Most of those lines are the same mob behaving differently, but
 some mean it is only there for half the cycle — and those need a second creature.
@@ -384,6 +415,13 @@ pinned at zero quests, that being deliberate rather than an oversight.
 
 The night-threat bank was 8 entries against 18 regions, which put the same line on
 four of them, so it grew to 47 and is dealt from a deck like the rest.
+
+An eighth covers loot boxes: every boss names its drop, box types never turn up
+before the floor that introduces them, boss drops climb with tier and depth and
+never reach Celestial, no effect sits on an item that cannot carry it, no box
+carries power above its own tier outside its one headline item, a Bronze Benefactor
+box beats a Gold Adventurer box, rolling loot moves no map, and every box named
+anywhere — in any word bank or any floor's output — uses one of the six canon tiers.
 
 A seventh group covers the stat rules, where the risk is drift rather than variety:
 the section renders identically on every floor and seed, it is the last section of

@@ -883,6 +883,143 @@ def night_threat(entry) -> Tuple[str, str]:
     return entry, ""
 
 
+def boss_box(tier: str, floor: int) -> str:
+    """The Boss Box a boss drops: a base by boss tier, a step for how deep the floor
+    is, capped short of Celestial. Worked out at render time from what the boss
+    already is, so it draws nothing from any rng and moves no map."""
+    bb = LOOT_BOXES["boss_box"]
+    idx = min(bb["base"].get(tier, 0) + bb["depth"].get(str(floor), 0), bb["cap"])
+    return f"{LOOT_BOX_TIERS[idx]} Boss Box"
+
+
+def box_types_for(floor: int) -> List[dict]:
+    """Box types that exist by this floor. Sponsors arrive on Floor 4, and with
+    them Benefactor boxes; the leaderboard arrives there too, and Bounty boxes."""
+    return [t for t in LOOT_BOXES["types"] if t["from_floor"] <= floor]
+
+
+def _fit_kind(pool: str) -> str:
+    """Which enchantment deck an item draws from. A weapon takes "on a hit"
+    effects, worn gear takes equipment effects, and a scroll or a wand takes only
+    the ones that read on anything. A leather jacket that "deals extra damage to
+    undead" is what happens without this."""
+    return "+".join(LOOT_BOXES["effect_kinds"].get(pool, ["any"]))
+
+
+def open_box(rng, decks: dict, box_type: dict, tier_idx: int) -> List[str]:
+    """What is in one box, as item lines.
+
+    One headline item carries the box's full tier; everything else in it sits a
+    tier below. A Legendary box is one named item and good gear around it, not a
+    pile of legendaries. A Benefactor box opens three tiers above its label,
+    which is how the books put a Bronze one ahead of a Gold Adventurer box, but
+    never past Legendary: Celestial is something a box is, not something it
+    becomes."""
+    lb = LOOT_BOXES
+    if box_type["name"] == "Benefactor":
+        # The cap limits the promotion, not the box: a Celestial Benefactor box
+        # is still Celestial, it just was not promoted there.
+        cap = LOOT_BOX_TIERS.index(lb["benefactor_cap"])
+        tier_idx = max(tier_idx, min(tier_idx + lb["benefactor_bonus"], cap))
+    top = LOOT_BOX_TIERS[tier_idx]
+    lo, hi = lb["counts"][top]
+    pools = box_type["pools"]
+    enchantable = [p for p in pools if p in lb["enchantable"]]
+    out = []
+    for i in range(rng.randint(lo, hi)):
+        quality = top if i == 0 else LOOT_BOX_TIERS[max(tier_idx - 1, 0)]
+        fx_count = lb["effects_per_item"][quality]
+        # The headline comes from a pool that can carry the tier, so a Gold box
+        # always shows it is Gold instead of turning out to be all rope.
+        pool = rng.choice(enchantable if i == 0 and fx_count and enchantable else pools)
+        item = decks[pool].draw()
+        if fx_count and pool in lb["enchantable"]:
+            deck = decks[f"fx:{quality}:{_fit_kind(pool)}"]
+            fx = []
+            while len(fx) < fx_count:        # distinct even across a reshuffle
+                effect = deck.draw()
+                if effect not in fx:
+                    fx.append(effect)
+            item = f"{item} ({'; '.join(fx)})"
+            if i == 0 and quality in ("Legendary", "Celestial"):
+                item = f"**{decks['first'].draw()}'s {decks['epithet'].draw()}**, {item}"
+        out.append(item)
+    return out
+
+
+def ready_boxes(fl) -> List[Tuple[str, dict, List[str]]]:
+    """A handful of boxes rolled for this floor, opened in advance.
+
+    On their own stream, like the crawler teams: rolling loot here must not move a
+    single wall of the floor it is rolled for."""
+    floor = fl.number
+    lb = LOOT_BOXES
+    rng = random.Random(f"loot|{fl.seed}|{floor}")
+    decks = {pool: Deck(rng, items) for pool, items in lb["items"].items()}
+    # One deck per tier per kind of item, in a fixed order so the stream is the
+    # same in every interpreter.
+    kinds = sorted({"+".join(k) for k in lb["effect_kinds"].values()})
+    for tier, effects in lb["effects"].items():
+        for kind in kinds:
+            decks[f"fx:{tier}:{kind}"] = Deck(
+                rng, [text for text, fits in effects if fits in kind.split("+")])
+    decks["first"] = Deck(rng, BOSS_FIRST)
+    decks["epithet"] = Deck(rng, lb["epithets"])
+    types = [t for t in box_types_for(floor) if not t.get("special")]
+    by_name = {t["name"]: t for t in types}
+    type_deck = Deck(rng, [t["name"] for t in types])
+    weights = lb["sample_tier_weights"][lb["depth_band"][str(floor)]]
+    boxes = []
+    for _ in range(lb["sample_count"]):
+        box_type = by_name[type_deck.draw()]
+        tier_idx = rng.choices(range(len(LOOT_BOX_TIERS)), weights=weights)[0]
+        boxes.append((tier_idx, box_type, open_box(rng, decks, box_type, tier_idx)))
+    boxes.sort(key=lambda b: (b[0], b[1]["name"]))
+    return [(f"{LOOT_BOX_TIERS[i]} {t['name']} Box", t, items) for i, t, items in boxes]
+
+
+def loot_box_section(fl) -> List[str]:
+    """Loot boxes on this floor: the rules, the tiers, the types that exist yet,
+    and a handful opened in advance."""
+    floor = fl.number
+    lb = LOOT_BOXES
+    o = ["## Loot Boxes", ""]
+    o += [f"- {rule}" for rule in lb["rules"]]
+    o.append("")
+    if getattr(fl, "neighborhoods", None):
+        o.append("Neighborhoods farther from the entry skew toward higher tiers; each one "
+                 "lists the tier its own boxes run at.")
+        o.append("")
+    o.append("| Tier | Items | What it tends to hold |")
+    o.append("|---|---:|---|")
+    for tier, desc in lb["tier_guide"]:
+        lo, hi = lb["counts"][tier]
+        o.append(f"| {tier} | {lo if lo == hi else f'{lo}–{hi}'} | {desc} |")
+    o.append("")
+    o.append("| Box | Earned for |")
+    o.append("|---|---|")
+    for t in box_types_for(floor):
+        note = f" ({t['note']})" if t.get("note") else ""
+        o.append(f"| {t['name']} | {t['earned']}{note} |")
+    o.append("")
+    later = [t for t in lb["types"] if t["from_floor"] > floor]
+    if later:
+        o.append("Not on this floor yet: " + ", ".join(
+            f"{t['name']} (from Floor {t['from_floor']})" for t in later) + ".")
+        o.append("")
+    o.append("### Ready to hand out")
+    o.append("")
+    count = _COUNT_WORD.get(lb["sample_count"], str(lb["sample_count"])).capitalize()
+    o.append(f"{count} boxes opened in advance, for whenever the party earns something "
+             f"nobody planned for.")
+    o.append("")
+    for label, box_type, items in ready_boxes(fl):
+        note = f" *({box_type['note']})*" if box_type.get("note") else ""
+        o.append(f"- **{label}**{note} — " + "; ".join(items) + ".")
+    o.append("")
+    return o
+
+
 def _mana_regen_for(score: int) -> str:
     """The regeneration row that applies at a score, which is the last row at or
     below it -- the table is sparse on purpose."""
@@ -1038,12 +1175,13 @@ def render_grid(fl: Floor) -> str:
         lines.append(" ".join(row))
     return "\n".join(lines)
 
-def boss_block(b: Boss, label: Optional[str] = None) -> List[str]:
+def boss_block(b: Boss, floor: int, label: Optional[str] = None) -> List[str]:
     out = [
         f"- **{label or b.tier.title()} Boss:** {b.name} (Level {b.level})",
         f"  - Form: {b.form}.",
         f"  - Chamber: {b.chamber}.",
         f"  - Mechanic: {b.mechanic}",
+        f"  - Drops: a {boss_box(b.tier, floor)}",
         f"  - Stairwell in chamber: {'yes' if b.has_stairwell else 'no'}",
     ]
     return out
@@ -1135,13 +1273,13 @@ def render(fl: Floor) -> str:
     if fl.top_boss:
         o.append(f"## {fl.top_tier_name} Boss")
         o.append("")
-        o.extend(boss_block(fl.top_boss, label=fl.top_tier_name))
+        o.extend(boss_block(fl.top_boss, fl.number, label=fl.top_tier_name))
         o.append("")
 
     if len(fl.city_bosses) == 1:
         o.append("## City Boss")
         o.append("")
-        o.extend(boss_block(next(iter(fl.city_bosses.values()))))
+        o.extend(boss_block(next(iter(fl.city_bosses.values())), fl.number))
         o.append("")
     elif fl.city_bosses:
         o.append("## City Bosses")
@@ -1152,7 +1290,7 @@ def render(fl: Floor) -> str:
             o.append(f"### City {cname} ({len(members)} neighborhoods, "
                      f"boroughs {', '.join(city_boroughs)})")
             o.append("")
-            o.extend(boss_block(b))
+            o.extend(boss_block(b, fl.number))
             o.append("")
 
     if fl.borough_bosses:
@@ -1163,7 +1301,7 @@ def render(fl: Floor) -> str:
             head = "The Borough" if fl.grid == 2 else f"Borough {bname}"
             o.append(f"### {head} (neighborhoods {', '.join(members)})")
             o.append("")
-            o.extend(boss_block(b))
+            o.extend(boss_block(b, fl.number))
             o.append("")
 
     o.append("## Neighborhoods")
@@ -1190,7 +1328,7 @@ def render(fl: Floor) -> str:
         o.append(f"- **Mob:** {nb.mob.name}, Level {nb.level_range[0]}–{nb.level_range[1]}")
         o.append(f"  - {nb.mob.quirk}")
         o.append(f"  - *{nb.mob.description}*")
-        o.extend(boss_block(nb.boss))
+        o.extend(boss_block(nb.boss, fl.number))
         o.append(f"- **Loot theme:** {nb.loot} ({nb.loot_tier}-tier loot box)")
         o.append(f"- **Rooms:** ({len(nb.rooms)})")
         for r in nb.rooms:
@@ -1220,12 +1358,6 @@ def render(fl: Floor) -> str:
     o.append("")
 
     o.extend(crawler_section(fl))
-
-    o.append("## Loot Boxes")
-    o.append("")
-    o.append("Box tiers, lowest to highest: " + " → ".join(LOOT_BOX_TIERS) + 
-             ". Neighborhoods farther from the entry skew toward higher tiers.")
-    o.append("")
 
     o.append("## Achievements")
     o.append("")
@@ -2081,6 +2213,7 @@ def render3(fl: Floor3) -> str:
             o.append(f"  - Form: {b.form}.")
             o.append(f"  - Roams between here and {reg.roams_to}." if reg.roams_to else "  - Stays in this region.")
             o.append(f"  - Mechanic: {b.mechanic}")
+            o.append(f"  - Drops: a {boss_box(b.tier, fl.number)}")
         if reg.stairwell:
             o.append(f"- **Stairwell {reg.stairwell.label}:** {reg.stairwell.condition}.")
         o.append(f"- **Loot theme:** {reg.loot}")
@@ -2770,6 +2903,7 @@ def render5(fl: Floor5) -> str:
         o.append(f"- **Quadrant Boss:** {c.boss.name} (Level {c.boss.level})")
         o.append(f"  - Form: {c.boss.form}.")
         o.append(f"  - Mechanic: {c.boss.mechanic}")
+        o.append(f"  - Drops: a {boss_box(c.boss.tier, fl.number)}")
         o.append("")
     o.append("## DM Material")
     o.append("")
@@ -3121,6 +3255,7 @@ def render6(fl: Floor6) -> str:
             o.append(f"  - Form: {b.form}.")
             o.append(f"  - Roams between here and {reg.roams_to}." if reg.roams_to else "  - Stays in this region.")
             o.append(f"  - Mechanic: {b.mechanic}")
+            o.append(f"  - Drops: a {boss_box(b.tier, fl.number)}")
         if reg.camp:
             o.append(f"- **Hunter camp:** {reg.camp}'s party (see Hunter Parties).")
         if reg.stairwell:
@@ -4216,6 +4351,7 @@ def render11(fl: Floor11) -> str:
     o.append(f"- **Floor Boss:** {fl.boss.name} (Level {fl.boss.level})")
     o.append(f"  - Form: {fl.boss.form}.")
     o.append(f"  - Mechanic: {fl.boss.mechanic}")
+    o.append(f"  - Drops: a {boss_box(fl.boss.tier, fl.number)}")
     o.append("- **Former crawlers:**")
     for f_ in fl.formers:
         if f_.substitute:
@@ -4433,6 +4569,9 @@ def _render_floor(fl, floor: int) -> str:
     renderers = {3: render3, 4: render4, 5: render5, 6: render6, 8: render8,
                  9: render9, 10: render10, 11: render11}
     text = renderers.get(floor, render)(fl)
+    # Loot boxes exist on every floor, so their section is added here for all of
+    # them rather than taught to nine renderers one at a time.
+    text = text.rstrip("\n") + "\n\n" + "\n".join(loot_box_section(fl))
     # The stat rules go on here rather than inside crawler_section, so that they
     # land at the end of every floor instead of wherever that floor happens to
     # print its roster -- on floors 1 and 2 that is halfway up, ahead of the loot

@@ -1391,5 +1391,686 @@
    "Nothing here caps out. A crawler who lives long enough leaves the human range behind entirely, which is the point."
   ],
   "npc_note": "To stat a team from Other Crawlers on the spot: give each crawler 4s across the board, then add a total of two points per floor they have survived, weighted toward whatever their class is for. That lands a group met on floor 3 at roughly 5s and a group that has lived to floor 9 somewhere near 10s, which is about where the books put them."
+ },
+ "LOOT_BOXES": {
+  "rules": [
+   "Boxes open only in a safe room or a guildhall. Earned anywhere else, they wait in the Awards and Boxes tab of the crawler's inventory.",
+   "Opening is all or nothing: once a crawler starts, every box they are holding opens in sequence.",
+   "The type says what kind of thing is inside; the tier says how good it is.",
+   "A Benefactor box outranks every other type, tier for tier: a Bronze Benefactor box beats a Gold Adventurer box.",
+   "Achievements usually name their own box after whatever earned it, so expect types this table does not list."
+  ],
+  "tier_guide": [
+   [
+    "Bronze",
+    "mundane and useful: nothing enchanted, everything needed"
+   ],
+   [
+    "Silver",
+    "solid kit, one piece of it lightly enchanted"
+   ],
+   [
+    "Gold",
+    "one enchanted piece worth building a fight around, and lesser enchantments beside it"
+   ],
+   [
+    "Platinum",
+    "one rare piece with two properties, and enchanted gear beside it"
+   ],
+   [
+    "Legendary",
+    "one named, unique item that changes how its owner plays, and rare gear beside it"
+   ],
+   [
+    "Celestial",
+    "something the Syndicate would rather stayed in the box; no boss on these floors drops one"
+   ]
+  ],
+  "counts": {
+   "Bronze": [
+    1,
+    2
+   ],
+   "Silver": [
+    2,
+    2
+   ],
+   "Gold": [
+    2,
+    3
+   ],
+   "Platinum": [
+    3,
+    3
+   ],
+   "Legendary": [
+    3,
+    3
+   ],
+   "Celestial": [
+    4,
+    4
+   ]
+  },
+  "effects_per_item": {
+   "Bronze": 0,
+   "Silver": 1,
+   "Gold": 1,
+   "Platinum": 2,
+   "Legendary": 2,
+   "Celestial": 3
+  },
+  "benefactor_bonus": 3,
+  "sample_count": 6,
+  "sample_tier_weights": {
+   "shallow": [
+    5,
+    4,
+    2,
+    1,
+    0,
+    0
+   ],
+   "middle": [
+    2,
+    4,
+    4,
+    2,
+    1,
+    0
+   ],
+   "deep": [
+    1,
+    2,
+    4,
+    3,
+    2,
+    1
+   ]
+  },
+  "depth_band": {
+   "1": "shallow",
+   "2": "shallow",
+   "3": "middle",
+   "4": "middle",
+   "5": "middle",
+   "6": "middle",
+   "8": "deep",
+   "9": "deep",
+   "10": "deep",
+   "11": "deep"
+  },
+  "boss_box": {
+   "base": {
+    "neighborhood": 0,
+    "borough": 1,
+    "city": 2,
+    "top": 3,
+    "castle": 2,
+    "floor": 3
+   },
+   "depth": {
+    "1": 0,
+    "2": 0,
+    "3": 1,
+    "4": 1,
+    "5": 1,
+    "6": 1,
+    "8": 2,
+    "9": 2,
+    "10": 2,
+    "11": 2
+   },
+   "cap": 4
+  },
+  "types": [
+   {
+    "name": "Adventurer",
+    "from_floor": 1,
+    "earned": "general progress and the commonest achievements",
+    "pools": [
+     "consumables",
+     "tools",
+     "apparel"
+    ]
+   },
+   {
+    "name": "Boss",
+    "from_floor": 1,
+    "earned": "killing a boss; the tier follows the boss",
+    "pools": [
+     "weapons",
+     "apparel",
+     "magic"
+    ]
+   },
+   {
+    "name": "Weapon",
+    "from_floor": 1,
+    "earned": "fighting achievements, and entering the dungeon unarmed",
+    "pools": [
+     "weapons"
+    ]
+   },
+   {
+    "name": "Apparel",
+    "from_floor": 1,
+    "earned": "achievements about what a crawler is or is not wearing",
+    "pools": [
+     "apparel"
+    ]
+   },
+   {
+    "name": "Pet",
+    "from_floor": 1,
+    "earned": "pet achievements; every tier has a hedgehog stencilled on it",
+    "pools": [
+     "pet"
+    ]
+   },
+   {
+    "name": "Fan",
+    "from_floor": 1,
+    "earned": "a surge of followers, or a moment that raised the crawler's profile",
+    "note": "contents picked by audience vote",
+    "pools": [
+     "oddities",
+     "apparel"
+    ]
+   },
+   {
+    "name": "Savage",
+    "from_floor": 1,
+    "earned": "killing another crawler; it comes with a skull after the killer's name",
+    "pools": [
+     "weapons",
+     "explosives"
+    ]
+   },
+   {
+    "name": "Quest",
+    "from_floor": 3,
+    "earned": "finishing a quest; the giver's reward line names the tier",
+    "pools": [
+     "consumables",
+     "magic"
+    ]
+   },
+   {
+    "name": "Benefactor",
+    "from_floor": 4,
+    "earned": "bought by a sponsor; a crawler can hold three sponsors",
+    "note": "opens three tiers above its label, up to Legendary",
+    "pools": [
+     "offworld",
+     "magic"
+    ]
+   },
+   {
+    "name": "Bounty",
+    "from_floor": 4,
+    "earned": "killing one of the Top Ten; it holds that crawler's bounty",
+    "special": true
+   },
+   {
+    "name": "Venison",
+    "from_floor": 5,
+    "earned": "a Top Ten crawler living to the next floor; it holds a tenth of their own bounty",
+    "special": true
+   }
+  ],
+  "enchantable": [
+   "weapons",
+   "apparel",
+   "magic",
+   "offworld",
+   "pet"
+  ],
+  "items": {
+   "consumables": [
+    "three minor healing potions",
+    "a minor mana potion",
+    "a roll of bandages",
+    "a bundle of torches",
+    "a ration pack, flavour unknown",
+    "two antidote vials",
+    "a single-dose potion of speed",
+    "a smoke bomb",
+    "a jar of burn salve",
+    "a canteen of clean water",
+    "a scroll of identify",
+    "a bottle of liquid courage, which is gin",
+    "a flask of lamp oil",
+    "a stamina tonic",
+    "a pouch of smelling salts",
+    "a potion whose label has worn off"
+   ],
+   "tools": [
+    "a coil of rope",
+    "a crowbar",
+    "a set of lockpicks",
+    "a grappling hook",
+    "a folding shovel",
+    "a hand lantern",
+    "a pocket compass",
+    "a tinderbox",
+    "a hammer and a bag of pitons",
+    "a ten-foot pole",
+    "a spyglass",
+    "a box of chalk for marking walls",
+    "a bedroll",
+    "a mirror on a stick"
+   ],
+   "weapons": [
+    "a short sword",
+    "a war pick",
+    "a crossbow and twenty bolts",
+    "a pair of throwing axes",
+    "a spear",
+    "a hand cannon",
+    "a set of brass knuckles",
+    "a mace",
+    "a longbow",
+    "a machete",
+    "a pair of daggers",
+    "a halberd",
+    "a sling and a pouch of lead shot",
+    "a flail",
+    "a tomahawk",
+    "a whip"
+   ],
+   "apparel": [
+    "a pair of boots",
+    "a leather jacket",
+    "a chainmail shirt",
+    "a pair of gloves",
+    "a wide-brimmed hat",
+    "a cloak",
+    "a pair of boxer shorts",
+    "a helmet",
+    "a belt with too many pouches",
+    "a scarf",
+    "a breastplate",
+    "a pair of goggles",
+    "a tabard",
+    "a pair of trousers",
+    "a ring",
+    "an amulet"
+   ],
+   "pet": [
+    "a bag of pet biscuits",
+    "a collar",
+    "a pet carrier",
+    "a grooming kit",
+    "a squeaky toy",
+    "a harness",
+    "a pet-sized helmet",
+    "a tin of pet treats",
+    "a collapsible scratching post",
+    "a leash",
+    "a pet bed",
+    "a pet-sized cloak"
+   ],
+   "magic": [
+    "a spell scroll",
+    "a spellbook",
+    "a wand",
+    "a skill book",
+    "a staff",
+    "a crystal focus",
+    "a tome with a lock on it",
+    "a deck of tarot cards",
+    "a candle that burns blue",
+    "a charm on a cord",
+    "a bottle of bottled lightning",
+    "an hourglass"
+   ],
+   "offworld": [
+    "a plasma cutter",
+    "a personal shield emitter",
+    "a medical injector",
+    "a translator earpiece",
+    "a nanofibre undersuit",
+    "a drone the size of a sparrow",
+    "a gravity-assist harness",
+    "a holographic decoy projector",
+    "a stasis grenade",
+    "a self-heating ration cube"
+   ],
+   "explosives": [
+    "a stick of dynamite",
+    "a pipe bomb",
+    "a satchel charge",
+    "a fragmentation grenade",
+    "a jar of alchemist's fire",
+    "a flashbang",
+    "a length of det cord",
+    "a landmine",
+    "a sack of black powder",
+    "a sticky bomb"
+   ],
+   "oddities": [
+    "a snow globe of a city that no longer exists",
+    "a signed headshot of a Syndicate celebrity",
+    "a rubber duck",
+    "a deck of cards missing the queen of hearts",
+    "a tin of pre-Collapse mints",
+    "a novelty mug",
+    "a VHS tape",
+    "a framed participation certificate",
+    "a single roller skate",
+    "a bag of marbles",
+    "a trophy for something nobody remembers",
+    "a whoopee cushion"
+   ]
+  },
+  "effects": {
+   "Silver": [
+    [
+     "glows faintly near traps",
+     "any"
+    ],
+    [
+     "never needs sharpening or mending",
+     "weapon"
+    ],
+    [
+     "weighs half what it should",
+     "any"
+    ],
+    [
+     "cleans itself",
+     "any"
+    ],
+    [
+     "+1 to one stat while equipped",
+     "any"
+    ],
+    [
+     "quietens its owner's footsteps",
+     "worn"
+    ],
+    [
+     "stays warm in cold rooms",
+     "worn"
+    ],
+    [
+     "hums near hidden doors",
+     "any"
+    ],
+    [
+     "cannot be dropped by accident",
+     "any"
+    ],
+    [
+     "shrugs off rust and acid",
+     "any"
+    ],
+    [
+     "shows the floor's countdown when tapped",
+     "any"
+    ],
+    [
+     "fits whoever picks it up",
+     "worn"
+    ],
+    [
+     "smells faintly of fresh bread, which calms mobs",
+     "any"
+    ],
+    [
+     "floats",
+     "any"
+    ]
+   ],
+   "Gold": [
+    [
+     "+2 to one stat while equipped",
+     "any"
+    ],
+    [
+     "deals fire damage on a hit",
+     "weapon"
+    ],
+    [
+     "returns to the hand when thrown",
+     "weapon"
+    ],
+    [
+     "resists poison",
+     "worn"
+    ],
+    [
+     "casts a level 1 light spell on command",
+     "any"
+    ],
+    [
+     "turns aside the first hit of every fight",
+     "worn"
+    ],
+    [
+     "sees in darkness",
+     "worn"
+    ],
+    [
+     "+1 to a combat skill while held",
+     "weapon"
+    ],
+    [
+     "adds 100 lb to comfortable lift",
+     "worn"
+    ],
+    [
+     "heals 5 health per kill",
+     "weapon"
+    ],
+    [
+     "marks its target on the minimap",
+     "weapon"
+    ],
+    [
+     "silences its owner's footsteps entirely",
+     "worn"
+    ],
+    [
+     "deals extra damage to undead",
+     "weapon"
+    ],
+    [
+     "cannot be stolen",
+     "any"
+    ],
+    [
+     "+1 to a non-combat skill while held",
+     "any"
+    ],
+    [
+     "warns its owner a heartbeat before an ambush",
+     "any"
+    ],
+    [
+     "cannot be destroyed by fire",
+     "any"
+    ],
+    [
+     "stores one spell to be cast later",
+     "any"
+    ],
+    [
+     "glows when its owner's sponsor is watching",
+     "any"
+    ]
+   ],
+   "Platinum": [
+    [
+     "+4 to one stat while equipped",
+     "any"
+    ],
+    [
+     "casts a level 5 spell once a day",
+     "any"
+    ],
+    [
+     "halves its owner's potion cooldown",
+     "any"
+    ],
+    [
+     "grants a new skill at level 3",
+     "any"
+    ],
+    [
+     "immunity to one damage type",
+     "worn"
+    ],
+    [
+     "a ten-foot teleport once per fight",
+     "any"
+    ],
+    [
+     "reflects the first spell cast at its owner each day",
+     "any"
+    ],
+    [
+     "doubles mana regeneration",
+     "any"
+    ],
+    [
+     "summons a weak minion once a day",
+     "any"
+    ],
+    [
+     "reveals every trap within thirty feet",
+     "any"
+    ],
+    [
+     "lets its owner breathe underwater",
+     "worn"
+    ],
+    [
+     "turns a killing blow into a near miss once per day",
+     "any"
+    ]
+   ],
+   "Legendary": [
+    [
+     "+8 to one stat while equipped",
+     "any"
+    ],
+    [
+     "raises one skill by 5 levels while held",
+     "any"
+    ],
+    [
+     "casts a level 10 spell once a day",
+     "any"
+    ],
+    [
+     "survives one killing blow per floor",
+     "any"
+    ],
+    [
+     "learns one spell from every caster it kills",
+     "weapon"
+    ],
+    [
+     "invisible to mobs below its owner's level",
+     "worn"
+    ],
+    [
+     "a second action every turn in the first round of a fight",
+     "any"
+    ],
+    [
+     "doubles the owner's maximum health",
+     "worn"
+    ],
+    [
+     "speaks, and knows things about this floor",
+     "any"
+    ],
+    [
+     "cannot miss",
+     "weapon"
+    ]
+   ],
+   "Celestial": [
+    [
+     "rewrites one rule of this floor for its owner, once",
+     "any"
+    ],
+    [
+     "+5 to every stat",
+     "any"
+    ],
+    [
+     "the Syndicate pauses the broadcast when it is used",
+     "any"
+    ],
+    [
+     "casts a level 15 spell once per floor",
+     "any"
+    ],
+    [
+     "grants a second class",
+     "any"
+    ],
+    [
+     "its owner cannot be targeted by gods",
+     "any"
+    ],
+    [
+     "remembers every crawler who has ever held it, and can ask them things",
+     "any"
+    ],
+    [
+     "turns one box this crawler opens into a box one tier higher",
+     "any"
+    ]
+   ]
+  },
+  "epithets": [
+   "Regret",
+   "Answer",
+   "Last Word",
+   "Mistake",
+   "Promise",
+   "Receipt",
+   "Lullaby",
+   "Farewell",
+   "Due Process",
+   "Second Opinion",
+   "Fine Print",
+   "Apology",
+   "Bad Idea",
+   "Final Notice",
+   "Reckoning",
+   "Excuse",
+   "Encore",
+   "Alibi",
+   "Small Mercy",
+   "Leftovers"
+  ],
+  "effect_kinds": {
+   "weapons": [
+    "any",
+    "weapon"
+   ],
+   "apparel": [
+    "any",
+    "worn"
+   ],
+   "pet": [
+    "any",
+    "worn"
+   ],
+   "magic": [
+    "any"
+   ],
+   "offworld": [
+    "any",
+    "worn"
+   ]
+  },
+  "benefactor_cap": "Legendary"
  }
 }
