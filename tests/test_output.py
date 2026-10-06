@@ -695,11 +695,17 @@ class Floor4LayoutTest(unittest.TestCase):
     CANON = ("krakaren", "festering ghoul", "wrath ghoul", "blister ghoul",
              "crotch dumpling", "ghoul generator")
 
-    @staticmethod
-    def _floors(seeds=range(1, 13), sizes=("small", "medium", "large")):
+    # Generated once and shared: these tests only read a floor, and two dozen of
+    # them each building the same 36 floors cost the suite ten seconds.
+    _built = {}
+
+    @classmethod
+    def _floors(cls, seeds=range(1, 13), sizes=("small", "medium", "large")):
         for size in sizes:
             for seed in seeds:
-                yield size, seed, mg.generate(4, size, seed, images=False)
+                if (size, seed) not in cls._built:
+                    cls._built[size, seed] = mg.generate(4, size, seed, images=False)
+                yield size, seed, cls._built[size, seed]
 
     def test_every_line_has_all_five_stairwells_and_no_others(self):
         for size, seed, res in self._floors():
@@ -1047,13 +1053,117 @@ class Floor4LayoutTest(unittest.TestCase):
                 self.assertIn(f"- **Quest on boarding — {q['title']}:**", res.markdown, where)
                 self.assertIn(f"{q['title']}, {t.name}", suggested, where)
 
+    # -- the floor's systems ----------------------------------------------------
+
+    @staticmethod
+    def _section(md, head):
+        start = md.index(head)
+        nxt = md.find("\n## ", start + 1)
+        return md[start:nxt if nxt != -1 else len(md)]
+
+    def test_the_drug_has_a_name_and_a_supplier_every_five_stops(self):
+        for size, seed, res in self._floors(seeds=range(1, 4)):
+            fl, md = res.floor, res.markdown
+            self.assertIn(fl.supplier, mg.SUPPLIERS4)
+            self.assertIn("Rev-Up Amazing Cure-All Vitamin Immunity Shot", md)
+            self.assertIn(f"handed out by the {fl.supplier['name']} at every exit-only cavern", md)
+            supply = self._section(md, "## Withdrawal")
+            self.assertIn("**The supply:** every fifth station is an exit-only cavern", supply)
+            self.assertIn(f"**{fl.supplier['name']}** (L{fl.supplier['level'][0]}", supply)
+            self.assertIn(fl.supplier["if_attacked"], supply)
+
+    def test_435_has_its_non_combatants(self):
+        for size, seed, res in self._floors(seeds=range(1, 4)):
+            fl = res.floor
+            self.assertIn(fl.hr, mg.HR4)
+            tail = self._section(res.markdown, "## The Tail")
+            entry = tail[tail.index("### 435"):tail.index("### 436")]
+            self.assertIn(f"the **{fl.hr['name']}**", entry)
+            self.assertIn("Non-combatants: they do not fight.", entry)
+
+    def test_station_75_is_the_depot(self):
+        """Carts at five times a train's speed, in the book's own figure, so their
+        times are the travel model's divided by five."""
+        for size, seed, res in self._floors(seeds=range(1, 4)):
+            fl, md = res.floor, res.markdown
+            lo, hi = mg.DEPOT4["carts"]
+            self.assertTrue(lo <= fl.depot["carts"] <= hi)
+            for key, bank in (("repair", "repair_crews"), ("security", "security"),
+                              ("controls", "controls"), ("state", "states")):
+                self.assertIn(fl.depot[key], mg.DEPOT4[bank])
+            depot = self._section(md, "## Station 75: the Interdiction Depot")
+            out = mg.duration_text(mg.f4_ride_minutes(75, 435) / 5)
+            back = mg.duration_text(mg.f4_ride_minutes(11, 75) / 5)
+            self.assertIn(f"from 75 out to 435 in {out}, or back to the yard in {back}", depot)
+            self.assertIn(fl.depot["controls"], depot)
+            self.assertIn("**The scoop:**", depot)
+            self.assertEqual(md.count("**75** — INTERDICTION DEPOT"), len(fl.lines))
+            self.assertIn(f"the interdiction depot, {fl.depot['carts']} repair carts", md)
+        svg = mg.generate(4, "small", 7).svgs[0][1]
+        self.assertIn("DEPOT 75", svg)
+        self.assertIn("Interdiction depot 75", svg)
+
+    def test_derailments_and_blowouts_are_possible(self):
+        rules = self._section(mg.generate(4, "small", 1, images=False).markdown, "## Floor Rules")
+        self.assertIn("A train can be derailed", rules)
+        self.assertIn("builds pressure until it blows", rules)
+
+    def test_the_tail_says_how_to_fight_the_mimic_and_fall_in_the_abyss(self):
+        for size, seed, res in self._floors(seeds=range(1, 4)):
+            fl = res.floor
+            self.assertIn(fl.mimic_spawn, mg.MIMIC_MINIONS4)
+            tail = self._section(res.markdown, "## The Tail")
+            mimic = tail[tail.index("### 433"):tail.index("### 435")]
+            self.assertIn("blunt weapons and spells do nothing", mimic)
+            self.assertIn("more than half of it has been cut away", mimic)
+            self.assertIn(fl.mimic_spawn["name"], mimic)
+            self.assertIn(fl.mimic_tell, mimic)
+            abyss = tail[tail.index("### 436"):]
+            self.assertIn("stray too far from the catwalk and the pit pulls you down", abyss)
+
+    def test_every_yard_a_line_runs_from_is_described(self):
+        for size, seed, res in self._floors():
+            fl, where = res.floor, f"{size} seed {seed}"
+            letters = sorted({ln.yard for ln in fl.lines})
+            self.assertEqual(sorted(fl.yards["features"]), letters, where)
+            features = list(fl.yards["features"].values())
+            self.assertEqual(len(set(features)), len(features), where)
+            self.assertIn(fl.yards["supervisor"], mg.YARDS4["supervisors"])
+            yards = self._section(res.markdown, "## The Train Yards")
+            for letter in letters:
+                users = [ln.color for ln in fl.lines if ln.yard == letter]
+                self.assertIn(f"- **Yard {letter}** (", yards, where)
+                for color in users:
+                    line = next(ln for ln in yards.splitlines()
+                                if ln.startswith(f"- **Yard {letter}** ("))
+                    self.assertIn(color, line, where)
+
+    def test_the_special_lines_and_a_sigil_at_every_ghoul_station(self):
+        for size, seed, res in self._floors():
+            fl, where = res.floor, f"{size} seed {seed}"
+            around = self._section(res.markdown, "## Getting Around")
+            for key in ("backward", "staff", "backward_how", "staff_how"):
+                self.assertIn(fl.special_lines[key], mg.SPECIAL_LINES4[key])
+            self.assertIn("the only train that runs the other way", around, where)
+            self.assertIn("is for the staff only", around, where)
+            # Compared as templates: the same sentence with five different ghouls
+            # in it still reads as the same sigil five times.
+            forms = {gs["sigil"].replace(gs["ghoul"]["name"], "{ghoul}")
+                     for gs in fl.ghoul_stations}
+            self.assertEqual(len(forms), 5, f"{where}: {forms}")
+            self.assertTrue(forms <= set(mg.SIGILS4), where)
+            for gs in fl.ghoul_stations:
+                self.assertNotIn("{", gs["sigil"], where)
+                self.assertIn(f"- **Sigil:** {gs['sigil']}", res.markdown, where)
+            self.assertIn("Control sigils are glowing circles", res.markdown, where)
+
     # -- the tail ---------------------------------------------------------------
 
     def test_station_435_is_on_the_map_and_in_the_text(self):
         for size in ("small", "medium", "large"):
             res = mg.generate(4, size, 4242)
             md, svg = res.markdown, res.svgs[0][1]
-            self.assertIn("**435, End of the Line:**", md)
+            self.assertIn("### 435 — End of the Line", md)
             self.assertEqual(md.count("**435** — END OF THE LINE"), len(res.floor.lines),
                              f"{size}: 435 missing from a line's stations")
             self.assertIn("END OF LINE", svg)

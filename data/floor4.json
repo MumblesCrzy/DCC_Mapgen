@@ -138,7 +138,7 @@
   "The floor is a Syndicate logo when viewed from above. Nobody on the floor can view it from above.",
   "The Rev-Up supply is being cut. The withdrawal timeline is the real countdown.",
   "Trainyard crews remember home lives that do not match each other. They notice if asked.",
-  "An interdiction crash-response team was supposed to be stationed at 75. The station is empty. The cart is not."
+  "The station announcements were recorded by somebody who is still aboard one of these trains."
  ],
  "WITHDRAWAL": {
   "pace": [
@@ -836,5 +836,208 @@
     "failure": "The passenger cars are theirs, and so is everything in them."
    }
   ]
- }
+ },
+ "SUPPLIERS4": [
+  {
+   "name": "Dispensary Gnomes",
+   "level": [
+    22,
+    26
+   ],
+   "does": "small, smiling and armed with clipboards; one shot per mob, signed for",
+   "if_attacked": "they ring a handbell, and every mob in the cavern stops queuing and turns around"
+  },
+  {
+   "name": "Pill Porters",
+   "level": [
+    23,
+    27
+   ],
+   "does": "they wheel the shots in on a luggage trolley and count every one back out",
+   "if_attacked": "the trolley locks, and the porters fight to the last vial"
+  },
+  {
+   "name": "Vending Imps",
+   "level": [
+    21,
+    25
+   ],
+   "does": "they live inside the cavern's vending machines and pay out a shot for a ticket stub",
+   "if_attacked": "the machine they live in fights back"
+  },
+  {
+   "name": "Matron Moths",
+   "level": [
+    24,
+    28
+   ],
+   "does": "huge, soft and patient; they give every shot personally",
+   "if_attacked": "they shed a dust that pushes everything in the cavern a stage further into withdrawal"
+  },
+  {
+   "name": "Candy Stripers",
+   "level": [
+    22,
+    26
+   ],
+   "does": "a cheerful volunteer staff in pink, who will not stop smiling",
+   "if_attacked": "they stop smiling"
+  }
+ ],
+ "HR4": [
+  {
+   "name": "Timekeepers",
+   "what": "grey, many-eyed things in cardigans behind a long counter",
+   "does": "they stamp each crew member's card, and the crew forget the break they just had"
+  },
+  {
+   "name": "Personnel Officers",
+   "what": "tall and faceless, in identical lanyards",
+   "does": "they take every complaint the crew file and feed it, slowly, into a shredder"
+  },
+  {
+   "name": "Rota Wardens",
+   "what": "huge, soft-voiced slugs in reading glasses",
+   "does": "they hand each crew member next week's rota, and the crew believe it"
+  },
+  {
+   "name": "Wellbeing Officers",
+   "what": "smiling, four-armed and endlessly patient",
+   "does": "they ask each of the crew how they are feeling, and the crew stop feeling it"
+  },
+  {
+   "name": "Clock-Watchers",
+   "what": "a choir of brass-faced figures who chime the hours",
+   "does": "the crew hear the chime and remember nothing of their shift"
+  }
+ ],
+ "DEPOT4": {
+  "carts": [
+   8,
+   12
+  ],
+  "repair_crews": [
+   "hobgoblin fitters",
+   "dwarf platelayers",
+   "kobold linesmen",
+   "gremlin welders"
+  ],
+  "security": [
+   "gnoll guards",
+   "bugbear wardens",
+   "orc stewards",
+   "goblin bailiffs"
+  ],
+  "controls": [
+   "a dead man's handle: the cart runs only while one of the security crew is holding it",
+   "a pair of brass grips that have to be held at once, by two of the repair crew",
+   "the foreman's voice. The cart answers to nobody else",
+   "a repair-crew time card, punched in. The clock is in the foreman's office"
+  ],
+  "states": [
+   "Fully crewed, and bored. Nothing has come off the rails yet.",
+   "Half the carts are out on a call, and half the crews with them.",
+   "Empty of crew. The carts are all still here.",
+   "The crews are on strike, picketing the sidings with signs nobody can read.",
+   "Locked down: the security crew are guarding the carts from the repair crew."
+  ]
+ },
+ "MIMIC_MINIONS4": [
+  {
+   "name": "walking mouths",
+   "level": [
+    30,
+    34
+   ],
+   "does": "all teeth and two short legs, and they come up by the dozen"
+  },
+  {
+   "name": "gulp-hounds",
+   "level": [
+    32,
+    36
+   ],
+   "does": "long, low and hungry, with a tongue twice their length"
+  },
+  {
+   "name": "spittle drones",
+   "level": [
+    28,
+    32
+   ],
+   "does": "they fly, and what they spit sets like glue"
+  },
+  {
+   "name": "molar crabs",
+   "level": [
+    31,
+    35
+   ],
+   "does": "a shell made of one enormous tooth"
+  }
+ ],
+ "YARDS4": {
+  "supervisors": [
+   {
+    "name": "the Yardmaster",
+    "what": "a vast, slow toad in a high-visibility vest, who never leaves the substation"
+   },
+   {
+    "name": "the Night Foreman",
+    "what": "a tall shape in a hard hat that is only ever seen from behind"
+   },
+   {
+    "name": "the Duty Manager",
+    "what": "a gnome with a whistle and six assistants who are all also the Duty Manager"
+   },
+   {
+    "name": "the Shed Boss",
+    "what": "an enormous ogre who reads timetables aloud, all day, to nobody"
+   }
+  ],
+  "features": [
+   "a paint shop, where every train gets a fresh coat it does not need",
+   "a wash plant: giant brushes that do not stop for anything in their way",
+   "the scrap lines, rows of derailed cars that still have their passengers' belongings in them",
+   "the sleeper sheds, where trains rest overnight with their lights on",
+   "the coal stage, a mountain of black stone with something living inside it",
+   "the signal works, a forest of semaphore arms that move when nobody is looking",
+   "a canteen for the yard crews, and a queue that never gets shorter",
+   "the fenced pens, where the yard keeps whatever the ghoul stations have too many of",
+   "the wheel lathe, which turns wheels true and anything else in its way",
+   "a carriage graveyard, where the oldest cars on the line go to rust"
+  ]
+ },
+ "SPECIAL_LINES4": {
+  "backward": [
+   "the Return Service",
+   "the Reverse Express",
+   "the Way Back",
+   "Last Orders"
+  ],
+  "backward_how": [
+   "once an hour, from each of the five ghoul stations, stopping nowhere else",
+   "whenever a stairwell station's platform is empty, which is less and less often",
+   "every twenty minutes, full or not, and it does not wait"
+  ],
+  "staff": [
+   "the Staff Shuttle",
+   "the Shift Change",
+   "the Clock-Off Line",
+   "the Late Turn"
+  ],
+  "staff_how": [
+   "it stops everywhere, and the doors only open for a uniform",
+   "crawlers who board it are put off at the next stop, wherever that is",
+   "it runs empty between shifts, and nobody on the crew will say where it goes then"
+  ]
+ },
+ "SIGILS4": [
+  "A control sigil on the stairwell door lets only the {ghoul} through.",
+  "A control sigil across the platform edge keeps the {ghoul} off the trains.",
+  "A control sigil keeps the {ghoul} in the station. It is cracked, and holds for now.",
+  "The control sigil here is switched off. Somebody upstairs is watching to see what happens.",
+  "A control sigil on the concourse keeps everything but the {ghoul} out of the stairwell room.",
+  "Two control sigils, one inside the other, and the {ghoul} pace the ring between them."
+ ]
 }

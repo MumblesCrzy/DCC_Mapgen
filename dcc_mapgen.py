@@ -2890,6 +2890,14 @@ FLOOR4_CFG = {
     "abyss": 436,
     "yard_ring": 10,
     "mimic_level": 80,
+    # What every mob and crew member on the floor is hooked on, and what aboard
+    # call it.
+    "drug": "Rev-Up Amazing Cure-All Vitamin Immunity Shot",
+    "drug_short": "Rev-Up",
+    # The interdiction depot, where the repair carts wait for a derailment; the
+    # books put it at 75 and its carts at five times a train's speed.
+    "depot": 75,
+    "cart_speed": 5,
     # Getting around. The books give the anchors: a stop every 2 to 20 minutes,
     # about three days to ride from 11 to 435, stations a block or two apart up
     # to 72, and 40 or 50 miles apart out past 300. The curves between them are
@@ -2913,7 +2921,9 @@ F4_RULES = [
     "No early descent. Stairwells open six hours before collapse and not before.",
     "Every colored line has a stairwell at stations 12, 24, 36, 48 and 72, and nowhere else. Crawlers spawn past 72, so the game is getting backwards.",
     "A transfer station has a safe room only if its number is prime (11, 13, 17 and so on). Transfers ending in 1 also have a Desperado Club; those ending in 9, a Club Vanquisher.",
-    "Exit-only caverns sit at every fifth station. Mobs disembark there for their Rev-Up dose; a rollercoaster track at the back runs to the trainyard.",
+    "Exit-only caverns sit at every fifth station. Mobs disembark there for their Rev-Up shot from the supplier; a rollercoaster track at the back runs to the trainyard.",
+    "A train can be derailed, and a steam engine with nobody tending it builds pressure until it blows. Either one brings the interdiction crews out of station 75.",
+    "Control sigils are glowing circles that stop one kind of mob from passing. Only a crawler with a knack for finding the way out can see them. The showrunners switch them on and off, not the dungeon, and they break easily.",
     "Mobs get off every five stops. A mob that misses its stop panics; it cannot stay aboard and live. They break into cars 10 and 15, never car 5.",
     "Trains reset to the trainyard (ring 10) after every run. Employees remember 435, then blink, then they are boarding again.",
 ]
@@ -3062,6 +3072,12 @@ class Floor4:
     hubs: List[dict] = field(default_factory=list)
     quests: List[Quest] = field(default_factory=list)      # every station quest
     achievements: List[list] = field(default_factory=list)
+    supplier: dict = field(default_factory=dict)       # who hands out the shots
+    hr: dict = field(default_factory=dict)             # the non-combatants at 435
+    depot: dict = field(default_factory=dict)          # station 75's repair carts
+    mimic_spawn: dict = field(default_factory=dict)    # what the Station Mimic belches up
+    yards: dict = field(default_factory=dict)          # supervisor, and a feature per yard
+    special_lines: dict = field(default_factory=dict)  # the backward line and the staff line
 
 
 class Generator4:
@@ -3298,13 +3314,30 @@ class Generator4:
                                                ghoul_stations, decks)
             quests.append(hub["quest"])
 
+        # The floor's systems: who hands out the shots, who meets the crew at 435,
+        # the repair depot at 75, the mimic's spawn, the yards, the special lines.
+        depot = {"carts": self.rng.randint(*DEPOT4["carts"]),
+                 "repair": self.rng.choice(DEPOT4["repair_crews"]),
+                 "security": self.rng.choice(DEPOT4["security"]),
+                 "controls": self.rng.choice(DEPOT4["controls"]),
+                 "state": self.rng.choice(DEPOT4["states"])}
+        yard_letters = sorted({ln.yard for ln in lines})
+        yards = {"supervisor": dict(self.rng.choice(YARDS4["supervisors"])),
+                 "features": dict(zip(yard_letters, self.rng.sample(YARDS4["features"],
+                                                                    len(yard_letters))))}
+        special = {k: self.rng.choice(SPECIAL_LINES4[k])
+                   for k in ("backward", "backward_how", "staff", "staff_how")}
+
         return Floor4(size=self.size, name=f"The {self.rng.choice(NAMED_PREFIX)} Tangle", days=days,
                       janitor=jan, janitor_level=janitor_level,
                       lines=lines, named=named, mimic_tell=self.rng.choice(MIMIC_TELL),
                       story=story, seed=self.seed, withdrawal=withdrawal,
                       last_day=last_day, stair_notes=stair_notes,
                       ghoul_stations=ghoul_stations, safe_rooms=safe_rooms, hubs=hubs,
-                      quests=quests, achievements=[list(a) for a in ACHIEVEMENTS4])
+                      quests=quests, achievements=[list(a) for a in ACHIEVEMENTS4],
+                      supplier=dict(self.rng.choice(SUPPLIERS4)), hr=dict(self.rng.choice(HR4)),
+                      depot=depot, mimic_spawn=dict(self.rng.choice(MIMIC_MINIONS4)),
+                      yards=yards, special_lines=special)
 
     def _station_quest(self, number, giver, lines, ghoul_stations, decks) -> Quest:
         """A quest given at a station: by a safe room's proprietor, or posted on a
@@ -3358,6 +3391,7 @@ class Generator4:
         feeds = self.rng.sample(gs["feeds"], len(stairs))
         tides = self.rng.sample(gs["tides"], len(stairs))
         openings = self.rng.sample(gs["openings"], len(stairs))
+        sigils = self.rng.sample(SIGILS4, len(stairs))
         merge_at = self.rng.choice(stairs[1:])
         merged = self.rng.choice(gs["merged"])
         stations = []
@@ -3367,6 +3401,7 @@ class Generator4:
                 "ghoul": ghouls[i], "feed": feeds[i],
                 "tide": tides[i].format(early=early, mid=mid, late=late),
                 "opening": openings[i],
+                "sigil": sigils[i].format(ghoul=ghouls[i]["name"]),
                 "merged": merged if num == merge_at else None})
         return stations
 
@@ -3447,6 +3482,85 @@ def _getting_around4(fl: Floor4) -> List[str]:
              f"{c['far_miles']} miles apart. Each line below says how long its crawlers have "
              f"before their train reaches {end}, and how far they are from the stairwells on foot.")
     o.append("")
+    sp = fl.special_lines
+    o.append("Two services run outside the colored lines:")
+    o.append("")
+    o.append(f"- **{sp['backward'][0].upper() + sp['backward'][1:]}** is the only train that "
+             f"runs the other way, from the stairwell stations back toward the yard: "
+             f"{sp['backward_how']}.")
+    o.append(f"- **{sp['staff'][0].upper() + sp['staff'][1:]}** is for the staff only: "
+             f"{sp['staff_how']}.")
+    o.append("")
+    return o
+
+
+def _depot4(fl: Floor4) -> List[str]:
+    """Station 75, where the repair carts wait for something to come off the rails."""
+    c, d = FLOOR4_CFG, fl.depot
+    at, speed = c["depot"], c["cart_speed"]
+    first, end = c["yard_ring"] + 1, c["employee_portal"]
+    return [
+        f"## Station {at}: the Interdiction Depot", "",
+        f"Where the floor's repair carts wait. Every line's tracks run past its sidings, so "
+        f"a cart can reach any of them.", "",
+        f"- **The carts:** {d['carts']} of them, flat-topped, twelve-wheeled, and {speed} "
+        f"times as fast as a train in either direction: from {at} out to {end} in "
+        f"{duration_text(f4_ride_minutes(at, end) / speed)}, or back to the yard in "
+        f"{duration_text(f4_ride_minutes(first, at) / speed)}.",
+        f"- **The crews:** {d['repair']} do the repairs; {d['security']} keep an eye on "
+        f"them, because the company does not trust the {d['repair']}.",
+        f"- **Making one go:** {d['controls']}.",
+        "- **The scoop:** the front of every cart is a scoop that clears the line by sending "
+        "whatever it picks up somewhere else: to a train yard, or into the Abyss. Switching "
+        "between them takes ten seconds.",
+        "- **When they go out:** whenever a train comes off its rails or a boiler blows, "
+        "anywhere on the floor.",
+        f"- **Right now:** {d['state']}", ""]
+
+
+def _tail4(fl: Floor4) -> List[str]:
+    """The last three stations on every line."""
+    c, hr, sp = FLOOR4_CFG, fl.hr, fl.mimic_spawn
+    return [
+        "## The Tail", "",
+        "The last three stations, the same on every line.", "",
+        f"### {c['mimic_station']} — The Station Mimic", "",
+        f"- **What it is:** advertised as a transit hub, and a city boss "
+        f"(L{c['mimic_level']}): a station-sized mouth waiting for a train to pull in. The "
+        f"tell is that {fl.mimic_tell}.",
+        "- **Fighting it:** blunt weapons and spells do nothing. Only cutting works, and it "
+        "does not die until more than half of it has been cut away.",
+        f"- **What it belches up:** {sp['name']} (L{sp['level'][0]}–{sp['level'][1]}): "
+        f"{sp['does']}.", "",
+        f"### {c['employee_portal']} — End of the Line", "",
+        "- **What it is:** the last stop for passengers on every line. The crew get off "
+        f"here and portal home to the yard; the cars go on to {c['abyss']} to be dumped in "
+        "the pit, with anyone still aboard.",
+        f"- **Who meets the crew:** the **{hr['name']}**, {hr['what']}. {hr['does'][0].upper()}"
+        f"{hr['does'][1:]}. Non-combatants: they do not fight.", "",
+        f"### {c['abyss']} — The Abyss", "",
+        "- **What it is:** a bare platform, one steep stair, and an hour's climb to a catwalk "
+        "over the pit. The pit is a mile across and thousands of feet deep, and the wreckage "
+        "of every train that ever reached it burns at the bottom while the janitors pick "
+        "through it.",
+        "- **Flying:** stray too far from the catwalk and the pit pulls you down.",
+        "- **The walls:** lined with portals.", ""]
+
+
+def _yards4(fl: Floor4) -> List[str]:
+    """Station 10, where every train starts and every run resets."""
+    c, y = FLOOR4_CFG, fl.yards
+    sup = y["supervisor"]
+    o = ["## The Train Yards", "",
+         f"Station {c['yard_ring']}: the yards every colored line runs from, lettered A to Q, "
+         f"where the trains reset after every run. A turntable the size of a ball field turns "
+         f"them into their service bays, and the yards' substation is run by {sup['name']}, "
+         f"{sup['what']}. The fenced sections are full of ghouls. A crawler gets here from the "
+         f"Abyss, or on an interdiction cart.", ""]
+    for letter, feature in sorted(y["features"].items()):
+        users = [ln.color for ln in fl.lines if ln.yard == letter]
+        o.append(f"- **Yard {letter}** ({_lines_text(users)}): {feature}.")
+    o.append("")
     return o
 
 
@@ -3484,14 +3598,13 @@ def render4(fl: Floor4) -> str:
     o.append(f"- **Train mob levels:** {c['mob_band'][0]}–{c['mob_band'][1]}, rising with withdrawal stage")
     o.append(f"- **Janitor mob:** {fl.janitor.name} (Level {fl.janitor_level}). {fl.janitor.quirk}")
     o.append(f"  - *{fl.janitor.description}*")
-    o.append("- **The tail (every line):**")
-    o.append(f"  - **{c['mimic_station']}, the Station Mimic:** advertised as a transit hub. "
-             f"It is a city boss (L{c['mimic_level']}), and the tell is that {fl.mimic_tell}.")
-    o.append(f"  - **{c['employee_portal']}, End of the Line:** the last stop for passengers on "
-             f"every line. The crew get off here and portal home to the yard; the cars go on to "
-             f"{c['abyss']} to be dumped in the pit, with anyone still aboard.")
-    o.append(f"  - **{c['abyss']}, the Abyss:** bare platform, one steep stair, an hour's climb "
-             f"to a catwalk over the pit, portals in the walls.")
+    o.append(f"- **The tail (every line):** {c['mimic_station']} is a Station Mimic (city boss, "
+             f"L{c['mimic_level']}), {c['employee_portal']} is the end of the line, and "
+             f"{c['abyss']} is the Abyss. See [The Tail](#the-tail).")
+    o.append(f"- **Station {c['depot']}:** the interdiction depot, {fl.depot['carts']} repair "
+             f"carts. See [Station {c['depot']}](#station-{c['depot']}-the-interdiction-depot).")
+    o.append(f"- **The drug:** the {c['drug']}, \"{c['drug_short']}\" to everyone aboard, "
+             f"handed out by the {fl.supplier['name']} at every exit-only cavern.")
     o.append(f"- **Withdrawal:** three stages on a schedule of each line's own, and a last "
              f"day (day {fl.days}) worse than any of them. See [Withdrawal](#withdrawal).")
     o.append("- **Story notes:**")
@@ -3506,11 +3619,19 @@ def render4(fl: Floor4) -> str:
         o.append(f"- {r}")
     o.append("")
     o.extend(_getting_around4(fl))
+    o.extend(_depot4(fl))
+    sup = fl.supplier
     o.append("## Withdrawal")
     o.append("")
-    o.append("Every mob and crew member on the floor rides on a Rev-Up habit. Miss a dose and "
-             "withdrawal sets in, in three stages, and nobody comes back from it. Each line "
-             "goes through the stages on its own schedule, given under the line.")
+    o.append(f"Every mob and crew member on the floor is hooked on the {c['drug']}, "
+             f"\"{c['drug_short']}\" to everyone aboard. Miss a shot and withdrawal sets in, "
+             f"in three stages, and nobody comes back from it. Each line goes through the "
+             f"stages on its own schedule, given under the line.")
+    o.append("")
+    o.append(f"**The supply:** every fifth station is an exit-only cavern, and at every one "
+             f"of them the **{sup['name']}** (L{sup['level'][0]}–{sup['level'][1]}) hand "
+             f"out the shots: {sup['does']}. One shot per mob, enough to ride the next five "
+             f"stops. If attacked, {sup['if_attacked']}.")
     o.append("")
     o.append("| Stage | What it does | Who dies of it | What the dead come back as |")
     o.append("| --- | --- | --- | --- |")
@@ -3542,12 +3663,15 @@ def render4(fl: Floor4) -> str:
         o.append(f"- **What adds to them:** {gs['feed']}")
         o.append(f"- **Through the countdown:** {gs['tide']}")
         o.append(f"- **When the stairwell opens:** {gs['opening']}")
+        o.append(f"- **Sigil:** {gs['sigil']}")
         if gs["merged"]:
             m = gs["merged"]
             o.append(f"- **If enough of them gather:** they merge into **{m['name']}** "
                      f"({m['tier']}, L{m['level'][0]}–{m['level'][1]}): {m['does']}.")
         o.append("")
     o.extend(_safe_rooms_and_hubs4(fl))
+    o.extend(_tail4(fl))
+    o.extend(_yards4(fl))
     o.append("## Colored Lines")
     o.append("")
     for ln in fl.lines:
@@ -3579,6 +3703,8 @@ def render4(fl: Floor4) -> str:
         o.append("- **Stations of note** (all others are routine platforms):")
         o.append(f"  - **{' / '.join(map(str, c['stairwell_numbers']))}** — stairwells. "
                  f"See [Ghoul Stations](#ghoul-stations).")
+        o.append(f"  - **{c['depot']}** — INTERDICTION DEPOT. See "
+                 f"[Station {c['depot']}](#station-{c['depot']}-the-interdiction-depot).")
         for st in ln.stations:
             if st.kind == "stairwell":
                 continue
@@ -3589,10 +3715,10 @@ def render4(fl: Floor4) -> str:
             has = st.amenities()
             sr = f" ({', '.join(has)})" if has else ""
             o.append(f"  - **{st.number}** — {kind}{extra}{sr}. {st.note}")
-        o.append(f"  - **{c['mimic_station']}** — STATION MIMIC. Not a station. See summary.")
+        o.append(f"  - **{c['mimic_station']}** — STATION MIMIC. Not a station. See [The Tail](#the-tail).")
         o.append(f"  - **{c['employee_portal']}** — END OF THE LINE. Last stop for passengers; "
                  f"the crew portal home from here, and the cars go on to the pit.")
-        o.append(f"  - **{c['abyss']}** — THE ABYSS. See summary.")
+        o.append(f"  - **{c['abyss']}** — THE ABYSS. See [The Tail](#the-tail).")
         o.append("")
     o.append("## Named Trains")
     o.append("")
@@ -3627,7 +3753,7 @@ def render4(fl: Floor4) -> str:
 def render4_svg(fl: Floor4) -> str:
     c = FLOOR4_CFG
     # Ordinal x positions for every station number that appears anywhere, plus fixed ends.
-    nums = {c["yard_ring"], c["mimic_station"], c["employee_portal"], c["abyss"]}
+    nums = {c["yard_ring"], c["depot"], c["mimic_station"], c["employee_portal"], c["abyss"]}
     for ln in fl.lines:
         nums.update(st.number for st in ln.stations)
     for t in fl.named:
@@ -3649,7 +3775,8 @@ def render4_svg(fl: Floor4) -> str:
                        f"train{'s' if len(fl.named) != 1 else ''}  •  "
                        f"janitor: {fl.janitor.name} L{fl.janitor_level}  •  seed {fl.seed}", size=12, fill="#555")]
     # Column labels for the constants
-    for n, lab in ((c["yard_ring"], "Trainyard"), (c["mimic_station"], "MIMIC"),
+    for n, lab in ((c["yard_ring"], "Trainyard"), (c["depot"], f"DEPOT {c['depot']}"),
+                   (c["mimic_station"], "MIMIC"),
                    (c["employee_portal"], "END OF LINE"), (c["abyss"], "ABYSS")):
         o.append(_text(xs[n], TOP - 30, lab, size=11, weight="bold", anchor="middle", fill="#333"))
     # Each ghoul station's name over its column, split over two lines so that
@@ -3661,8 +3788,8 @@ def render4_svg(fl: Floor4) -> str:
             if part:
                 o.append(_text(xs[gs["number"]], TOP - 66 + 11 * k, part, size=9,
                                weight="bold", anchor="middle", fill="#7a2e2e"))
-    # Vertical guide lines for the shared tail
-    for n in (c["mimic_station"], c["employee_portal"], c["abyss"]):
+    # Vertical guide lines for the shared tail, and for the depot every line passes
+    for n in (c["depot"], c["mimic_station"], c["employee_portal"], c["abyss"]):
         o.append(f'<line x1="{xs[n]}" y1="{TOP - 18}" x2="{xs[n]}" y2="{TOP + ROW * (len(fl.lines) - 1) + 30}" '
                  f'stroke="#bbb" stroke-width="1" stroke-dasharray="4,4"/>')
 
@@ -3679,6 +3806,11 @@ def render4_svg(fl: Floor4) -> str:
         o.append(f'<circle cx="{xs[c["mimic_station"]]}" cy="{y}" r="5" fill="#f6f2ea" stroke="#333" stroke-width="2"/>')
         # 435, the end of the line: the last stop anyone gets off at, so it is a
         # station of its own on every line rather than a dot on the way to the pit.
+        # The depot's sidings, unless the line has a station of its own at 75.
+        if not any(st.number == c["depot"] for st in ln.stations):
+            xd = xs[c["depot"]]
+            o.append(f'<rect x="{xd-6}" y="{y-6}" width="12" height="12" fill="#888" '
+                     f'stroke="#111" stroke-width="2"/>')
         x435 = xs[c["employee_portal"]]
         o.append(f'<circle cx="{x435}" cy="{y}" r="9" fill="#fff" stroke="#111" stroke-width="3"/>')
         o.append(f'<circle cx="{x435}" cy="{y}" r="3.5" fill="#111"/>')
@@ -3749,8 +3881,10 @@ def render4_svg(fl: Floor4) -> str:
         (f'<circle cx="{lx+670}" cy="{ly}" r="8" fill="#111" stroke="#c0392b" stroke-width="3"/>', "Abyss 436"),
         (f'<circle cx="{lx+780}" cy="{ly}" r="8" fill="#fff" stroke="#111" stroke-width="3"/>'
          f'<circle cx="{lx+780}" cy="{ly}" r="3" fill="#111"/>', "End of the line 435"),
+        (f'<rect x="{lx+914}" y="{ly-6}" width="12" height="12" fill="#888" stroke="#111" '
+         f'stroke-width="2"/>', "Interdiction depot 75"),
     ]
-    offs = [22, 170, 314, 446, 582, 686, 796]
+    offs = [22, 170, 314, 446, 582, 686, 796, 932]
     for (glyph, label), off in zip(items, offs):
         o.append(glyph)
         o.append(_text(lx + off, ly + 4, label, size=11))
