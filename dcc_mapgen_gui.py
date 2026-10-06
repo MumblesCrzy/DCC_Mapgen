@@ -325,6 +325,12 @@ class CampaignView(ttk.Frame):
         self.standing_cb = ttk.Combobox(row, textvariable=self.standing, width=14,
                                         values=mg.disposition_labels(), state="disabled")
         self.standing_cb.pack(side="left", padx=(4, PAD))
+        ttk.Label(row, text="Crawlers").pack(side="left")
+        self.crawlers = tk.StringVar()
+        # Blank for a group nobody has counted yet: the generator sizes it on floor 3.
+        self.crawlers_sb = ttk.Spinbox(row, textvariable=self.crawlers, from_=1, to=20,
+                                       width=4, state="disabled")
+        self.crawlers_sb.pack(side="left", padx=(4, PAD))
         ttk.Label(row, text="Fate").pack(side="left")
         self.outcome = tk.StringVar()
         # Fatal is the one that kills them; anything else brings a dead group back.
@@ -339,10 +345,11 @@ class CampaignView(ttk.Frame):
         self.report = tk.StringVar()
         self.report_entry = ttk.Entry(report, textvariable=self.report, state="disabled")
         self.report_entry.pack(side="left", fill="x", expand=True, padx=(4, 0))
-        for widget in (self.standing_cb, self.report_entry):
+        for widget in (self.standing_cb, self.crawlers_sb, self.report_entry):
             widget.bind("<Return>", lambda e: self.apply())
-        ttk.Label(edit, text="Standing and fate carry onto the next floor you generate; "
-                             "that floor deals every living group a fresh report.",
+        ttk.Label(edit, text="All of it carries onto the next floor you generate; that "
+                             "floor deals every living group a fresh report. Fewer "
+                             "crawlers drops the most recent to join.",
                   foreground="#666", font=("Segoe UI", 8)).pack(anchor="w", pady=(4, 0))
 
         self.refresh()
@@ -410,8 +417,9 @@ class CampaignView(ttk.Frame):
             if not t.alive:
                 fate = f"died on floor {t.died_on} - {fate}"
             # A dash until floor 3, where the System has everyone pick a race
-            # and a class and there is finally a party to count.
-            party = str(len(t.members)) if t.members else "-"
+            # and a class and there is finally a party to count -- unless the DM
+            # counted them first.
+            party = str(t.crawler_count) if t.crawler_count else "-"
             shown = f"{t.name} (added)" if t.added else t.name
             self.tree.insert("", "end", iid=t.name,
                              values=(shown, t.disposition, party, t.first_seen,
@@ -431,40 +439,59 @@ class CampaignView(ttk.Frame):
         self._selected = team
         if team is None:
             self.sel_lbl.configure(text="Select a team above.", foreground="#666")
-            for var in (self.standing, self.outcome, self.report):
+            for var in (self.standing, self.crawlers, self.outcome, self.report):
                 var.set("")
-            for widget in (self.standing_cb, self.outcome_cb, self.report_entry,
-                           self.apply_btn):
+            for widget in (self.standing_cb, self.crawlers_sb, self.outcome_cb,
+                           self.report_entry, self.apply_btn):
                 widget.configure(state="disabled")
             return
         note = "" if team.alive else f"  (died on floor {team.died_on})"
         added = "  (added by the DM)" if team.added else ""
-        who = "\n" + mg.party_line(team) if team.members else ""
+        who = "\n" + mg.party_line(team) if team.crawler_count else ""
         self.sel_lbl.configure(
             text=f"{team.name} - formed from {team.origin}{note}{added}{who}",
             foreground="#222")
         self.standing.set(team.disposition)
+        self.crawlers.set(str(team.crawler_count or ""))
         self.outcome.set(team.outcome)
         self.report.set(team.status)
         self.standing_cb.configure(state="normal")
+        self.crawlers_sb.configure(state="normal")
         self.outcome_cb.configure(state="readonly")
         self.report_entry.configure(state="normal")
         self.apply_btn.configure(state="normal")
 
+    @staticmethod
+    def _count(text: str):
+        """A crawler count as typed, or None if left blank. Raises ValueError for
+        anything that is not a whole number; the engine refuses fewer than one."""
+        text = text.strip()
+        return int(text) if text else None
+
+    def _bad_count(self):
+        messagebox.showerror("How many crawlers?",
+                             "Crawlers needs to be a whole number, or blank if nobody "
+                             "has counted them.", parent=self)
+
     def apply(self):
-        """Save the selected group's standing, fate and latest report."""
+        """Save the selected group's standing, crawler count, fate and latest report."""
         team = getattr(self, "_selected", None)
         standing = self.standing.get().strip()
         if not team or not standing:
             return
-        was_alive = team.alive
-        team.disposition = standing
+        try:
+            crawlers = self._count(self.crawlers.get())
+        except ValueError:
+            self._bad_count()
+            return
+        was_alive, count_was = team.alive, team.crawler_count
         try:
             mg.set_status(self.app.roster, team.name, status=self.report.get(),
-                          outcome=self.outcome.get() or team.outcome)
+                          outcome=self.outcome.get() or team.outcome, crawlers=crawlers)
         except mg.MapgenError as e:
             messagebox.showerror("Could not change that group", str(e), parent=self)
             return
+        team.disposition = standing
         if not self._save():
             return
         self.refresh()
@@ -477,6 +504,9 @@ class CampaignView(ttk.Frame):
             known = standing in mg.disposition_labels()
             msg = (f"{team.name} now stands {standing} with the party"
                    + ("" if known else " (no reaction text for that one)"))
+        n = team.crawler_count
+        if n != count_was:
+            msg += f"; {n} crawler{'' if n == 1 else 's'}"
         self.app._set_status(msg)
 
     def _save(self) -> bool:
@@ -513,11 +543,14 @@ class CampaignView(ttk.Frame):
         body = ttk.Frame(dlg, padding=PAD * 2)
         body.pack(fill="both", expand=True)
         fields = {"name": tk.StringVar(), "origin": tk.StringVar(),
+                  "crawlers": tk.StringVar(),
                   "standing": tk.StringVar(value="wary"),
                   "floor": tk.StringVar(value=str(self._current_floor())),
                   "status": tk.StringVar(), "outcome": tk.StringVar(value="steady")}
         rows = (("Name", ttk.Entry(body, textvariable=fields["name"], width=36)),
                 ("Formed from", ttk.Entry(body, textvariable=fields["origin"], width=36)),
+                ("Crawlers", ttk.Spinbox(body, from_=1, to=20, width=6,
+                                         textvariable=fields["crawlers"])),
                 ("Standing", ttk.Combobox(body, textvariable=fields["standing"], width=34,
                                           values=mg.disposition_labels())),
                 ("Met on floor", ttk.Spinbox(body, from_=1, to=18, width=6,
@@ -529,7 +562,10 @@ class CampaignView(ttk.Frame):
             ttk.Label(body, text=label).grid(row=r, column=0, sticky="w", pady=2)
             widget.grid(row=r, column=1, sticky="w", padx=(PAD, 0), pady=2)
         ttk.Label(body, text="Formed from reads as \"formed from a hen party on a zeppelin "
-                             "tour\". Leave it blank if nobody knows.",
+                             "tour\". Leave it blank if nobody knows. Leave Crawlers "
+                             "blank and the generator sizes the group, as it does any "
+                             "other; met on floor 3 or deeper, a count is dealt races "
+                             "and classes straight away.",
                   foreground="#666", font=("Segoe UI", 8), wraplength=360,
                   justify="left").grid(row=len(rows), column=0, columnspan=2,
                                        sticky="w", pady=(6, 0))
@@ -558,11 +594,17 @@ class CampaignView(ttk.Frame):
                                  parent=self)
             return False
         try:
+            crawlers = self._count(values.get("crawlers", ""))
+        except ValueError:
+            self._bad_count()
+            return False
+        try:
             team = mg.add_team(self.app.roster, values.get("name", ""),
                                origin=values.get("origin", ""),
                                standing=values.get("standing", "wary"), floor=floor,
                                status=values.get("status", ""),
-                               outcome=values.get("outcome") or "steady")
+                               outcome=values.get("outcome") or "steady",
+                               crawlers=crawlers)
         except mg.MapgenError as e:
             messagebox.showerror("Could not add that group", str(e), parent=self)
             return False
@@ -1286,28 +1328,42 @@ def selftest() -> int:
     errors = []
     messagebox.showerror = lambda title, msg, **kw: errors.append(msg)
     added = cv.add_group({"name": "The Sky Pirates", "origin": "a hen party on a zeppelin tour",
-                          "standing": "friendly", "floor": "3",
+                          "crawlers": "4", "standing": "friendly", "floor": "3",
                           "status": "arguing over a map", "outcome": "thriving"})
     app.update()
     check(added and "The Sky Pirates" in cv.tree.get_children(),
           "a group met at the table can be added")
     check(cv.tree.set("The Sky Pirates", "name") == "The Sky Pirates (added)",
           "an added group is marked as added")
+    check(cv.tree.set("The Sky Pirates", "party") == "4",
+          "an added group shows the crawler count it was given")
     check(not cv.add_group({"name": "the sky pirates"}) and errors,
           "a second group with the same name is refused")
+    errors.clear()
+    check(not cv.add_group({"name": "The Ghosts", "crawlers": "lots"}) and errors,
+          "a crawler count that is not a number is refused")
     cv.add_dialog()
     app.update()
     dialogs = [w for w in cv.winfo_children() if isinstance(w, tk.Toplevel)]
     check(len(dialogs) == 1 and len([w for w in dialogs[0].winfo_children()[0].winfo_children()
-                                     if isinstance(w, (ttk.Entry, ttk.Combobox))]) >= 5,
+                                     if isinstance(w, (ttk.Entry, ttk.Combobox))]) >= 7,
           "the Add group dialog opens with its fields")
     for d in dialogs:
         d.grab_release()
         d.destroy()
     cv.tree.selection_set("The Sky Pirates")
     app.update()
-    check(cv.report.get() == "arguing over a map" and cv.outcome.get() == "thriving",
-          "selecting a group fills its report and fate")
+    check(cv.report.get() == "arguing over a map" and cv.outcome.get() == "thriving"
+          and cv.crawlers.get() == "4",
+          "selecting a group fills its report, fate and crawler count")
+    cv.crawlers.set("2")
+    cv.apply()
+    app.update()
+    check(cv.tree.set("The Sky Pirates", "party") == "2"
+          and len(mg.find_team(app.roster, "Sky Pirates").members) == 2,
+          "a group's crawler count can be edited")
+    cv.tree.selection_set("The Sky Pirates")
+    app.update()
     cv.outcome.set("fatal")
     cv.report.set("shot down over the market")
     cv.apply()

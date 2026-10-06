@@ -542,12 +542,142 @@ class CampaignEditTest(unittest.TestCase):
     def test_added_survives_a_save_and_load_and_old_rosters_still_load(self):
         roster = self._campaign()
         mg.add_team(roster, "The Sky Pirates", floor=3)
+        mg.add_team(roster, "The Early Birds", floor=2, crawlers=5)
         back = mg.CampaignRoster.from_dict(roster.to_dict())
         self.assertTrue(mg.find_team(back, "Sky Pirates").added)
+        self.assertEqual(mg.find_team(back, "Early Birds").headcount, 5)
         old = roster.to_dict()
         for t in old["teams"]:
             t.pop("added", None)
-        self.assertFalse(any(t.added for t in mg.CampaignRoster.from_dict(old).teams))
+            t.pop("headcount", None)
+        loaded = mg.CampaignRoster.from_dict(old).teams
+        self.assertFalse(any(t.added for t in loaded))
+        self.assertTrue(all(t.headcount is None for t in loaded))
+
+    # -- how many crawlers ----------------------------------------------------
+
+    def test_a_count_before_floor_3_is_only_a_number(self):
+        roster = self._campaign(floors=(1, 2))
+        team = mg.add_team(roster, "The Early Birds", floor=2, crawlers=5)
+        self.assertEqual((team.members, team.headcount, team.crawler_count), ([], 5, 5),
+                         "nobody has a race or class before floor 3")
+        self.assertEqual(team.history[-1]["crawlers"], 5)
+        self.assertEqual(mg.party_line(team), "Five crawlers.")
+        generated = roster.active()[0]
+        mg.set_status(roster, generated.name, crawlers=1)
+        self.assertEqual((generated.members, generated.crawler_count), ([], 1))
+        self.assertEqual(mg.party_line(generated), "Down to one crawler.")
+        mg.set_status(roster, generated.name, outcome="fatal")
+        self.assertEqual(mg.party_line(generated), "There was one of them.")
+        mg.set_status(roster, team.name, outcome="fatal")
+        self.assertEqual(mg.party_line(team), "There were five of them.")
+
+    def test_a_counted_group_shows_its_number_on_floors_1_and_2(self):
+        roster = self._campaign(floors=(1,))
+        mg.add_team(roster, "The Early Birds", floor=1, crawlers=5)
+        lines = mg.generate(2, "small", 4242, images=False, roster=roster).markdown.splitlines()
+        at = next(i for i, ln in enumerate(lines) if "The Early Birds" in ln)
+        self.assertRegex(lines[at + 1], r"^  - (\w+ crawlers|Down to one crawler|"
+                                        r"There (was|were) \w+ of them)\.$")
+        uncounted = [i for i, ln in enumerate(lines)
+                     if ln.startswith("- **") and "formed from" in ln and i != at]
+        self.assertTrue(uncounted)
+        for i in uncounted:
+            self.assertFalse(lines[i + 1].startswith("  - "),
+                             "a group nobody counted was given a number before floor 3")
+
+    def test_the_report_moves_the_number_the_way_it_moves_a_party(self):
+        # floor, the DM's number, the report's change -> number after, crawlers dealt
+        cases = [(2, 5, (0, None), 5, 0), (2, 5, (-1, None), 4, 0), (2, 5, (-9, None), 1, 0),
+                 (2, 5, (2, None), 7, 0), (1, 7, (3, None), mg.PARTY_MAX, 0),
+                 (2, 10, (1, None), 10, 0),
+                 (3, 5, (0, None), None, 5), (3, 5, (-1, None), None, 4)]
+        for floor, start, change, headcount, members in cases:
+            with self.subTest(floor=floor, start=start, change=change):
+                team = mg.CrawlerTeam(name="Team Probe", origin="a probe", headcount=start)
+                mg._deal_party(random.Random(1), team, floor, change)
+                self.assertEqual(len(team.members), members)
+                self.assertEqual(team.headcount, headcount)
+
+    def test_floor_3_deals_the_number_the_dm_gave(self):
+        """Seven, because the roll tops out at six: a group dealt seven was dealt
+        the DM's number, not a roll that happened to agree with it."""
+        self.assertLess(max(mg.PARTY_SIZES), 7)
+        sevens = 0
+        for seed in range(1, 13):
+            roster = self._campaign(floors=(1, 2), seed=seed)
+            mg.add_team(roster, "The Early Birds", floor=2, crawlers=7)
+            roster = mg.generate(3, "small", seed, images=False, roster=roster).roster
+            team = mg.find_team(roster, "Early Birds")
+            self.assertIsNone(team.headcount, f"seed {seed}: the number outlived the party")
+            self.assertEqual(team.history[-1]["crawlers"], len(team.members))
+            sevens += len(team.members) == 7
+        self.assertGreaterEqual(sevens, 4, "floor 3 ignored the DM's count")
+
+    def test_a_count_from_floor_3_is_dealt_at_once(self):
+        roster = self._campaign()
+        upgradable = 0
+        for i in range(20):
+            for floor in (4, 7):
+                team = mg.add_team(roster, f"Probe {floor}-{i}", floor=floor, crawlers=5)
+                self.assertEqual(len(team.members), 5)
+                self.assertIsNone(team.headcount)
+                races = [m["race"] for m in team.members]
+                classes = [m["class"] for m in team.members]
+                self.assertEqual(len(set(races)), 5, races)
+                self.assertEqual(len(set(classes)), 5, classes)
+                held = [c for c in classes if c in mg.CRAWLER_CLASS_UPGRADE]
+                if floor == 4:
+                    upgradable += bool(held)
+                else:
+                    self.assertEqual(held, [], "met past floor 6 without the upgrade")
+        self.assertTrue(upgradable, "nothing upgradable was dealt, so the floor 7 check "
+                                    "proves nothing")
+        uncounted = mg.add_team(roster, "The Unknowns", floor=4)
+        self.assertEqual((uncounted.members, uncounted.crawler_count), ([], None),
+                         "a group nobody counted is left for the generator to size")
+
+    def test_editing_the_count_deals_or_drops_crawlers(self):
+        roster = self._campaign()
+        team = next(t for t in roster.active() if t.members)
+        before = [dict(m) for m in team.members]
+        entries = len(team.history)
+        mg.set_status(roster, team.name, crawlers=len(before) + 2)
+        self.assertEqual(team.members[:len(before)], before, "the crawlers already there")
+        self.assertEqual(len({m["race"] for m in team.members}), len(before) + 2)
+        self.assertEqual(len({m["class"] for m in team.members}), len(before) + 2)
+        self.assertEqual(team.history[-1]["crawlers"], len(before) + 2)
+        mg.set_status(roster, team.name, crawlers=1)
+        self.assertEqual(team.members, before[:1], "the most recent to join leave first")
+        self.assertEqual(team.history[-1]["crawlers"], 1)
+        self.assertEqual(len(team.history), entries, "a second entry for the same floor")
+
+    def test_crawlers_the_dm_adds_never_double_up(self):
+        """At volume, and grown well past a party: two newcomers of 46 races
+        colliding with each other or the group is rare at +2 and certain here."""
+        grown = 0
+        for seed in range(1, 9):
+            roster = self._campaign(seed=seed)
+            for team in [t for t in roster.teams if t.members]:
+                mg.set_status(roster, team.name, crawlers=12)
+                grown += 1
+                races = [m["race"] for m in team.members]
+                classes = [m["class"] for m in team.members]
+                self.assertEqual(len(set(races)), 12, f"{team.name}: {races}")
+                self.assertEqual(len(set(classes)), 12, f"{team.name}: {classes}")
+        self.assertGreaterEqual(grown, 20)
+
+    def test_a_bad_count_is_refused_and_changes_nothing(self):
+        roster = self._campaign()
+        team = roster.active()[0]
+        status, members = team.status, [dict(m) for m in team.members]
+        for bad in (0, -2, "3", 2.5):
+            with self.assertRaises(mg.MapgenError, msg=repr(bad)):
+                mg.add_team(roster, f"The Bad Count {bad}", crawlers=bad)
+            with self.assertRaises(mg.MapgenError, msg=repr(bad)):
+                mg.set_status(roster, team.name, status="rewritten", crawlers=bad)
+        self.assertEqual((team.status, team.members), (status, members))
+        self.assertFalse([t for t in roster.teams if t.name.startswith("The Bad Count")])
 
 
 class CrawlerPartyTest(unittest.TestCase):

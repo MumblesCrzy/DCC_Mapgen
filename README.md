@@ -321,7 +321,8 @@ same `floorN_size_seedS.md` plus map files that `--save` produces on the command
   tier or type if you like, and open it. See [Loot boxes](#loot-boxes).
 - The **Campaign** tab carries crawler teams between floors. It is where you change
   where a team stands with the party, add a group met at the table, and rewrite a
-  group's latest report or fate — alive or dead. See [Campaigns](#campaigns).
+  group's crawler count, latest report or fate — alive or dead. See
+  [Campaigns](#campaigns).
 
 The inline preview uses `resvg-py` (`pip install -r requirements.txt`). Without it the app
 still generates and saves everything — maps just save as SVG, and **Open in browser**
@@ -447,19 +448,35 @@ floor generated afterwards carries it. The table lists everyone met so far, the 
 greyed out with the floor that killed them, and standing is editable there.
 
 Not every group the party meets comes out of the generator. **Add group...** adds one
-met at the table — a name, who they were before the Collapse, where they stand with
-the party, the floor they were met on, and their latest report. From the next floor
-generated on, an added group is carried like any other: dealt a fresh report each
-floor, picking races and classes on Floor 3, able to thrive or die. What the
-generator never does is rename it or re-deal its standing, which it does to every
-group it has just met itself. Added groups are marked "(added)" in the table.
+met at the table — a name, who they were before the Collapse, how many crawlers are
+in it, where they stand with the party, the floor they were met on, and their latest
+report. From the next floor generated on, an added group is carried like any other:
+dealt a fresh report each floor, picking races and classes on Floor 3, able to
+thrive or die. What the generator never does is rename it or re-deal its standing,
+which it does to every group it has just met itself. Added groups are marked
+"(added)" in the table.
 
-Any group's **latest report** and **fate** — steady, thriving, costly or fatal — can be
-rewritten from the same panel as its standing. Fatal kills the group on the floor it
-was last seen, and it stops carrying; any other fate brings a dead group back, which
-is how you undo a mistake or run a resurrection. The edit corrects that floor's entry
-in the group's history rather than adding a second one, and marks it as yours.
-Either way, the next floor generated deals every living group a fresh report.
+Any group's **crawler count**, **latest report** and **fate** — steady, thriving,
+costly or fatal — can be rewritten from the same panel as its standing. Fatal kills
+the group on the floor it was last seen, and it stops carrying; any other fate brings
+a dead group back, which is how you undo a mistake or run a resurrection. The edit
+corrects that floor's entry in the group's history rather than adding a second one,
+and marks it as yours. Either way, the next floor generated deals every living group
+a fresh report.
+
+The crawler count works differently either side of Floor 3:
+
+- **Floors 1–2.** Nobody has a race or class yet, so the count is only a number.
+  The floor prints it under the group ("Five crawlers."), each report moves it the
+  way it would move a party — a costly floor costs one — and Floor 3 deals exactly
+  that many crawlers instead of rolling the group's size. A group the generator met
+  has no number at all until Floor 3, unless you give it one.
+- **Floor 3 and deeper.** The count is the crawlers. Raising it deals newcomers who
+  share no race or class with anyone already there, as a merge does on a generated
+  floor; lowering it drops the most recent to join first. A group added on Floor 3
+  or deeper is dealt its races and classes as soon as you add it — with the level 6
+  upgrades already taken past Floor 6 — and one added with the count left blank is
+  sized by the generator on the next floor, like any other.
 
 ![the Campaign tab, five floors into a run](sample/gui_campaign.png)
 

@@ -437,6 +437,9 @@ class CrawlerTeam:
     # Who is actually in the group: one {"race", "class"} per crawler, empty until
     # the floor 3 selection. Race never changes after that; the class can upgrade.
     members: List[dict] = field(default_factory=list)
+    # How many crawlers a group has before it has any members to count -- set only
+    # by the DM, on floors 1-2. Floor 3 deals exactly this many, and clears it.
+    headcount: Optional[int] = None
     # -- this floor's report, rerolled each floor --
     status: str = ""
     outcome: str = "steady"        # steady/thriving/costly/fatal
@@ -454,6 +457,12 @@ class CrawlerTeam:
     @property
     def alive(self) -> bool:
         return self.died_on is None
+
+    @property
+    def crawler_count(self) -> Optional[int]:
+        """How many crawlers are in the group, or None if nobody has said: a group
+        the generator met on floor 1 or 2 has no number until floor 3 deals one."""
+        return len(self.members) if self.members else self.headcount
 
     @property
     def reaction(self) -> str:
@@ -498,13 +507,14 @@ class CampaignRoster:
         return cls(teams=[_team_from_dict(t) for t in raw.get("teams", [])])
 
 
-# Still 1 with `members` and `added` added: a roster written before parties existed loads
-# fine (the field defaults to empty and fills on the next floor 3+), and an older
-# build reading a newer file drops the key it does not know. Bumping this would
-# reject both, for no incompatibility.
+# Still 1 with `members`, `headcount` and `added` added: a roster written before
+# parties existed loads fine (the field defaults to empty and fills on the next
+# floor 3+), and an older build reading a newer file drops the key it does not
+# know. Bumping this would reject both, for no incompatibility.
 ROSTER_VERSION = 1
-_TEAM_FIELDS = ("name", "origin", "surname", "disposition", "members", "status",
-                "outcome", "day", "floor", "first_seen", "died_on", "history", "added")
+_TEAM_FIELDS = ("name", "origin", "surname", "disposition", "members", "headcount",
+                "status", "outcome", "day", "floor", "first_seen", "died_on", "history",
+                "added")
 
 
 def _team_to_dict(t: CrawlerTeam) -> dict:
@@ -1629,7 +1639,7 @@ def crawler_section(fl) -> List[str]:
         carried = "" if ct.first_seen == ct.floor else f" — met on floor {ct.first_seen}"
         o.append(f"- **{lead}** (*{ct.disposition}*{carried}) — formed from "
                  f"{ct.origin}; {ct.status}.")
-        if ct.members:
+        if ct.crawler_count:
             o.append(f"  - {party_line(ct)}")
     o.append("")
     # The reactions are listed once rather than per team: with more teams than
@@ -5185,12 +5195,21 @@ def _deal_party(rng, team: CrawlerTeam, floor: int,
     report adds or takes away crawlers, and anyone owed a class upgrade takes it.
     Upgrades come last so that crawlers who joined a merged roster this floor are
     promoted alongside the ones who were already there."""
-    if floor < CLASS_FLOOR:
-        return                               # nobody has chosen yet on floors 1-2
     delta, effect = change
+    if floor < CLASS_FLOOR:
+        # Nobody has chosen yet on floors 1-2, so a group only has a number if the
+        # DM gave it one -- and then the report moves the number the way it would
+        # move a party, or "lost one of their own" would leave the count where it was.
+        if team.headcount:
+            team.headcount = max(1, team.headcount
+                                 + min(delta, max(0, PARTY_MAX - team.headcount)))
+        return
     if not team.members:
-        n = rng.choices(PARTY_SIZES, weights=PARTY_SIZE_WEIGHTS)[0]
+        # A group the DM sized on floor 1 or 2 is dealt that many; anyone else gets
+        # the usual roll.
+        n = team.headcount or rng.choices(PARTY_SIZES, weights=PARTY_SIZE_WEIGHTS)[0]
         team.members = _new_members(rng, n, [])
+        team.headcount = None
     if delta > 0:
         team.members += _new_members(rng, min(delta, PARTY_MAX - len(team.members)),
                                      team.members)
@@ -5221,7 +5240,16 @@ def _article(word: str) -> str:
 
 
 def party_line(team: CrawlerTeam) -> str:
-    """One line naming what the group is made of, for the Other Crawlers section."""
+    """One line naming what the group is made of, for the Other Crawlers section.
+
+    Before floor 3 nobody has a race or a class, so a group the DM gave a number
+    to is only that number."""
+    if not team.members:
+        n = team.headcount or 0
+        word = _COUNT_WORD.get(n, str(n))
+        if not team.alive:
+            return "There was one of them." if n == 1 else f"There were {word} of them."
+        return "Down to one crawler." if n == 1 else f"{word.capitalize()} crawlers."
     who = ", ".join(f"{_article(m['race'])} {m['race']} {m['class']}"
                     for m in team.members)
     n = len(team.members)
@@ -5325,8 +5353,8 @@ def build_crawler_teams(fl, size: str, seed: int, floor: int,
             team.died_on = floor
         entry = {"floor": floor, "day": team.day,
                  "outcome": team.outcome, "status": team.status}
-        if team.members:
-            entry["crawlers"] = len(team.members)
+        if team.crawler_count:
+            entry["crawlers"] = team.crawler_count
         team.history.append(entry)
 
     return roster
@@ -5363,16 +5391,58 @@ def team_outcomes() -> List[str]:
     return list(TEAM_STATUS)
 
 
+def _check_outcome(outcome: str) -> None:
+    if outcome not in TEAM_STATUS:
+        raise MapgenError(f"a team's outcome is one of {', '.join(team_outcomes())} "
+                          f"(got {outcome!r})")
+
+
+def _check_crawlers(crawlers: Optional[int]) -> None:
+    if crawlers is not None and (not isinstance(crawlers, int) or crawlers < 1):
+        raise MapgenError(f"a group has at least one crawler (got {crawlers!r}); "
+                          "one with nobody left is dead, which is its fate")
+
+
+def _resize_party(team: CrawlerTeam, crawlers: int) -> None:
+    """Make a group the size the DM says.
+
+    Before floor 3 that is only a number, kept until floor 3 deals that many
+    crawlers. From floor 3 the group has chosen, so the count is its members:
+    raising it deals newcomers who share no race or class with anyone already
+    there, as a merge on a generated floor does; lowering it removes the most
+    recent to join. A group past floor 6 arrives with its upgrades taken."""
+    if not team.members and team.floor < CLASS_FLOOR:
+        team.headcount = crawlers
+        return
+    if crawlers > len(team.members):
+        # Seeded from the group and its size, so the same edit deals the same
+        # crawlers, and the floor's own stream is never touched.
+        rng = random.Random(f"joined|{team.name}|{team.floor}|{len(team.members)}")
+        team.members += _new_members(rng, crawlers - len(team.members), team.members)
+    else:
+        del team.members[crawlers:]
+    if team.floor >= CLASS_UPGRADE_FLOOR:
+        for m in team.members:
+            m["class"] = upgraded_class(m["class"])
+    team.headcount = None
+
+
 def add_team(roster: CampaignRoster, name: str, *, origin: str = "",
              standing: str = "wary", floor: int = 1, status: str = "",
-             outcome: str = "steady") -> CrawlerTeam:
+             outcome: str = "steady", crawlers: Optional[int] = None) -> CrawlerTeam:
     """Add a team the party met at the table rather than one the generator dealt.
 
     From the next floor generated on, it is carried like any other team: it is
     dealt a fresh report, picks races and classes on floor 3, can thrive or die.
     What the generator never does is rename it or re-deal its standing, both of
-    which it does to a team it has just met itself. Raises MapgenError for an
-    empty or duplicate name, or an outcome that is not one of team_outcomes()."""
+    which it does to a team it has just met itself.
+
+    `crawlers` is how many are in it. Met on floor 3 or deeper, they have already
+    chosen, so that many are dealt races and classes at once; met earlier, the
+    number is kept and floor 3 deals that many. Left as None, the generator sizes
+    the group when it deals the party, as it does any other. Raises MapgenError
+    for an empty or duplicate name, an outcome that is not one of team_outcomes(),
+    or fewer than one crawler."""
     clean = name.strip()
     if not clean:
         raise MapgenError("a team needs a name")
@@ -5381,9 +5451,8 @@ def add_team(roster: CampaignRoster, name: str, *, origin: str = "",
     taken = [t.name for t in roster.teams if t.name.lower() == clean.lower()]
     if taken:
         raise MapgenError(f"there is already a team called {taken[0]!r} on the roster")
-    if outcome not in TEAM_STATUS:
-        raise MapgenError(f"a team's outcome is one of {', '.join(team_outcomes())} "
-                          f"(got {outcome!r})")
+    _check_outcome(outcome)
+    _check_crawlers(crawlers)
     if floor < 1:
         raise MapgenError(f"a team is met on floor 1 or deeper (got {floor})")
     team = CrawlerTeam(
@@ -5393,26 +5462,34 @@ def add_team(roster: CampaignRoster, name: str, *, origin: str = "",
         surname=clean, disposition=standing.strip() or "wary",
         status=status.strip(), outcome=outcome, floor=floor, first_seen=floor,
         died_on=floor if outcome == "fatal" else None, added=True)
-    team.history.append({"floor": floor, "day": None, "outcome": outcome,
-                         "status": team.status, "by_dm": True})
+    if crawlers is not None:
+        _resize_party(team, crawlers)
+    entry = {"floor": floor, "day": None, "outcome": outcome,
+             "status": team.status, "by_dm": True}
+    if team.crawler_count:
+        entry["crawlers"] = team.crawler_count
+    team.history.append(entry)
     roster.teams.append(team)
     return team
 
 
 def set_status(roster: CampaignRoster, name: str, *, status: Optional[str] = None,
-               outcome: Optional[str] = None) -> CrawlerTeam:
-    """Rewrite a team's latest report, its fate, or both.
+               outcome: Optional[str] = None,
+               crawlers: Optional[int] = None) -> CrawlerTeam:
+    """Rewrite a team's latest report, its fate, how many crawlers it has, or any
+    of them.
 
     A fatal outcome kills the team on the floor it was last seen, and it stops
     carrying to later floors; any other outcome brings a dead team back, which
-    is how a DM undoes a mistake (or runs a resurrection). The latest entry in
-    the team's history is corrected to match rather than a second one added for
-    the same floor, and is marked as the DM's."""
+    is how a DM undoes a mistake (or runs a resurrection). A new count is
+    handled as add_team describes. The latest entry in the team's history is
+    corrected to match rather than a second one added for the same floor, and is
+    marked as the DM's. Nothing changes if any of the three is refused."""
     team = find_team(roster, name)
     if outcome is not None:
-        if outcome not in TEAM_STATUS:
-            raise MapgenError(f"a team's outcome is one of {', '.join(team_outcomes())} "
-                              f"(got {outcome!r})")
+        _check_outcome(outcome)
+    _check_crawlers(crawlers)
+    if outcome is not None:
         team.outcome = outcome
         if outcome == "fatal":
             team.died_on = team.died_on or team.floor
@@ -5420,11 +5497,15 @@ def set_status(roster: CampaignRoster, name: str, *, status: Optional[str] = Non
             team.died_on = None
     if status is not None:
         team.status = status.strip()
+    if crawlers is not None and crawlers != team.crawler_count:
+        _resize_party(team, crawlers)
+    fix = {"outcome": team.outcome, "status": team.status, "by_dm": True}
+    if team.crawler_count:
+        fix["crawlers"] = team.crawler_count
     if team.history and team.history[-1].get("floor") == team.floor:
-        team.history[-1].update(outcome=team.outcome, status=team.status, by_dm=True)
+        team.history[-1].update(fix)
     else:
-        team.history.append({"floor": team.floor, "day": team.day, "outcome": team.outcome,
-                             "status": team.status, "by_dm": True})
+        team.history.append({"floor": team.floor, "day": team.day, **fix})
     return team
 
 
