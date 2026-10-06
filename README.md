@@ -315,6 +315,10 @@ same `floorN_size_seedS.md` plus map files that `--save` produces on the command
   scroll, ctrl+scroll to zoom.
 - The seed box is filled in with the seed that was used, so a map you like can be
   re-rolled or tweaked without hunting for it.
+- On floors 1–2, the **stairwell chance** and **borough boss rate** sliders run 0–100%,
+  in whole percents: a click on the track or an arrow key moves one percent. They are
+  `--stair-chance` and `--borough-boss-rate`, which take the same thing as a fraction
+  (50% is `0.5`).
 - **File → Re-roll rooms from a saved floor** is `--rooms-for` in the GUI: point it at a
   floor 1–2 Markdown file this app wrote and re-roll one neighborhood's rooms.
 - The **Loot Boxes** tab lists every box the current floor names; pick one, change its

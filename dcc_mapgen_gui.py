@@ -946,12 +946,13 @@ class App(tk.Tk):
         self.boss_stairs = tk.BooleanVar(value=True)
         ttk.Checkbutton(f, text="Stairwells in borough/city boss chambers",
                         variable=self.boss_stairs).pack(anchor="w")
+        # Both held as percentages, 0-100; _kwargs hands generate() the fraction.
         ttk.Label(f, text="Neighborhood stairwell chance").pack(anchor="w", pady=(6, 0))
-        self.stair_chance = tk.DoubleVar(value=1.0)
-        self._slider(f, self.stair_chance)
+        self.stair_chance = tk.DoubleVar(value=100)
+        self.stair_scale = self._slider(f, self.stair_chance)
         ttk.Label(f, text="Borough boss rate").pack(anchor="w", pady=(6, 0))
-        self.borough_rate = tk.DoubleVar(value=1.0)
-        self._slider(f, self.borough_rate)
+        self.borough_rate = tk.DoubleVar(value=100)
+        self.borough_scale = self._slider(f, self.borough_rate)
 
         f = self._opt_frame("region", "Folklore region")
         self.region = tk.StringVar(value="(random)")
@@ -997,13 +998,28 @@ class App(tk.Tk):
         return f
 
     def _slider(self, parent, var):
+        """A 0-100% slider in whole percents.
+
+        The range is percent rather than the 0-1 the generator takes because Tk
+        steps a scale by 1 when its track is clicked or an arrow key pressed: on a
+        0-1 scale that is the whole range, so only dragging could reach anything
+        between none and all. Here a step is one percent."""
         row = ttk.Frame(parent)
         row.pack(fill="x", pady=(2, 0))
-        lbl = ttk.Label(row, text=f"{var.get():.2f}", width=5, anchor="e")
-        ttk.Scale(row, from_=0.0, to=1.0, variable=var, orient="horizontal",
-                  command=lambda v: lbl.configure(text=f"{float(v):.2f}")).pack(
-                      side="left", fill="x", expand=True)
+        lbl = ttk.Label(row, text=f"{round(var.get())}%", width=5, anchor="e")
+
+        def moved(value):
+            # Dragging lands on fractions of a percent; snap so the label and
+            # the floor generated agree.
+            pct = round(float(value))
+            var.set(pct)
+            lbl.configure(text=f"{pct}%")
+
+        scale = ttk.Scale(row, from_=0, to=100, variable=var, orient="horizontal",
+                          command=moved)
+        scale.pack(side="left", fill="x", expand=True)
         lbl.pack(side="left", padx=(4, 0))
+        return scale
 
     def _floor_num(self):
         # The combobox is readonly and filled from FLOOR_LABELS, so a miss should be
@@ -1051,8 +1067,8 @@ class App(tk.Tk):
             kw["days"] = as_int(self.days, "Countdown days")
         if "stairs" in opts:
             kw.update(boss_stairs=self.boss_stairs.get(),
-                      stair_chance=round(self.stair_chance.get(), 3),
-                      borough_boss_rate=round(self.borough_rate.get(), 3))
+                      stair_chance=round(self.stair_chance.get()) / 100,
+                      borough_boss_rate=round(self.borough_rate.get()) / 100)
         if "region" in opts and self.region.get() != "(random)":
             kw["region"] = self.region.get()
         if "floor9" in opts:
@@ -1295,6 +1311,21 @@ def selftest() -> int:
     check(len(res.markdown) > 5000, f"markdown written ({len(res.markdown)} chars)")
     check(len(app.text.get("1.0", "end")) > 5000, "markdown reached the Text tab")
     check(app.seed.get() == "4242", "seed box shows the seed used")
+
+    # A click on a slider's track, or an arrow key, is what Tk steps by 1. On the
+    # old 0-1 sliders that was the whole range: none or all, nothing between.
+    check(app._kwargs()["stair_chance"] == 1.0, "stairwell chance starts at 100%")
+    app.tk.call("ttk::scale::Increment", str(app.stair_scale), -1)
+    app.update()
+    stair = app._kwargs()["stair_chance"]
+    check(stair == 0.99, f"one click on the stairwell slider is one percent (got {stair})")
+    app.borough_scale.set(37.4)              # where a drag can let go
+    app.update()
+    rate = app._kwargs()["borough_boss_rate"]
+    check(rate == 0.37 and app.borough_rate.get() == 37,
+          f"a drag settles on a whole percent and maps to its fraction (got {rate})")
+    app.stair_chance.set(100)
+    app.borough_rate.set(100)
 
     if resvg_py is None:
         say("  skip  preview render (resvg-py not installed)")
