@@ -8,7 +8,7 @@ A procedural floor/map generator in the style of the *Dungeon Crawler Carl* book
 
 - **Floors 1 & 2** — neighborhood/borough/city grid, from small up through large (1 City). Beyond that, huge/giant/massive/continent tile multiple Cities together — County (4 Cities), State (9), Country (16), Continent (25) — each City keeping its own City Boss, with one top-tier boss (County/State/Country/Continent) overseeing all of them. Bosses (with a word-bank uniqueness guard so names/forms don't collide), loot boxes, achievements, an Elite, other crawler teams, the tutorial guild, and a full connected **room graph** per neighborhood (safe rooms, hidden passages, guild hall, filler rooms, corridor encounters). `--stair-chance` and `--borough-boss-rate` tune how often neighborhood stairwells and borough bosses show up.
 - **Floor 3** (The Over City) — settlements on a wilderness grid, roaming bosses, locked stairwells, a quest board per town, one Elite.
-- **Floor 4** (The Iron Tangle) — schematic rail/transit map.
+- **Floor 4** (The Iron Tangle) — schematic rail/transit map. Every line has its stairwells at stations 12, 24, 36, 48 and 72; a transfer has a safe room only if its number is prime, a Desperado Club if it ends in 1 and a Club Vanquisher if it ends in 9, as in the books. Withdrawal is rolled from a word bank of this project's own rather than the books' plot: three stages, each with its symptoms, its toll and what its dead come back as; a schedule for each line, fitted to the countdown; and two things that go wrong on the last day.
 - **Floor 5** (The Bubbles) — four quadrants, castles, factions.
 - **Floor 6** (The Hunting Grounds) — Floor 3's grid reskinned as jungle, with hunter parties and a bounty board.
 - **Floor 8** (Ghosts of Earth) — polar folklore map with totem cards and a deckmaster ladder.
@@ -667,6 +667,15 @@ threat suggestions are checked against Floor 8 always reading undead, the shared
 sections never counting, names and single stray words never counting, words of more
 than one word still counting, every measured false signal staying out, and the table
 in fifty-six written floors matching a fresh reading of each floor's own text.
+
+Floor 4's station layout has its own group, with the rules written into the test:
+- every line has stairwells at exactly 12, 24, 36, 48 and 72;
+- a station has a safe room, Desperado Club or Club Vanquisher exactly when its
+  number says so, both in the floor data and in the write-up;
+- every floor has at least one safe room;
+- a station two lines share reads the same from either;
+- each line's withdrawal stages fall inside the countdown, down to a three-day floor;
+- none of the books' own Floor 4 creatures or events turns up in the write-up.
 
 The leaderboard has its own group. The canon bounties are written into the test
 rather than read from the bank, and checked against the table every floor prints:

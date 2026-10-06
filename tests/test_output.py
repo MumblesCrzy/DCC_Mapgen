@@ -680,6 +680,130 @@ class CampaignEditTest(unittest.TestCase):
         self.assertFalse([t for t in roster.teams if t.name.startswith("The Bad Count")])
 
 
+class Floor4LayoutTest(unittest.TestCase):
+    """The Iron Tangle's stations, as the books lay them out, and its withdrawal.
+
+    Stairwells are at 12, 24, 36, 48 and 72 on every line. A transfer has a safe
+    room only if its number is prime, a Desperado Club if it ends in 1, a Club
+    Vanquisher if it ends in 9. The rules are written out here, not read from the
+    generator's config."""
+
+    STAIRS = [12, 24, 36, 48, 72]
+    PRIMES = {n for n in range(2, 500) if all(n % d for d in range(2, n))}
+    # The books' own withdrawal and last-day plot: the bank is ours instead. Full
+    # names, since "Blister" on its own is a word the mob bank uses for anything.
+    CANON = ("krakaren", "festering ghoul", "wrath ghoul", "blister ghoul",
+             "crotch dumpling", "ghoul generator")
+
+    @staticmethod
+    def _floors(seeds=range(1, 13), sizes=("small", "medium", "large")):
+        for size in sizes:
+            for seed in seeds:
+                yield size, seed, mg.generate(4, size, seed, images=False)
+
+    def test_every_line_has_all_five_stairwells_and_no_others(self):
+        for size, seed, res in self._floors():
+            for ln in res.floor.lines:
+                stairs = sorted(st.number for st in ln.stations if st.has_stairwell)
+                self.assertEqual(stairs, self.STAIRS, f"{size} seed {seed}: {ln.color}")
+
+    def test_no_transfer_hides_in_a_stairwell_station(self):
+        """The write-up gives the five stairwell stations one line between them,
+        so a transfer dealt onto one would vanish from every line's list."""
+        transfers = 0
+        for size, seed, res in self._floors(seeds=range(1, 41)):
+            for ln in res.floor.lines:
+                for st in ln.stations:
+                    if st.transfer_to:
+                        transfers += 1
+                        self.assertNotIn(st.number, self.STAIRS,
+                                         f"{size} seed {seed}: {ln.color} {st.number}")
+        self.assertGreater(transfers, 500)
+
+    def test_safe_rooms_and_clubs_follow_the_station_number(self):
+        clubs = collections.Counter()
+        for size, seed, res in self._floors():
+            for ln in res.floor.lines:
+                for st in ln.stations:
+                    where = f"{size} seed {seed}: {ln.color} {st.number}"
+                    transfer = bool(st.transfer_to)
+                    self.assertEqual(st.safe_room, transfer and st.number in self.PRIMES, where)
+                    self.assertEqual(st.desperado, transfer and st.number % 10 == 1, where)
+                    self.assertEqual(st.vanquisher, transfer and st.number % 10 == 9, where)
+                    clubs["safe room"] += st.safe_room
+                    clubs["desperado"] += st.desperado
+                    clubs["vanquisher"] += st.vanquisher
+        self.assertTrue(all(clubs[k] for k in ("safe room", "desperado", "vanquisher")),
+                        f"something never came up, so its rule went untested: {clubs}")
+
+    def test_every_floor_has_a_safe_room_on_its_lines(self):
+        for size, seed, res in self._floors(seeds=range(1, 41), sizes=("small",)):
+            self.assertTrue(any(st.safe_room for ln in res.floor.lines for st in ln.stations),
+                            f"seed {seed}")
+
+    def test_the_write_up_marks_what_each_transfer_has(self):
+        row = re.compile(r"^  - \*\*(\d+)\*\* — (\w[\w ]*?)(?: ↔ [^(.]+)?(?: \(([^)]*)\))?\. ")
+        checked = 0
+        for size, seed, res in self._floors(seeds=range(1, 5)):
+            md = res.markdown
+            self.assertNotIn("Every transfer station has a safe room", md)
+            for ln in md.splitlines():
+                m = row.match(ln)
+                if not m or "TRANSFER" not in ln and "↔" not in ln:
+                    continue
+                checked += 1
+                n, has = int(m.group(1)), m.group(3) or ""
+                self.assertEqual("safe room" in has, n in self.PRIMES, ln)
+                self.assertEqual("Desperado Club" in has, n % 10 == 1, ln)
+                self.assertEqual("Club Vanquisher" in has, n % 10 == 9, ln)
+        self.assertGreater(checked, 20)
+
+    def test_a_shared_transfer_reads_the_same_from_either_line(self):
+        for size, seed, res in self._floors(seeds=range(1, 7)):
+            notes = collections.defaultdict(set)
+            for ln in res.floor.lines:
+                for st in ln.stations:
+                    if st.kind == "transfer":
+                        notes[st.number].add(st.note)
+            for n, seen in notes.items():
+                self.assertEqual(len(seen), 1, f"{size} seed {seed}: station {n} {seen}")
+
+    def test_withdrawal_stays_inside_the_countdown(self):
+        for days in (3, 4, 6, 10, 15):
+            for seed in range(1, 9):
+                fl = mg.generate(4, "large", seed, days=days, images=False).floor
+                for ln in fl.lines:
+                    self.assertTrue(2 <= ln.stage2_day < ln.stage3_day <= days or
+                                    (days < 3 and ln.stage3_day <= days),
+                                    f"{days} days, seed {seed}: {ln.color} stage 2 day "
+                                    f"{ln.stage2_day}, stage 3 day {ln.stage3_day}")
+
+    def test_withdrawal_is_three_stages_and_a_last_day(self):
+        for size, seed, res in self._floors(seeds=range(1, 5)):
+            fl, md = res.floor, res.markdown
+            self.assertEqual(len(fl.withdrawal), 3)
+            self.assertEqual(len(set(fl.last_day)), 2)
+            section = md[md.index("## Withdrawal"):md.index("## Stairwell Stations")]
+            for n, st in enumerate(fl.withdrawal, start=1):
+                self.assertIn(f"| {n} | ", section)
+                self.assertIn(st["risen"]["name"], section)
+            for event in fl.last_day:
+                self.assertIn(event, section)
+            self.assertNotIn("WITHDRAWAL_PROFILE", md)
+
+    def test_none_of_the_books_floor_4_plot(self):
+        for size, seed, res in self._floors():
+            body = mg.floor_body(res.markdown).lower()
+            for word in self.CANON:
+                self.assertNotIn(word, body, f"{size} seed {seed}")
+
+    def test_the_stairwell_stations_each_get_their_own_note(self):
+        for size, seed, res in self._floors(seeds=range(1, 7)):
+            notes = res.floor.stair_notes
+            self.assertEqual(sorted(notes), self.STAIRS)
+            self.assertEqual(len(set(notes.values())), 5, f"{size} seed {seed}")
+
+
 class LeaderboardTest(unittest.TestCase):
     """The Top Ten by ratings, from Floor 4, each with a bounty on their head.
 

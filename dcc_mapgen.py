@@ -69,12 +69,13 @@ default; --borough-boss-rate turns that into a probability too.
 """
 
 import argparse
+import math
 import random
 import re
 import sys
 import zlib
 from dataclasses import dataclass, field, replace
-from typing import List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 
 class MapgenError(Exception):
@@ -2884,13 +2885,17 @@ SIZE4_CFG = {
 
 F4_RULES = [
     "No early descent. Stairwells open six hours before collapse and not before.",
-    "Stairwells exist only at stations 12, 24, 36, 48 and 72 on colored lines. Crawlers spawn past 72, so the game is getting backwards.",
-    "Every transfer station has a safe room.",
+    "Every colored line has a stairwell at stations 12, 24, 36, 48 and 72, and nowhere else. Crawlers spawn past 72, so the game is getting backwards.",
+    "A transfer station has a safe room only if its number is prime (11, 13, 17 and so on). Transfers ending in 1 also have a Desperado Club; those ending in 9, a Club Vanquisher.",
     "Exit-only caverns sit at every fifth station. Mobs disembark there for their Rev-Up dose; a rollercoaster track at the back runs to the trainyard.",
     "Mobs get off every five stops. A mob that misses its stop panics; it cannot stay aboard and live. They break into cars 10 and 15, never car 5.",
     "Engineer keys open cars on their own line only. A conductor's souvenir hat opens the wall portals at the Abyss.",
     "Trains reset to the trainyard (ring 10) after every run. Employees remember 435, then blink, then they are boarding again.",
 ]
+
+
+def _is_prime(n: int) -> bool:
+    return n > 1 and all(n % d for d in range(2, int(n ** 0.5) + 1))
 
 
 @dataclass
@@ -2902,6 +2907,22 @@ class Station:
     has_stairwell: bool = False
     safe_room: bool = False
 
+    # What a transfer station has follows from its number: a safe room if it is
+    # prime, a Desperado Club if it ends in 1, a Club Vanquisher if it ends in 9.
+    # Only transfers have any of them.
+    @property
+    def desperado(self) -> bool:
+        return bool(self.transfer_to) and self.number % 10 == 1
+
+    @property
+    def vanquisher(self) -> bool:
+        return bool(self.transfer_to) and self.number % 10 == 9
+
+    def amenities(self) -> List[str]:
+        return ([name for name, has in (("safe room", self.safe_room),
+                                        ("Desperado Club", self.desperado),
+                                        ("Club Vanquisher", self.vanquisher)) if has])
+
 
 @dataclass
 class RailLine:
@@ -2912,9 +2933,11 @@ class RailLine:
     engineer_species: str
     line_mob: Mob
     roster: List[str]
-    withdrawal: str
+    withdrawal: str               # how this line's crew and mobs take it
     spawn: int
     stations: List[Station]
+    stage2_day: int = 0           # the day withdrawal reaches stage 2 on this line
+    stage3_day: int = 0
 
 
 @dataclass
@@ -2943,6 +2966,10 @@ class Floor4:
     seed: int
     number: int = 4
     other_crawlers: List[CrawlerTeam] = field(default_factory=list)
+    # One pick per withdrawal stage: {"symptom", "toll", "risen"}, from WITHDRAWAL.
+    withdrawal: List[dict] = field(default_factory=list)
+    last_day: List[str] = field(default_factory=list)
+    stair_notes: Dict[int, str] = field(default_factory=dict)   # by station number
 
 
 class Generator4:
@@ -2975,9 +3002,14 @@ class Generator4:
         colors = self.rng.sample(list(LINE_COLORS), n_lines)
         lo, hi = self.cfg["mob_band"]
         c = self.cfg
+        days = self.days_override or c["days"]
+        # Each line declines at its own pace, as a fraction of the countdown, so
+        # a five-day floor gets a five-day decline rather than stages dated past
+        # the collapse.
+        paces = _pick_distinct(self.rng, WITHDRAWAL["pace"], n_lines)
 
         lines: List[RailLine] = []
-        for color in colors:
+        for color, pace in zip(colors, paces):
             mob = self.make_mob()
             spawn = self.rng.randint(*c["spawn_range"])
             lvl_a = self.rng.randint(lo, hi - 5)
@@ -2987,15 +3019,27 @@ class Generator4:
                 "Janitor ghouls, board at 12",
                 "Engineer, aboard from the yard; only leaves the cab for a derailment",
             ]
+            # Stage 3 by the last day at the latest, and stage 2 at least a day
+            # before it, however short the countdown.
+            stage3 = min(days, max(3, math.ceil(days * pace["stage3"])))
+            stage2 = max(1, min(stage3 - 1, max(2, math.ceil(days * pace["stage2"]))))
             lines.append(RailLine(
                 color=color, hex=LINE_COLORS[color], yard=self.rng.choice("ABCDEFGHIJKLMNOPQ"),
                 engineer=f"{self.rng.choice(BOSS_FIRST)} the {self.rng.choice(['7th', 'Elder', 'Unblinking', 'Punctual', 'Second-Shift', 'Late'])}",
                 engineer_species=self.rng.choice(ENGINEER_SPECIES),
-                line_mob=mob, roster=roster, withdrawal=self.rng.choice(WITHDRAWAL_PROFILE),
-                spawn=spawn, stations=[]))
+                line_mob=mob, roster=roster, withdrawal=pace["text"],
+                spawn=spawn, stations=[], stage2_day=stage2, stage3_day=stage3))
 
-        # Stations per line: spawn, 1-3 stairwell numbers, exit caverns near spawn and near the stairs.
+        # The five stairwell stations are the same five numbers on every line, so
+        # each gets one note for the floor rather than one per line.
+        stairs = c["stairwell_numbers"]
+        stair_notes = dict(zip(stairs, _pick_distinct(self.rng, STATION_FLAVOR["stairwell"],
+                                                      len(stairs))))
+
         stmap = {ln.color: {} for ln in lines}
+        # A transfer is one station on two lines, so one note: the safe room at
+        # 103 is the same safe room whichever line the party arrives on.
+        transfer_notes = {}
 
         def add(ln, number, kind, **kw):
             d = stmap[ln.color]
@@ -3003,24 +3047,35 @@ class Generator4:
                 st = d[number]
                 if kind == "transfer":
                     st.transfer_to.extend(kw.get("transfer_to", []))
-                    st.safe_room = True
+                    st.safe_room = _is_prime(number)
                 return st
-            note = self.rng.choice(STATION_FLAVOR[kind]) if kind in STATION_FLAVOR else ""
+            if kind == "stairwell":
+                note = stair_notes[number]
+            elif kind == "transfer":
+                if number not in transfer_notes:
+                    transfer_notes[number] = self.rng.choice(
+                        STATION_FLAVOR["safe_room" if _is_prime(number) else "transfer"])
+                note = transfer_notes[number]
+            else:
+                note = self.rng.choice(STATION_FLAVOR[kind]) if kind in STATION_FLAVOR else ""
             st = Station(number, kind, note, list(kw.get("transfer_to", [])),
-                         has_stairwell=(kind == "stairwell"), safe_room=(kind == "transfer"))
+                         has_stairwell=(kind == "stairwell"),
+                         safe_room=(kind == "transfer" and _is_prime(number)))
             d[number] = st
             return st
 
         for ln in lines:
             add(ln, ln.spawn, "spawn")
-            k = self.rng.randint(1, 3)
-            for num in self.rng.sample(c["stairwell_numbers"], k):
+            for num in stairs:
                 add(ln, num, "stairwell")
             cav = ((ln.spawn // 5) + 1) * 5
             add(ln, cav, "exit_cavern")
             add(ln, self.rng.choice([15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70]), "exit_cavern")
 
-        # Transfers: spanning path + extras so the network is connected.
+        # Transfers: spanning path + extras so the network is connected. Never on
+        # a multiple of five (the exit caverns) or a stairwell station. The first
+        # is always prime: a safe room is only ever at a prime transfer, and the
+        # lines a floor details should share at least one.
         order = lines[:]
         self.rng.shuffle(order)
         pairs = [(order[i], order[i + 1]) for i in range(len(order) - 1)]
@@ -3028,24 +3083,26 @@ class Generator4:
         for _ in range(extra):
             a, b = self.rng.sample(lines, 2)
             pairs.append((a, b))
-        for a, b in pairs:
-            lo_n = 11
-            hi_n = max(a.spawn, b.spawn) + 40
-            num = self.rng.randint(lo_n, min(hi_n, 420))
-            if num % 5 == 0:
-                num += 1
+        for i, (a, b) in enumerate(pairs):
+            top = min(max(a.spawn, b.spawn) + 40, 420)
+            choices = [n for n in range(11, top + 1)
+                       if n % 5 and n not in stairs and (i or _is_prime(n))]
+            num = self.rng.choice(choices)
             add(a, num, "transfer", transfer_to=[b.color])
             add(b, num, "transfer", transfer_to=[a.color])
         for ln in lines:
             ln.stations = sorted(stmap[ln.color].values(), key=lambda s_: s_.number)
 
-        # Named trains: loops over 3-4 detailed stations on 2+ lines.
+        # Named trains: loops over 3-4 detailed stations on 2+ lines. Not the
+        # stairwell stations: every line has all five, and a loop of them would
+        # crowd out everything else.
         named = []
         for _ in range(self.sc["named"]):
             name = self._unique(lambda: f"{self.rng.choice(NAMED_PREFIX)} {self.rng.choice(NAMED_SUFFIX)}")
             k = self.rng.randint(3, 4)
             stops = []
-            pool = [(ln.color, st.number) for ln in lines for st in ln.stations]
+            pool = [(ln.color, st.number) for ln in lines for st in ln.stations
+                    if st.kind != "stairwell"]
             self.rng.shuffle(pool)
             seen_lines = set()
             for color, num in pool:
@@ -3068,12 +3125,19 @@ class Generator4:
         jan = self.make_mob()
         jan.quirk = self.rng.choice(JANITOR_MECHANICS) + " Board at station 12 and ride to 435."
         jan.description = "Janitor mob. " + jan.description
-        days = self.days_override or c["days"]
         story = self.rng.sample(F4_STORY, 2)
+        # Withdrawal for the whole floor: one symptom, toll and risen form per
+        # stage, and two things that happen on the last day.
+        withdrawal = [{"symptom": self.rng.choice(st["symptoms"]),
+                       "toll": self.rng.choice(st["toll"]),
+                       "risen": self.rng.choice(st["risen"])}
+                      for st in WITHDRAWAL["stages"]]
+        last_day = self.rng.sample(WITHDRAWAL["last_day"], 2)
         return Floor4(size=self.size, name=f"The {self.rng.choice(NAMED_PREFIX)} Tangle", days=days,
                       janitor=jan, janitor_level=self.rng.randint(*c["janitor_level"]),
                       lines=lines, named=named, mimic_tell=self.rng.choice(MIMIC_TELL),
-                      story=story, seed=self.seed)
+                      story=story, seed=self.seed, withdrawal=withdrawal,
+                      last_day=last_day, stair_notes=stair_notes)
 
 
 def render4(fl: Floor4) -> str:
@@ -3081,11 +3145,24 @@ def render4(fl: Floor4) -> str:
     o = [f"# Floor 4 — {fl.name} ({fl.size})", "", "## Summary", ""]
     o.append(f"- **Countdown:** {fl.days} days (the normal allotment is {c['normal_days']})")
     o.append(f"- **Lines detailed:** {len(fl.lines)} colored lines, {len(fl.named)} named trains")
-    n_stairs = sum(st.has_stairwell for ln in fl.lines for st in ln.stations)
-    o.append(f"- **Stairwells on detailed lines:** {n_stairs}")
+    stairs = c["stairwell_numbers"]
+    o.append(f"- **Stairwells:** stations {', '.join(map(str, stairs[:-1]))} and {stairs[-1]} "
+             f"on every line, sealed until six hours before collapse. "
+             f"See [Stairwell Stations](#stairwell-stations).")
+    # Where the detailed lines meet, and what each meeting point has. Stations
+    # shared by two lines are listed once.
+    transfers = {}
     for ln in fl.lines:
-        nums = [str(st.number) for st in ln.stations if st.has_stairwell]
-        o.append(f"  - {ln.color} Line: station{'s' if len(nums) != 1 else ''} {', '.join(nums)}")
+        for st in ln.stations:
+            if st.transfer_to:
+                transfers.setdefault(st.number, st)
+    for label, has in (("Safe rooms", lambda s_: s_.safe_room),
+                       ("Desperado Club", lambda s_: s_.desperado),
+                       ("Club Vanquisher", lambda s_: s_.vanquisher)):
+        nums = sorted(n for n, st in transfers.items() if has(st))
+        if nums:
+            o.append(f"- **{label} on the detailed lines:** "
+                     f"station{'s' if len(nums) != 1 else ''} {', '.join(map(str, nums))}")
     o.append(f"- **Train mob levels:** {c['mob_band'][0]}–{c['mob_band'][1]}, rising with withdrawal stage")
     o.append(f"- **Janitor mob:** {fl.janitor.name} (Level {fl.janitor_level}). {fl.janitor.quirk}")
     o.append(f"  - *{fl.janitor.description}*")
@@ -3094,8 +3171,8 @@ def render4(fl: Floor4) -> str:
              f"{c['employee_portal']} is where the crew portals back to the yard. "
              f"{c['abyss']} is the Abyss: bare platform, one steep stair, an hour's climb to a catwalk over the pit, "
              f"portals in the walls that want a conductor's hat.")
-    o.append("- **Withdrawal climax:** in the final day the Rev-Up supply fails and the surviving crew hit stage 3; "
-             "Krakaren-type bosses spawn across the network and the stairwells become a race.")
+    o.append(f"- **Withdrawal:** three stages on a schedule of each line's own, and a last "
+             f"day (day {fl.days}) worse than any of them. See [Withdrawal](#withdrawal).")
     o.append("- **Story notes:**")
     for st in fl.story:
         o.append(f"  - {st}")
@@ -3106,6 +3183,33 @@ def render4(fl: Floor4) -> str:
     o.append("")
     for r in F4_RULES:
         o.append(f"- {r}")
+    o.append("")
+    o.append("## Withdrawal")
+    o.append("")
+    o.append("Every mob and crew member on the floor rides on a Rev-Up habit. Miss a dose and "
+             "withdrawal sets in, in three stages, and nobody comes back from it. Each line "
+             "goes through the stages on its own schedule, given under the line.")
+    o.append("")
+    o.append("| Stage | What it does | Who dies of it | What the dead come back as |")
+    o.append("| --- | --- | --- | --- |")
+    for n, st in enumerate(fl.withdrawal, start=1):
+        r = st["risen"]
+        lo, hi = r["level"]
+        o.append(f"| {n} | {st['symptom'].capitalize()} | {st['toll'].capitalize()} | "
+                 f"**{r['name']}** (L{lo}–{hi}): {r['does']} |")
+    o.append("")
+    o.append(f"**The last day (day {fl.days}):**")
+    o.append("")
+    for event in fl.last_day:
+        o.append(f"- {event}")
+    o.append("")
+    o.append("## Stairwell Stations")
+    o.append("")
+    o.append("The same five stations on every line. Each is sealed until six hours before "
+             "collapse.")
+    o.append("")
+    for num, note in sorted(fl.stair_notes.items()):
+        o.append(f"- **{num}** — {note}")
     o.append("")
     o.append("## Colored Lines")
     o.append("")
@@ -3118,15 +3222,21 @@ def render4(fl: Floor4) -> str:
             o.append(f"  - {r}")
         o.append(f"  - {ln.line_mob.name}: {ln.line_mob.quirk}")
         o.append(f"    - *{ln.line_mob.description}*")
-        o.append(f"- **Withdrawal profile:** {ln.withdrawal}")
+        o.append(f"- **Withdrawal:** stage 2 from day {ln.stage2_day}, stage 3 from day "
+                 f"{ln.stage3_day}. {ln.withdrawal}")
         o.append(f"- **Crawler spawn:** station {ln.spawn}")
         o.append("- **Stations of note** (all others are routine platforms):")
+        o.append(f"  - **{' / '.join(map(str, c['stairwell_numbers']))}** — stairwells. "
+                 f"See [Stairwell Stations](#stairwell-stations).")
         for st in ln.stations:
-            kind = {"spawn": "SPAWN", "stairwell": "STAIRWELL", "transfer": "TRANSFER", "exit_cavern": "EXIT CAVERN"}[st.kind]
+            if st.kind == "stairwell":
+                continue
+            kind = {"spawn": "SPAWN", "transfer": "TRANSFER", "exit_cavern": "EXIT CAVERN"}[st.kind]
             extra = ""
             if st.transfer_to:
                 extra = f" ↔ {', '.join(sorted(set(st.transfer_to)))} Line" + ("s" if len(set(st.transfer_to)) > 1 else "")
-            sr = " (safe room)" if st.safe_room else ""
+            has = st.amenities()
+            sr = f" ({', '.join(has)})" if has else ""
             o.append(f"  - **{st.number}** — {kind}{extra}{sr}. {st.note}")
         o.append(f"  - **{c['mimic_station']} / {c['employee_portal']} / {c['abyss']}** — mimic, crew portal, Abyss. See summary.")
         o.append("")
@@ -3222,8 +3332,8 @@ def render4_svg(fl: Floor4) -> str:
             else:  # exit cavern
                 o.append(f'<polygon points="{x},{y-10} {x+9},{y+6} {x-9},{y+6}" fill="#fff" stroke="#111" stroke-width="2.5"/>')
             o.append(_text(x, y + 24, str(st.number), size=11, weight="bold", anchor="middle"))
-            if st.safe_room:
-                o.append(_text(x, y + 36, "safe room", size=9, anchor="middle", fill="#555"))
+            for k, what in enumerate(st.amenities()):
+                o.append(_text(x, y + 36 + 10 * k, what, size=9, anchor="middle", fill="#555"))
     # Named trains as dashed loops
     dash_styles = ["8,5", "2,4", "12,4,2,4"]
     y_base = TOP + ROW * (len(fl.lines) - 1) + 60
@@ -3248,7 +3358,7 @@ def render4_svg(fl: Floor4) -> str:
     ly = y_base + 30
     lx = 30
     items = [
-        (f'<circle cx="{lx+8}" cy="{ly}" r="8" fill="#fff" stroke="#111" stroke-width="3"/>', "Transfer (safe room)"),
+        (f'<circle cx="{lx+8}" cy="{ly}" r="8" fill="#fff" stroke="#111" stroke-width="3"/>', "Transfer"),
         (f'<rect x="{lx+152}" y="{ly-7}" width="14" height="14" fill="#fff" stroke="#111" stroke-width="3" transform="rotate(45 {lx+159} {ly})"/>', "Stairwell station"),
         (f'<circle cx="{lx+300}" cy="{ly}" r="8" fill="#c0392b" stroke="#111" stroke-width="2"/>', "Crawler spawn"),
         (f'<polygon points="{lx+430},{ly-9} {lx+439},{ly+6} {lx+421},{ly+6}" fill="#fff" stroke="#111" stroke-width="2.5"/>', "Exit-only cavern"),
