@@ -483,19 +483,87 @@ def disposition_labels() -> List[str]:
 
 
 @dataclass
+class RankedCrawler:
+    """Someone who has been on the Dungeon Leaderboard: the Top Ten by ratings,
+    each with a bounty on their head, from Floor 4.
+
+    Kept once they fall off, as a dead team is kept on the roster. A crawler who
+    comes back to the list keeps the multiplier they had, and the campaign keeps a
+    record of who was ranked when."""
+    name: str
+    race: str = ""
+    klass: str = ""                # their class; "class" in the roster file
+    team: str = ""                 # the roster group they belong to; "" for a stranger
+    rank: Optional[int] = None     # 1-10 while on the list, None once off it
+    # Every floor they have spent on the list. The multiplier counts these, which
+    # is what lets it remember: ranked on floors 4 and 5, off on 6 and back on 7
+    # is x3, not x1.
+    floors: List[int] = field(default_factory=list)
+    # The DM's correction to that count. Setting a multiplier stores the
+    # difference, so each later floor still adds one to whatever the DM set.
+    bonus: int = 0
+    died_on: Optional[int] = None
+    added: bool = False            # put on the list by the DM rather than dealt
+    # When they came onto the list and went off it: {"floor", "event", "rank"},
+    # the event one of entered, fell off, returned, died or revived. "by_dm"
+    # marks a change the DM made.
+    history: List[dict] = field(default_factory=list)
+
+    @property
+    def alive(self) -> bool:
+        return self.died_on is None
+
+    @property
+    def multiplier(self) -> int:
+        return max(1, len(self.floors) + self.bonus)
+
+    @property
+    def bounty(self) -> int:
+        """Gold on their head: their rank's bounty times their multiplier. Nothing
+        while they are off the list."""
+        return bounty_for(self.rank, self.multiplier) if self.rank else 0
+
+
+def bounty_for(rank: int, multiplier: int = 1) -> int:
+    """The bounty on whoever holds a rank, in gold."""
+    return LEADERBOARD["bounties"][rank - 1] * multiplier
+
+
+_RANKED_FIELDS = ("name", "race", "klass", "team", "rank", "floors", "bonus",
+                  "died_on", "added", "history")
+
+
+def _ranked_to_dict(c: RankedCrawler) -> dict:
+    raw = {f: getattr(c, f) for f in _RANKED_FIELDS}
+    raw["class"] = raw.pop("klass")
+    return raw
+
+
+def _ranked_from_dict(raw: dict) -> RankedCrawler:
+    if not raw.get("name"):
+        raise MapgenError("a crawler on the campaign's leaderboard has no name")
+    known = {k: v for k, v in raw.items() if k in _RANKED_FIELDS}
+    known["klass"] = raw.get("class", raw.get("klass", ""))
+    return RankedCrawler(**known)
+
+
+@dataclass
 class CampaignRoster:
     """Teams followed across a run of floors, including the ones that did not make it.
 
     The dead are kept: a campaign wants to remember who died on floor 4, and floor
-    11 parades crawlers who already died."""
+    11 parades crawlers who already died. So is everyone who was ever on the
+    leaderboard."""
     teams: List[CrawlerTeam] = field(default_factory=list)
+    leaderboard: List[RankedCrawler] = field(default_factory=list)
 
     def active(self) -> List["CrawlerTeam"]:
         return [t for t in self.teams if t.alive]
 
     def to_dict(self) -> dict:
         return {"version": ROSTER_VERSION,
-                "teams": [_team_to_dict(t) for t in self.teams]}
+                "teams": [_team_to_dict(t) for t in self.teams],
+                "leaderboard": [_ranked_to_dict(c) for c in self.leaderboard]}
 
     @classmethod
     def from_dict(cls, raw: dict) -> "CampaignRoster":
@@ -504,13 +572,14 @@ class CampaignRoster:
             raise MapgenError(
                 f"campaign roster is version {version}, this build reads "
                 f"version {ROSTER_VERSION}")
-        return cls(teams=[_team_from_dict(t) for t in raw.get("teams", [])])
+        return cls(teams=[_team_from_dict(t) for t in raw.get("teams", [])],
+                   leaderboard=[_ranked_from_dict(c) for c in raw.get("leaderboard", [])])
 
 
-# Still 1 with `members`, `headcount` and `added` added: a roster written before
-# parties existed loads fine (the field defaults to empty and fills on the next
-# floor 3+), and an older build reading a newer file drops the key it does not
-# know. Bumping this would reject both, for no incompatibility.
+# Still 1 with `members`, `headcount`, `added` and the leaderboard added: a roster
+# written before parties existed loads fine (the field defaults to empty and fills
+# on the next floor 3+), and an older build reading a newer file drops the key it
+# does not know. Bumping this would reject both, for no incompatibility.
 ROSTER_VERSION = 1
 _TEAM_FIELDS = ("name", "origin", "surname", "disposition", "members", "headcount",
                 "status", "outcome", "day", "floor", "first_seen", "died_on", "history",
@@ -1658,6 +1727,7 @@ def crawler_section(fl) -> List[str]:
         if label not in disposition_labels():
             o.append(f"- ***{label}*** — {disposition_reaction(label)}.")
     o.append("")
+    o.extend(leaderboard_section(fl))
     return o
 
 
@@ -5506,7 +5576,445 @@ def set_status(roster: CampaignRoster, name: str, *, status: Optional[str] = Non
         team.history[-1].update(fix)
     else:
         team.history.append({"floor": team.floor, "day": team.day, **fix})
+    # A group killed, or cut down to fewer crawlers, may have taken someone off
+    # the leaderboard with it.
+    _settle_board(roster, team.floor, by_dm=True)
     return team
+
+
+# -- the leaderboard ------------------------------------------------------------
+#
+# The Top Ten by ratings, from the first episode on Floor 4. Dealt once, on the
+# first floor of a campaign deep enough to have one; after that it carries, and
+# what changes it is the DM. A generated floor only adds one to everyone's
+# multiplier, takes off whoever died with their group, and fills the empty places
+# at the bottom with newcomers.
+
+BOARD_SIZE = 10
+
+
+def board(roster: Optional[CampaignRoster]) -> List[RankedCrawler]:
+    """The Top Ten as it stands, rank 1 first."""
+    if roster is None:
+        return []
+    return sorted((c for c in roster.leaderboard if c.rank), key=lambda c: c.rank)
+
+
+def board_floor(roster: Optional[CampaignRoster]) -> Optional[int]:
+    """The floor the leaderboard was last dealt on, which is the floor the DM's
+    changes to it are recorded against. None before there is a leaderboard."""
+    floors = [f for c in (roster.leaderboard if roster else []) for f in c.floors]
+    return max(floors) if floors else None
+
+
+def _log(c: RankedCrawler, floor: int, event: str, by_dm: bool = False) -> None:
+    """Record a crawler coming onto the list or going off it, with the rank and
+    multiplier they had at the time."""
+    entry = {"floor": floor, "event": event, "rank": c.rank, "multiplier": c.multiplier}
+    if by_dm:
+        entry["by_dm"] = True
+    c.history.append(entry)
+
+
+def _on_floor(c: RankedCrawler, floor: int) -> None:
+    """Count a floor towards the multiplier, once however often it is dealt."""
+    if floor not in c.floors:
+        c.floors.append(floor)
+        c.floors.sort()
+
+
+def _rerank(order: List[RankedCrawler], floor: int, by_dm: bool = False) -> None:
+    """Hand out ranks 1-10 in this order; anyone past tenth falls off the list."""
+    for i, c in enumerate(order):
+        if i < BOARD_SIZE:
+            c.rank = i + 1
+        elif c.rank is not None:
+            _log(c, floor, "fell off", by_dm)
+            c.rank = None
+
+
+def _taken_names(roster: CampaignRoster) -> set:
+    # Group names too: a crawler called the same as a group is one lookup away
+    # from editing the wrong thing.
+    return ({c.name.lower() for c in roster.leaderboard}
+            | {t.name.lower() for t in roster.teams})
+
+
+def _crawler_name(rng, taken: set) -> str:
+    """A name nobody in `taken` has, sharing no first name or surname with them
+    either: two Wilhelminas on one Top Ten reads as the generator repeating
+    itself, not as two people."""
+    forms, weights = zip(*LEADERBOARD["name_forms"])
+    # Only words from the name banks count: a handle such as "Fast Eddie Nwosu"
+    # carries a surname, but two handles may both start with "The".
+    bank = {w.lower() for w in CRAWLER_FIRST + CRAWLER_SURNAME}
+    used = {w for n in taken for w in n.split() if w in bank}
+    for _ in range(200):
+        name = rng.choices(forms, weights=weights)[0].format(
+            first=rng.choice(CRAWLER_FIRST), surname=rng.choice(CRAWLER_SURNAME),
+            handle=rng.choice(CRAWLER_HANDLE))
+        if name.lower() in taken or any(w in used for w in name.lower().split()):
+            continue
+        taken.add(name.lower())
+        return name
+    n = 2                                    # a bank long since spent; never in practice
+    while f"{name} {n}".lower() in taken:
+        n += 1
+    taken.add(f"{name} {n}".lower())
+    return f"{name} {n}"
+
+
+def _stranger(rng, floor: int, taken: set) -> RankedCrawler:
+    """A ranked crawler the party has never met: most of the Top Ten, in a
+    dungeon this size, are people the party only ever sees on the feed."""
+    klass = rng.choice(CRAWLER_CLASS)
+    if floor >= CLASS_UPGRADE_FLOOR:
+        klass = upgraded_class(klass)
+    return RankedCrawler(name=_crawler_name(rng, taken), race=rng.choice(CRAWLER_RACE),
+                         klass=klass)
+
+
+def _group(roster: CampaignRoster, name: str) -> Optional[CrawlerTeam]:
+    return next((t for t in roster.teams if t.name == name), None) if name else None
+
+
+def _ranked_member(roster: CampaignRoster, c: RankedCrawler) -> Optional[dict]:
+    """The crawler in their group that a ranked crawler is, or None if the group
+    has lost them -- wiped out, or no longer counting anyone of their race. A race
+    is permanent and no party holds two of one, so it is what identifies them."""
+    team = _group(roster, c.team)
+    if team is None or not team.alive:
+        return None
+    return next((m for m in team.members if m["race"] == c.race), None)
+
+
+def _recruit(rng, roster: CampaignRoster, floor: int, taken: set,
+             k: int) -> List[RankedCrawler]:
+    """Up to k crawlers from groups reported on this floor, one per group, a group
+    having a good floor likelier. Nobody who has been ranked before is picked
+    again under a new name: coming back is the DM's call."""
+    known = {(c.team, c.race) for c in roster.leaderboard if c.team}
+    ranked_groups = {c.team for c in board(roster) if c.team}
+    pool = []
+    for t in roster.teams:
+        if t.alive and t.floor == floor and t.name not in ranked_groups:
+            free = [m for m in t.members if (t.name, m["race"]) not in known]
+            if free:
+                pool.append((t, free))
+    weights = [LEADERBOARD["outcome_weight"].get(t.outcome, 1) for t, _ in pool]
+    picked = []
+    for i in _weighted_sample(rng, weights, k):
+        team, free = pool[i]
+        m = rng.choice(free)
+        picked.append(RankedCrawler(name=_crawler_name(rng, taken), race=m["race"],
+                                    klass=m["class"], team=team.name))
+    return picked
+
+
+def _settle_board(roster: Optional[CampaignRoster], floor: int,
+                  by_dm: bool = False) -> List[RankedCrawler]:
+    """Take off the list, dead, anyone whose group has lost them, and close up the
+    ranks behind them. Returns who died."""
+    if roster is None:
+        return []
+    lost = [c for c in board(roster) if c.team and _ranked_member(roster, c) is None]
+    for c in lost:
+        _log(c, floor, "died", by_dm)
+        c.died_on, c.rank = floor, None
+    if lost:
+        _rerank(board(roster), floor, by_dm)
+    return lost
+
+
+def _fill(rng, roster: CampaignRoster, floor: int) -> None:
+    """Fill the empty places at the bottom of the list with crawlers new to it."""
+    ranked = board(roster)
+    empty = BOARD_SIZE - len(ranked)
+    if empty <= 0:
+        return
+    taken = _taken_names(roster)
+    share = LEADERBOARD["from_roster"] / BOARD_SIZE
+    new = _recruit(rng, roster, floor, taken, sum(rng.random() < share for _ in range(empty)))
+    new += [_stranger(rng, floor, taken) for _ in range(empty - len(new))]
+    for c in new:
+        c.floors = [floor]
+    roster.leaderboard.extend(new)
+    _rerank(ranked + new, floor)
+    for c in new:
+        _log(c, floor, "entered")
+
+
+def build_leaderboard(roster: CampaignRoster, seed: int, floor: int) -> None:
+    """Deal the leaderboard, or carry it onto this floor.
+
+    The first floor of a campaign from Floor 4 down deals a fresh Top Ten: a few
+    crawlers from groups the party has met, the rest strangers. A list first dealt
+    deeper than Floor 4 has been running since then, so its crawlers arrive with
+    multipliers to match. On every later floor, each crawler still ranked has
+    reached it, so their multiplier goes up by one -- and then anyone whose group
+    the floor's report wiped out, or who is no longer in their group, dies with
+    their bounty claimed. Empty places at the bottom go to newcomers. Ranks are
+    otherwise left as they were: moving people up and down is the DM's."""
+    if floor < LEADERBOARD["first_floor"]:
+        return
+    rng = random.Random(f"leaderboard|{seed}|{floor}")
+    if roster.leaderboard:
+        for c in board(roster):
+            _on_floor(c, floor)
+            member = _ranked_member(roster, c)
+            if member:
+                c.klass = member["class"]
+            elif not c.team and floor >= CLASS_UPGRADE_FLOOR:
+                c.klass = upgraded_class(c.klass)
+        _settle_board(roster, floor)
+        _fill(rng, roster, floor)
+        return
+    taken = _taken_names(roster)
+    order = _recruit(rng, roster, floor, taken, LEADERBOARD["from_roster"])
+    order += [_stranger(rng, floor, taken) for _ in range(BOARD_SIZE - len(order))]
+    rng.shuffle(order)
+    longest = floor - LEADERBOARD["first_floor"] + 1
+    for c in order:
+        c.floors = [floor]
+        c.bonus = rng.randint(1, longest) - 1
+    roster.leaderboard.extend(order)
+    _rerank(order, floor)
+    for c in order:
+        _log(c, floor, "entered")
+
+
+def floor_board(roster: CampaignRoster) -> List[RankedCrawler]:
+    """The list as it stands, as copies: a result handed back for one floor should
+    not change when the campaign moves on."""
+    return [replace(c, floors=list(c.floors), history=[dict(e) for e in c.history])
+            for c in board(roster)]
+
+
+def board_news(roster: CampaignRoster, floor: int) -> List[Tuple[RankedCrawler, dict]]:
+    """What changed on the list since the last floor's write-up: this floor's
+    comings and goings, and whatever the DM changed after the last floor was
+    generated. Nothing for the floor a list is first dealt on -- everyone on it
+    is new."""
+    floors = sorted({f for c in roster.leaderboard for f in c.floors})
+    if not floors or floors[0] >= floor:
+        return []
+    before = max(f for f in floors if f < floor)
+    order = {"died": 0, "fell off": 1, "revived": 2, "returned": 3, "entered": 4}
+    news = [(c, e) for c in roster.leaderboard for e in c.history
+            if e["floor"] == floor or (e.get("by_dm") and e["floor"] == before)]
+    news.sort(key=lambda ce: (order.get(ce[1]["event"], 9), ce[1].get("rank") or 99))
+    return news
+
+
+def find_ranked(roster: CampaignRoster, name: str) -> RankedCrawler:
+    """Anyone ever on the leaderboard, by name, matched as find_team matches."""
+    if roster is None or not roster.leaderboard:
+        raise MapgenError("nobody has been on the leaderboard yet")
+    wanted = name.strip().lower()
+    exact = [c for c in roster.leaderboard if c.name.lower() == wanted]
+    matches = exact or [c for c in roster.leaderboard if wanted in c.name.lower()]
+    if not matches:
+        raise MapgenError(f"nobody called {name!r} has been on the leaderboard")
+    if len(matches) > 1:
+        raise MapgenError(f"{name!r} matches more than one crawler: "
+                          + ", ".join(c.name for c in matches))
+    return matches[0]
+
+
+def _edit_floor(roster: CampaignRoster) -> int:
+    floor = board_floor(roster)
+    if floor is None:
+        raise MapgenError(f"there is no leaderboard yet: it starts on Floor "
+                          f"{LEADERBOARD['first_floor']}, so generate that floor or "
+                          f"deeper in this campaign first")
+    return floor
+
+
+def _check_multiplier(multiplier) -> None:
+    if not isinstance(multiplier, int) or isinstance(multiplier, bool) or multiplier < 1:
+        raise MapgenError(f"a multiplier is a whole number, 1 or more (got {multiplier!r})")
+
+
+def place_on_board(roster: CampaignRoster, name: str, rank: int, *, race: str = "",
+                   klass: str = "", team: str = "",
+                   multiplier: Optional[int] = None) -> RankedCrawler:
+    """Put a crawler on the list at a rank.
+
+    One already on it moves there. One who fell off comes back, keeping their
+    multiplier, and this floor counts towards it. A name the leaderboard has
+    never had is added -- the party's own crawlers included. Everyone from that
+    rank down moves one place, and whoever is pushed past tenth falls off.
+
+    A crawler from a group on the roster needs their race, and it has to be the
+    race of someone in that group: that is how the generator tells, later, that
+    the group has lost them. Their class is then taken from the group."""
+    floor = _edit_floor(roster)
+    if isinstance(rank, bool) or not isinstance(rank, int) or not 1 <= rank <= BOARD_SIZE:
+        raise MapgenError(f"a rank is 1 to {BOARD_SIZE} (got {rank!r})")
+    if multiplier is not None:
+        _check_multiplier(multiplier)
+    clean = name.strip()
+    if not clean:
+        raise MapgenError("a crawler needs a name")
+    c = next((x for x in roster.leaderboard if x.name.lower() == clean.lower()), None)
+    if c is not None and not c.alive:
+        raise MapgenError(f"{c.name} died on floor {c.died_on}; bring them back first")
+    event = None
+    if c is None:
+        if clean.lower() in {t.name.lower() for t in roster.teams}:
+            raise MapgenError(f"{clean!r} is a group's name; a ranked crawler is one person")
+        group = None
+        if team.strip():
+            group = next((t for t in roster.teams
+                          if t.name.lower() == team.strip().lower()), None)
+            if group is None:
+                raise MapgenError(f"no group called {team!r} on the roster")
+            if not group.alive:
+                raise MapgenError(f"{group.name} died on floor {group.died_on}")
+            member = next((m for m in group.members
+                           if m["race"].lower() == race.strip().lower()), None)
+            if member is None:
+                there = ", ".join(f"{m['race']} {m['class']}" for m in group.members)
+                raise MapgenError(f"{group.name} has nobody of the race {race!r}"
+                                  + (f"; it has {there}" if there else
+                                     "; it has no crawlers dealt yet"))
+            race, klass = member["race"], member["class"]
+        c = RankedCrawler(name=clean, race=race.strip(), klass=klass.strip(),
+                          team=group.name if group else "", added=True)
+        roster.leaderboard.append(c)
+        event = "entered"
+    elif c.rank is None:
+        event = "returned"
+    order = [x for x in board(roster) if x is not c]
+    order.insert(rank - 1, c)
+    _rerank(order, floor, by_dm=True)
+    _on_floor(c, floor)
+    if multiplier is not None:
+        c.bonus = multiplier - len(c.floors)
+    if event:
+        _log(c, floor, event, by_dm=True)
+    return c
+
+
+def drop_from_board(roster: CampaignRoster, name: str, *,
+                    died: bool = False) -> RankedCrawler:
+    """Take a crawler off the list, and close up the ranks behind them.
+
+    With died, they were killed -- the bounty is claimed -- and their group loses
+    them too, dying with them if they were its last crawler."""
+    floor = _edit_floor(roster)
+    c = find_ranked(roster, name)
+    if not c.alive:
+        raise MapgenError(f"{c.name} already died, on floor {c.died_on}")
+    if c.rank is None and not died:
+        raise MapgenError(f"{c.name} is not on the list")
+    _log(c, floor, "died" if died else "fell off", by_dm=True)
+    c.rank = None
+    if died:
+        c.died_on = floor
+        team, member = _group(roster, c.team), _ranked_member(roster, c)
+        if member is not None:
+            if len(team.members) > 1:
+                team.members.remove(member)
+                set_status(roster, team.name)
+            else:
+                set_status(roster, team.name, outcome="fatal")
+    _rerank(board(roster), floor, by_dm=True)
+    return c
+
+
+def revive_ranked(roster: CampaignRoster, name: str) -> RankedCrawler:
+    """Undo a death. They come back off the list -- put them back on with
+    place_on_board -- and a living group that lost them has them again."""
+    floor = _edit_floor(roster)
+    c = find_ranked(roster, name)
+    if c.alive:
+        raise MapgenError(f"{c.name} is not dead")
+    c.died_on = None
+    _log(c, floor, "revived", by_dm=True)
+    team = _group(roster, c.team)
+    if team is not None and team.alive and _ranked_member(roster, c) is None:
+        team.members.append({"race": c.race, "class": c.klass})
+        set_status(roster, team.name)
+    return c
+
+
+def set_multiplier(roster: CampaignRoster, name: str, multiplier: int) -> RankedCrawler:
+    """Set a crawler's multiplier. It still goes up by one for each later floor
+    they spend on the list, and is kept if they are off it."""
+    _check_multiplier(multiplier)
+    c = find_ranked(roster, name)
+    c.bonus = multiplier - len(c.floors)
+    return c
+
+
+def ranked_label(c: RankedCrawler) -> str:
+    """Who a ranked crawler is, after their name: "a Gnome Necromancer, with
+    Team Thistle"."""
+    what = " ".join(x for x in (c.race, c.klass) if x)
+    who = f"{_article(what)} {what}" if what else ""
+    if c.team:
+        who = f"{who}, with {c.team}" if who else f"with {c.team}"
+    return who
+
+
+_EVENT_WORDS = {"entered": "came onto the list", "fell off": "fell off",
+                "returned": "came back", "died": "died", "revived": "was brought back"}
+
+
+def ranked_story(c: RankedCrawler) -> str:
+    """Their time on the list in a line: "came onto the list on floor 4 at rank 3;
+    fell off on floor 6; came back on floor 7 at rank 9 (x3)"."""
+    parts = []
+    for e in c.history:
+        bit = f"{_EVENT_WORDS.get(e['event'], e['event'])} on floor {e['floor']}"
+        if e["event"] in ("entered", "returned") and e.get("rank"):
+            bit += f" at rank {e['rank']}"
+        if e["event"] in ("returned", "died") or (e["event"] == "entered"
+                                                  and e.get("multiplier", 1) > 1):
+            bit += f" (x{e.get('multiplier', 1)})"
+        parts.append(bit)
+    return "; ".join(parts)
+
+
+def leaderboard_section(fl) -> List[str]:
+    """The Top Ten for a floor from 4 down, with what changed since the last one."""
+    ranked = getattr(fl, "leaderboard", None)
+    if not ranked:
+        return []
+    o = ["### The Leaderboard", "",
+         "The Top Ten by ratings, as this floor's first episode has them. A crawler's "
+         "bounty is the figure for their rank times their multiplier, which goes up by "
+         "one for every floor they spend on the list and is remembered if they drop "
+         "off and come back.", "",
+         "| Rank | Crawler | Multiplier | Bounty |", "| --- | --- | --- | --- |"]
+    for c in ranked:
+        who = ranked_label(c)
+        o.append(f"| {c.rank} | **{c.name}**{' — ' + who if who else ''} | "
+                 f"x{c.multiplier} | {c.bounty:,} gold |")
+    o.append("")
+    news = getattr(fl, "board_news", None)
+    if news:
+        o += ["Since the last floor:", ""]
+        for c, e in news:
+            if e["event"] == "died":
+                gold = bounty_for(e["rank"], e["multiplier"]) if e.get("rank") else 0
+                line = (f"**{c.name}** died" + (f" at rank {e['rank']}; a bounty of "
+                                                f"{gold:,} gold was claimed" if gold else ""))
+            elif e["event"] == "fell off":
+                line = f"**{c.name}** fell off the list"
+            elif e["event"] == "returned":
+                line = (f"**{c.name}** is back, at rank {e['rank']}, keeping their "
+                        f"multiplier (x{e['multiplier']})")
+            elif e["event"] == "revived":
+                line = f"**{c.name}** is alive after all"
+            else:
+                line = f"**{c.name}** is new to the list, at rank {e['rank']}"
+            o.append(f"- {line}.")
+        o.append("")
+    o += [f"- {rule}" for rule in LEADERBOARD["rules"]]
+    o.append("")
+    return o
 
 
 def _set_standing(roster: CampaignRoster, name: str, standing: str) -> str:
@@ -5599,7 +6107,12 @@ def generate(floor: int = 1, size: str = "medium", seed: Optional[int] = None, *
     # built, so every floor can carry a campaign roster through one code path
     # and changing how teams are dealt cannot shift the floor's own rolls.
     roster = build_crawler_teams(fl, size, seed, floor, roster)
+    # After the teams, which it reads: a ranked crawler whose group this floor
+    # wiped out dies with it.
+    build_leaderboard(roster, seed, floor)
     fl.other_crawlers = floor_teams(roster, floor)
+    fl.leaderboard = floor_board(roster)
+    fl.board_news = [(replace(c, history=[]), dict(e)) for c, e in board_news(roster, floor)]
     text = _render_floor(fl, floor)
 
     svgs = floor_svgs(fl, boss_stairs) if images else []

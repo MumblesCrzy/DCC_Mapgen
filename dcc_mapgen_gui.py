@@ -400,6 +400,12 @@ class CampaignView(ttk.Frame):
     # -- roster table -------------------------------------------------------
 
     def refresh(self):
+        # The leaderboard lives in the same campaign, and changes to a group can
+        # take a crawler off it, so it is redrawn along with this table. Not yet
+        # built while this tab's own constructor runs.
+        board_tab = getattr(self.app, "board_tab", None)
+        if board_tab is not None:
+            board_tab.refresh()
         self.tree.delete(*self.tree.get_children())
         path = self.app.campaign_path
         roster = self.app.roster
@@ -614,6 +620,312 @@ class CampaignView(ttk.Frame):
         self.tree.selection_set(team.name)
         self.tree.see(team.name)
         self.app._set_status(f"Added {team.name}; it carries onto the next floor you generate")
+        return True
+
+
+class LeaderboardView(ttk.Frame):
+    """The Dungeon Leaderboard: the Top Ten by ratings, from Floor 4.
+
+    The first floor of a campaign from 4 down deals it; after that it is the DM's
+    to change. Everyone who has ever been on it stays in the table -- off the
+    list, or dead -- so a crawler put back on keeps the multiplier they had, and
+    the campaign keeps a record of who was ranked when."""
+
+    COLUMNS = (("rank", "Rank", 45), ("name", "Crawler", 160), ("who", "Race, class, group", 240),
+               ("mult", "Multiplier", 70), ("bounty", "Bounty", 95),
+               ("story", "On and off the list", 300))
+
+    def __init__(self, master, app):
+        super().__init__(master)
+        self.app = app
+
+        bar = ttk.Frame(self)
+        bar.pack(fill="x", padx=PAD, pady=(PAD, 0))
+        self.add_btn = ttk.Button(bar, text="Add crawler...", command=self.add_dialog,
+                                  state="disabled")
+        self.add_btn.pack(side="left")
+        self.info_lbl = ttk.Label(bar, foreground="#666")
+        self.info_lbl.pack(side="left", padx=(PAD, 0))
+
+        wrap = ttk.Frame(self)
+        wrap.pack(fill="both", expand=True, padx=PAD, pady=PAD)
+        self.tree = ttk.Treeview(wrap, columns=[c[0] for c in self.COLUMNS],
+                                 show="headings", selectmode="browse")
+        for key, title, width in self.COLUMNS:
+            self.tree.heading(key, text=title)
+            self.tree.column(key, width=width, stretch=(key == "story"))
+        vs = ttk.Scrollbar(wrap, orient="vertical", command=self.tree.yview)
+        self.tree.configure(yscrollcommand=vs.set)
+        self.tree.pack(side="left", fill="both", expand=True)
+        vs.pack(side="right", fill="y")
+        self.tree.tag_configure("off", foreground="#777")
+        self.tree.tag_configure("dead", foreground="#aaa")
+        self.tree.bind("<<TreeviewSelect>>", lambda e: self._on_select())
+
+        edit = ttk.Labelframe(self, text="Selected crawler", padding=PAD)
+        edit.pack(fill="x", padx=PAD, pady=(0, PAD))
+        self.sel_lbl = ttk.Label(edit, text="Select a crawler above.", foreground="#666",
+                                 justify="left", wraplength=760)
+        self.sel_lbl.pack(anchor="w")
+        row = ttk.Frame(edit)
+        row.pack(fill="x", pady=(6, 0))
+        ttk.Label(row, text="Rank").pack(side="left")
+        self.rank = tk.StringVar()
+        # Blank is off the list: clearing it is how a crawler falls off.
+        self.rank_sb = ttk.Spinbox(row, textvariable=self.rank, from_=1, to=mg.BOARD_SIZE,
+                                   width=4, state="disabled")
+        self.rank_sb.pack(side="left", padx=(4, PAD))
+        ttk.Label(row, text="Multiplier").pack(side="left")
+        self.mult = tk.StringVar()
+        self.mult_sb = ttk.Spinbox(row, textvariable=self.mult, from_=1, to=99, width=4,
+                                   state="disabled")
+        self.mult_sb.pack(side="left", padx=(4, PAD))
+        self.apply_btn = ttk.Button(row, text="Save", command=self.apply, state="disabled")
+        self.apply_btn.pack(side="left")
+        self.revive_btn = ttk.Button(row, text="Bring back", command=self.revive,
+                                     state="disabled")
+        self.revive_btn.pack(side="right")
+        self.kill_btn = ttk.Button(row, text="Killed...", command=self.kill, state="disabled")
+        self.kill_btn.pack(side="right", padx=(0, 4))
+        for widget in (self.rank_sb, self.mult_sb):
+            widget.bind("<Return>", lambda e: self.apply())
+        ttk.Label(edit, text="Clear the rank to take a crawler off the list; give a former "
+                             "one a rank to bring them back, multiplier remembered. Everyone "
+                             "below a new rank moves down one, and tenth is pushed off. Each "
+                             "floor generated adds one to the multiplier of everyone still "
+                             "on the list.",
+                  foreground="#666", font=("Segoe UI", 8), wraplength=760,
+                  justify="left").pack(anchor="w", pady=(4, 0))
+
+        self.refresh()
+
+    # -- table ----------------------------------------------------------------
+
+    def refresh(self):
+        self.tree.delete(*self.tree.get_children())
+        roster = self.app.roster
+        floor = mg.board_floor(roster)
+        self.add_btn.configure(state="normal" if floor else "disabled")
+        if roster is None:
+            self.info_lbl.configure(text="Open or start a campaign on the Campaign tab: "
+                                         "the leaderboard is kept in it.")
+        elif floor is None:
+            self.info_lbl.configure(text=f"No leaderboard yet. It starts on Floor "
+                                         f"{mg.LEADERBOARD['first_floor']}; generate that "
+                                         f"floor or deeper in this campaign.")
+        else:
+            self.info_lbl.configure(text=f"As of floor {floor}. Changes here count "
+                                         f"towards floor {floor}.")
+        crawlers = list(roster.leaderboard) if roster else []
+        # The list first, then former crawlers, then the dead.
+        crawlers.sort(key=lambda c: (0 if c.rank else 1 if c.alive else 2, c.rank or 0, c.name))
+        for c in crawlers:
+            if c.rank:
+                rank, tags, bounty = str(c.rank), (), f"{c.bounty:,}"
+            elif c.alive:
+                rank, tags, bounty = "-", ("off",), "-"
+            else:
+                rank, tags, bounty = "dead", ("dead",), "-"
+            self.tree.insert("", "end", iid=c.name, tags=tags,
+                             values=(rank, c.name + (" (added)" if c.added else ""),
+                                     mg.ranked_label(c), f"x{c.multiplier}", bounty,
+                                     mg.ranked_story(c)))
+        self._select(None)
+
+    def _crawler(self, name):
+        roster = self.app.roster
+        return next((c for c in roster.leaderboard if c.name == name), None) if roster else None
+
+    def _on_select(self):
+        sel = self.tree.selection()
+        self._select(self._crawler(sel[0]) if sel else None)
+
+    def _select(self, c):
+        self._selected = c
+        if c is None:
+            self.sel_lbl.configure(text="Select a crawler above.", foreground="#666")
+            self.rank.set("")
+            self.mult.set("")
+            for w in (self.rank_sb, self.mult_sb, self.apply_btn, self.kill_btn,
+                      self.revive_btn):
+                w.configure(state="disabled")
+            return
+        who = mg.ranked_label(c)
+        status = (f"rank {c.rank}, bounty {c.bounty:,} gold" if c.rank else
+                  "off the list" if c.alive else f"died on floor {c.died_on}")
+        self.sel_lbl.configure(text=f"{c.name}{' - ' + who if who else ''} ({status})\n"
+                                    f"{mg.ranked_story(c)}", foreground="#222")
+        self.rank.set(str(c.rank or ""))
+        self.mult.set(str(c.multiplier))
+        alive = "normal" if c.alive else "disabled"
+        for w in (self.rank_sb, self.mult_sb, self.apply_btn, self.kill_btn):
+            w.configure(state=alive)
+        self.revive_btn.configure(state="disabled" if c.alive else "normal")
+
+    # -- changes ----------------------------------------------------------------
+
+    def _done(self, c, msg):
+        """Save, redraw both tabs -- a death here can cost a group a crawler -- and
+        keep the crawler selected."""
+        if not self.app.campaign_tab._save():
+            return
+        self.app.campaign_tab.refresh()          # which refreshes this tab too
+        if c.name in self.tree.get_children():
+            self.tree.selection_set(c.name)
+            self.tree.see(c.name)
+        self.app._set_status(msg)
+
+    def apply(self):
+        """Save the selected crawler's rank and multiplier."""
+        c = getattr(self, "_selected", None)
+        if c is None:
+            return
+        try:
+            rank = int(self.rank.get()) if self.rank.get().strip() else None
+            mult = int(self.mult.get()) if self.mult.get().strip() else c.multiplier
+        except ValueError:
+            messagebox.showerror("Rank and multiplier", "Rank and multiplier are whole "
+                                 "numbers; leave the rank blank for off the list.",
+                                 parent=self)
+            return
+        roster = self.app.roster
+        try:
+            if rank is None and c.rank is not None:
+                mg.drop_from_board(roster, c.name)
+            elif rank is not None and rank != c.rank:
+                mg.place_on_board(roster, c.name, rank)
+            if mult != c.multiplier:
+                mg.set_multiplier(roster, c.name, mult)
+        except mg.MapgenError as e:
+            messagebox.showerror("Could not change the leaderboard", str(e), parent=self)
+            self.refresh()
+            return
+        self._done(c, f"{c.name}: " + (f"rank {c.rank}, x{c.multiplier}, bounty "
+                                       f"{c.bounty:,} gold" if c.rank else
+                                       f"off the list, x{c.multiplier} remembered"))
+
+    def kill(self):
+        c = getattr(self, "_selected", None)
+        if c is None:
+            return
+        claimed = f"Their bounty of {c.bounty:,} gold is claimed" if c.rank else "Nobody claims a bounty"
+        group = f", and {c.team} loses them" if c.team else ""
+        if not messagebox.askyesno("Killed?", f"Kill {c.name}? {claimed}{group}.",
+                                   parent=self):
+            return
+        try:
+            mg.drop_from_board(self.app.roster, c.name, died=True)
+        except mg.MapgenError as e:
+            messagebox.showerror("Could not change the leaderboard", str(e), parent=self)
+            return
+        self._done(c, f"{c.name} is dead, on floor {c.died_on}")
+
+    def revive(self):
+        c = getattr(self, "_selected", None)
+        if c is None:
+            return
+        try:
+            mg.revive_ranked(self.app.roster, c.name)
+        except mg.MapgenError as e:
+            messagebox.showerror("Could not change the leaderboard", str(e), parent=self)
+            return
+        self._done(c, f"{c.name} is alive again, off the list until you rank them")
+
+    # -- someone new ------------------------------------------------------------
+
+    def add_dialog(self):
+        """Ask for a crawler to put on the list, then add them."""
+        roster = self.app.roster
+        if mg.board_floor(roster) is None:
+            return
+        dlg = tk.Toplevel(self)
+        dlg.title("Add a crawler to the leaderboard")
+        dlg.transient(self.winfo_toplevel())
+        dlg.resizable(False, False)
+        body = ttk.Frame(dlg, padding=PAD * 2)
+        body.pack(fill="both", expand=True)
+        groups = [t for t in roster.teams if t.alive and t.members]
+        fields = {"name": tk.StringVar(), "team": tk.StringVar(value="(none)"),
+                  "race": tk.StringVar(), "class": tk.StringVar(),
+                  "rank": tk.StringVar(value=str(mg.BOARD_SIZE)),
+                  "multiplier": tk.StringVar(value="1")}
+        race_cb = ttk.Combobox(body, textvariable=fields["race"], width=34,
+                               values=mg.CRAWLER_RACE)
+        class_cb = ttk.Combobox(body, textvariable=fields["class"], width=34,
+                                values=mg.CRAWLER_CLASS)
+        team_cb = ttk.Combobox(body, textvariable=fields["team"], width=34, state="readonly",
+                               values=["(none)"] + [t.name for t in groups])
+
+        def group_picked(_event=None):
+            # A crawler from a group is one of its members: offer their races, and
+            # take the class from whoever is picked.
+            team = next((t for t in groups if t.name == fields["team"].get()), None)
+            if team is None:
+                race_cb.configure(values=mg.CRAWLER_RACE)
+                class_cb.configure(state="normal")
+                return
+            race_cb.configure(values=[m["race"] for m in team.members])
+            fields["race"].set(team.members[0]["race"])
+            fields["class"].set(team.members[0]["class"])
+            class_cb.configure(state="disabled")
+
+        def race_picked(_event=None):
+            team = next((t for t in groups if t.name == fields["team"].get()), None)
+            m = team and next((m for m in team.members if m["race"] == fields["race"].get()), None)
+            if m:
+                fields["class"].set(m["class"])
+
+        team_cb.bind("<<ComboboxSelected>>", group_picked)
+        race_cb.bind("<<ComboboxSelected>>", race_picked)
+        rows = (("Name", ttk.Entry(body, textvariable=fields["name"], width=36)),
+                ("Group", team_cb), ("Race", race_cb), ("Class", class_cb),
+                ("Rank", ttk.Spinbox(body, from_=1, to=mg.BOARD_SIZE, width=6,
+                                     textvariable=fields["rank"])),
+                ("Multiplier", ttk.Spinbox(body, from_=1, to=99, width=6,
+                                           textvariable=fields["multiplier"])))
+        for r, (label, widget) in enumerate(rows):
+            ttk.Label(body, text=label).grid(row=r, column=0, sticky="w", pady=2)
+            widget.grid(row=r, column=1, sticky="w", padx=(PAD, 0), pady=2)
+        ttk.Label(body, text="Leave Group as (none) for a stranger, or for one of the party. "
+                             "A crawler from a group is one of its members, so pick their "
+                             "race from it; the class comes with them. Whoever holds the "
+                             "rank now, and everyone below, moves down one.",
+                  foreground="#666", font=("Segoe UI", 8), wraplength=360,
+                  justify="left").grid(row=len(rows), column=0, columnspan=2,
+                                       sticky="w", pady=(6, 0))
+        buttons = ttk.Frame(body)
+        buttons.grid(row=len(rows) + 1, column=0, columnspan=2, sticky="e", pady=(PAD, 0))
+
+        def ok():
+            if self.add_crawler({k: v.get() for k, v in fields.items()}):
+                dlg.destroy()
+
+        ttk.Button(buttons, text="Add", command=ok).pack(side="left")
+        ttk.Button(buttons, text="Cancel", command=dlg.destroy).pack(side="left", padx=(4, 0))
+        dlg.bind("<Return>", lambda e: ok())
+        dlg.bind("<Escape>", lambda e: dlg.destroy())
+        rows[0][1].focus_set()
+        dlg.grab_set()
+
+    def add_crawler(self, values: dict) -> bool:
+        """Put a crawler on the list from the dialog's values. Kept apart from the
+        dialog so it can be driven without one. Returns whether they were added."""
+        try:
+            rank = int(values.get("rank") or mg.BOARD_SIZE)
+            mult = int(values.get("multiplier") or 1)
+        except ValueError:
+            messagebox.showerror("Rank and multiplier", "Rank and multiplier are whole "
+                                 "numbers.", parent=self)
+            return False
+        team = values.get("team", "")
+        try:
+            c = mg.place_on_board(self.app.roster, values.get("name", ""), rank,
+                                  race=values.get("race", ""), klass=values.get("class", ""),
+                                  team="" if team == "(none)" else team, multiplier=mult)
+        except mg.MapgenError as e:
+            messagebox.showerror("Could not add that crawler", str(e), parent=self)
+            return False
+        self._done(c, f"{c.name} is on the list at rank {c.rank}, bounty {c.bounty:,} gold")
         return True
 
 
@@ -835,6 +1147,8 @@ class App(tk.Tk):
         self.text.pack(side="left", fill="both", expand=True)
         self.campaign_tab = CampaignView(right, self)
         right.add(self.campaign_tab, text="Campaign")
+        self.board_tab = LeaderboardView(right, self)
+        right.add(self.board_tab, text="Leaderboard")
         self.loot_tab = LootView(right, self)
         right.add(self.loot_tab, text="Loot Boxes")
         self.notebook = right
@@ -1403,6 +1717,64 @@ def selftest() -> int:
     check(not sky.alive and "dead" in cv.tree.item("The Sky Pirates", "tags"),
           "setting a group's fate to fatal kills it")
     check(sky.status == "shot down over the market", "the report can be rewritten")
+
+    # The Leaderboard tab: nothing before Floor 4, then the Top Ten, edited.
+    lb = app.board_tab
+    check(not lb.tree.get_children() and str(lb.add_btn.cget("state")) == "disabled",
+          "no leaderboard before Floor 4")
+    app.roster = mg.generate(4, "small", 4242, images=False, roster=app.roster).roster
+    app.campaign_tab.refresh()
+    app.update()
+    ranked = [r for r in lb.tree.get_children() if lb.tree.set(r, "rank").isdigit()]
+    check(len(ranked) == 10, f"Floor 4 deals a Top Ten ({len(ranked)})")
+    third = mg.board(app.roster)[2]
+    lb.tree.selection_set(third.name)
+    app.update()
+    lb.rank.set("")
+    lb.apply()
+    app.update()
+    check(third.rank is None and "off" in lb.tree.item(third.name, "tags")
+          and "fell off" in lb.tree.set(third.name, "story"),
+          "clearing a rank takes a crawler off the list, and the table says so")
+    lb.tree.selection_set(third.name)
+    app.update()
+    lb.rank.set("1")
+    lb.mult.set("5")
+    lb.apply()
+    app.update()
+    check(third.rank == 1 and lb.tree.set(third.name, "bounty") == "5,000,000"
+          and "came back" in lb.tree.set(third.name, "story"),
+          "a former crawler comes back at a rank, and a multiplier can be set")
+    errors.clear()
+    check(lb.add_crawler({"name": "Hero of the Party", "team": "(none)", "race": "Human",
+                          "class": "Bard", "rank": "2", "multiplier": "1"})
+          and mg.find_ranked(app.roster, "Hero of the Party").rank == 2,
+          "one of the party can be put on the list")
+    group = next(t for t in app.roster.active() if t.members)
+    check(not lb.add_crawler({"name": "Not In It", "team": group.name, "race": "Nobody",
+                              "rank": "3"}) and errors,
+          "a crawler from a group has to be one of its members")
+    from_group = next((c for c in mg.board(app.roster) if c.team), None)
+    if from_group is not None:
+        members_were = len(mg.find_team(app.roster, from_group.team).members)
+        messagebox.askyesno = lambda *a, **kw: True
+        lb.tree.selection_set(from_group.name)
+        app.update()
+        lb.kill()
+        app.update()
+        team = mg.find_team(app.roster, from_group.team)
+        check(not from_group.alive and "dead" in lb.tree.item(from_group.name, "tags")
+              and (len(team.members) == members_were - 1 or not team.alive),
+              "killing a ranked crawler costs their group them too")
+    lb.add_dialog()
+    app.update()
+    dialogs = [w for w in lb.winfo_children() if isinstance(w, tk.Toplevel)]
+    check(len(dialogs) == 1 and len([w for w in dialogs[0].winfo_children()[0].winfo_children()
+                                     if isinstance(w, (ttk.Entry, ttk.Combobox))]) >= 6,
+          "the Add crawler dialog opens with its fields")
+    for d in dialogs:
+        d.grab_release()
+        d.destroy()
     app.roster = None
     app.campaign_tab.refresh()
 

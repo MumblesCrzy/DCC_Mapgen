@@ -15,7 +15,7 @@ A procedural floor/map generator in the style of the *Dungeon Crawler Carl* book
 - **Floor 9** (Faction Wars) — the nine-slice pie around Larracos, warlords, stance paths.
 - **Floor 10** (Don't Come In Last) — seven-heat race season, garage/vehicle/upgrades.
 - **Floor 11** (A Parade of Horribles) — parade route, judges, arena boss.
-- **Campaigns** — other crawler teams carry from floor to floor, keeping who they are and where they stand with the party, until their luck runs out. From Floor 3 they carry a party of named races and classes too. See [Campaigns](#campaigns).
+- **Campaigns** — other crawler teams carry from floor to floor, keeping who they are and where they stand with the party, until their luck runs out. From Floor 3 they carry a party of named races and classes too, and from Floor 4 a Top Ten leaderboard with bounties tracks who is ranked, who fell off and who came back. See [Campaigns](#campaigns).
 - A **desktop app** (`dcc_mapgen_gui.py`) wrapping all of the above: pick a floor and size, generate, and read the write-up and browse every map without leaving the window. See [Desktop app](#desktop-app).
 - Every floor supports `--seed` for reproducible maps — byte-for-byte, and [tested](#tests) as such — and `--image`/`--save` for SVG or PNG output (PNG needs the optional `resvg-py` package). The seed is per floor: one seed carried across a whole campaign gives a different dungeon on each floor.
 - `--rooms-for` can (re)generate just the room-level detail for one neighborhood from a floor you already generated and are playing, without touching the rest of the data.
@@ -327,6 +327,9 @@ same `floorN_size_seedS.md` plus map files that `--save` produces on the command
   where a team stands with the party, add a group met at the table, and rewrite a
   group's crawler count, latest report or fate — alive or dead. See
   [Campaigns](#campaigns).
+- The **Leaderboard** tab is the campaign's Top Ten from Floor 4, and everyone who
+  has ever been on it. Rank anyone, take them off, set their multiplier, kill them, or
+  add a crawler of your own. See [The leaderboard](#the-leaderboard).
 
 The inline preview uses `resvg-py` (`pip install -r requirements.txt`). Without it the app
 still generates and saves everything — maps just save as SVG, and **Open in browser**
@@ -488,6 +491,58 @@ Carrying a campaign never changes the floor itself. Teams are dealt from their o
 random stream, so the same seed gives the same map and the same everything else
 whether or not a campaign is open.
 
+### The leaderboard
+
+From Floor 4, the Other Crawlers section ends with the Dungeon Leaderboard: the Top
+Ten by ratings, each with a bounty on their head. The bounty is the figure for the
+rank times the crawler's multiplier:
+
+| Rank | 1 | 2 | 3 | 4 | 5 | 6–10 |
+| --- | --- | --- | --- | --- | --- | --- |
+| Bounty | 1,000,000 | 500,000 | 400,000 | 300,000 | 200,000 | 100,000 |
+
+The multiplier counts the floors a crawler has spent on the list: x1 on their first,
+x2 on their second, and so on. It is remembered when they drop off. A crawler ranked
+on Floors 4 and 5 who falls off on 6 and comes back on 7 is x3, not x1.
+
+The first floor of a campaign from 4 down deals the list. A few places go to crawlers
+from groups the party has met, a group having a good floor being likelier to put
+someone there; the rest go to strangers with names from a new bank. A list first
+dealt deeper than Floor 4 has been running since then, so its crawlers arrive with
+multipliers to match.
+
+After that the list is the DM's. A generated floor does only three things to it:
+
+- everyone still on the list gets one more on their multiplier;
+- anyone whose group the floor wiped out, or who is no longer in it, dies, and their
+  bounty is claimed;
+- the empty places at the bottom go to newcomers.
+
+Nobody is moved up or down by the generator.
+
+The campaign file keeps everyone who has ever been ranked: when they came onto the
+list, fell off, came back or died, with the rank and multiplier they had at each.
+The write-up for each floor after the first says what changed since the last one,
+your own changes included.
+
+The rules for killing a ranked crawler are printed under the table: the Bounty Box
+for the killer, and the Venison Box for a crawler who reaches the next floor still
+ranked. The leaderboard is what gives a Bounty Box its figure.
+
+In the desktop app this is the **Leaderboard** tab. It lists everyone ever ranked:
+the list first, then former crawlers, then the dead. For the selected crawler:
+
+- **Rank:** give a former crawler a rank to bring them back with their multiplier,
+  or clear it to take a crawler off. Everyone below a new rank moves down one, and
+  tenth is pushed off.
+- **Multiplier:** set it outright. Later floors still add one to it.
+- **Killed...:** kills them and claims the bounty. A crawler from a group takes their
+  place in that group with them; if they were its last crawler, the group dies too.
+  **Bring back** undoes it.
+- **Add crawler...:** puts someone new on the list, a stranger or one of the party's
+  own. A crawler from a group has to be one of its crawlers, so you pick their race
+  from the group and their class comes with them.
+
 ## Usage
 
 ### One example per floor
@@ -612,6 +667,22 @@ threat suggestions are checked against Floor 8 always reading undead, the shared
 sections never counting, names and single stray words never counting, words of more
 than one word still counting, every measured false signal staying out, and the table
 in fifty-six written floors matching a fresh reading of each floor's own text.
+
+The leaderboard has its own group. The canon bounties are written into the test
+rather than read from the bank, and checked against the table every floor prints:
+nothing before Floor 4, a full Top Ten at x1 on Floor 4, and every bounty its rank's
+figure times the multiplier. The multiplier is followed floor by floor — up one for
+each floor on the list, not for a floor off it, and kept through a return. Also
+checked:
+
+- a ranked crawler from a group really is one of that group's crawlers, through the
+  Floor 6 upgrades;
+- nobody on the list shares a first name or surname, over two hundred lists;
+- whoever a group loses — wiped out, cut down, or killed from the leaderboard —
+  leaves the list dead, and the next floor refills it to ten;
+- someone who fell off is never dealt back on under a new name;
+- each refused edit leaves the campaign exactly as it was;
+- the whole leaderboard survives a save and load.
 
 A seventh group covers the stat rules, where the risk is drift rather than variety:
 the section renders identically on every floor and seed, it is the last section of

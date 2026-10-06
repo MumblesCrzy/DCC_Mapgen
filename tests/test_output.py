@@ -680,6 +680,281 @@ class CampaignEditTest(unittest.TestCase):
         self.assertFalse([t for t in roster.teams if t.name.startswith("The Bad Count")])
 
 
+class LeaderboardTest(unittest.TestCase):
+    """The Top Ten by ratings, from Floor 4, each with a bounty on their head.
+
+    The figures are the canon ones, written out here rather than read from the
+    bank: a test that reads its expectations from the thing it tests passes
+    whatever the bank says."""
+
+    BOUNTIES = [1_000_000, 500_000, 400_000, 300_000, 200_000,
+                100_000, 100_000, 100_000, 100_000, 100_000]
+    ROW = re.compile(r"^\| (\d+) \| \*\*(.+?)\*\*.* \| x(\d+) \| ([\d,]+) gold \|$")
+
+    @staticmethod
+    def _campaign(floors, seed=4242, size="medium"):
+        roster, results = None, {}
+        for f in floors:
+            res = mg.generate(f, size, seed, images=False, roster=roster)
+            roster, results[f] = res.roster, res
+        return roster, results
+
+    def _assert_full(self, roster, where):
+        ranks = [c.rank for c in mg.board(roster)]
+        self.assertEqual(ranks, list(range(1, 11)), f"{where}: ranks {ranks}")
+
+    def test_nothing_before_floor_4(self):
+        roster, res = self._campaign((1, 2, 3))
+        self.assertEqual(roster.leaderboard, [])
+        for f in (1, 2, 3):
+            self.assertNotIn("Leaderboard", res[f].markdown)
+        with self.assertRaises(mg.MapgenError):
+            mg.place_on_board(roster, "Anyone", 1)
+
+    def test_floor_4_deals_a_top_ten_at_the_canon_bounties(self):
+        for seed in (4242, 11, 77):
+            roster, res = self._campaign((3, 4), seed=seed)
+            self._assert_full(roster, f"seed {seed}")
+            rows = [self.ROW.match(ln) for ln in res[4].markdown.splitlines()]
+            rows = [m.groups() for m in rows if m]
+            self.assertEqual(len(rows), 10, f"seed {seed}: {len(rows)} rows")
+            for (rank, name, mult, gold), want in zip(rows, self.BOUNTIES):
+                self.assertEqual(mult, "1", f"seed {seed}: {name} new on Floor 4 at x{mult}")
+                self.assertEqual(int(gold.replace(",", "")), want, f"seed {seed}: rank {rank}")
+            self.assertEqual(len({r[1] for r in rows}), 10)
+
+    def test_some_of_the_top_ten_are_groups_the_party_has_met(self):
+        """And each of those is one of that group's crawlers, race and class."""
+        met = 0
+        for seed in range(1, 9):
+            # Through floor 6, where the group's classes upgrade under them.
+            roster, _ = self._campaign((3, 4, 5, 6), seed=seed)
+            for c in mg.board(roster):
+                if not c.team:
+                    continue
+                met += 1
+                team = mg.find_team(roster, c.team)
+                self.assertIn({"race": c.race, "class": c.klass}, team.members,
+                              f"seed {seed}: {c.name} is not in {team.name}")
+        self.assertGreater(met, 8, "the list almost never draws on the roster")
+
+    def test_names_on_the_list_never_share_a_first_name_or_surname(self):
+        bank = {w.lower() for w in mg.CRAWLER_FIRST + mg.CRAWLER_SURNAME}
+        stub = type("StubFloor", (), {"days": 8, "neighborhoods": None})
+        for seed in range(200):
+            roster = mg.build_crawler_teams(stub(), "large", seed, 4)
+            mg.build_leaderboard(roster, seed, 4)
+            words = [w.lower() for c in roster.leaderboard for w in c.name.split()
+                     if w.lower() in bank]
+            self.assertEqual(len(words), len(set(words)),
+                             f"seed {seed}: {[c.name for c in roster.leaderboard]}")
+
+    def test_the_multiplier_goes_up_one_for_each_floor_on_the_list(self):
+        roster, res = self._campaign((3, 4, 5, 6, 8))
+        seen = {}
+        for f in (4, 5, 6, 8):
+            for c in res[f].floor.leaderboard:
+                if c.name in seen:
+                    self.assertEqual(c.multiplier, seen[c.name] + 1,
+                                     f"{c.name} on floor {f}")
+                else:
+                    self.assertEqual(c.multiplier, 1, f"{c.name} new on floor {f}")
+                seen[c.name] = c.multiplier
+        self.assertTrue(any(m == 4 for m in seen.values()), "nobody lasted four floors")
+
+    def test_a_bounty_is_the_ranks_figure_times_the_multiplier(self):
+        _, res = self._campaign((3, 4, 5, 6))
+        rows = [self.ROW.match(ln) for ln in res[6].markdown.splitlines()]
+        rows = [m.groups() for m in rows if m]
+        self.assertEqual(len(rows), 10)
+        for rank, name, mult, gold in rows:
+            self.assertEqual(int(gold.replace(",", "")),
+                             self.BOUNTIES[int(rank) - 1] * int(mult), name)
+        self.assertTrue(any(m != "1" for _, _, m, _ in rows))
+
+    def test_the_multiplier_is_remembered_off_the_list(self):
+        roster, _ = self._campaign((3, 4, 5))
+        c = mg.board(roster)[4]
+        self.assertEqual(c.multiplier, 2)
+        mg.drop_from_board(roster, c.name)
+        self.assertIsNone(c.rank)
+        roster = mg.generate(6, "medium", 4242, images=False, roster=roster).roster
+        self.assertEqual(c.multiplier, 2, "a floor off the list does not count")
+        mg.place_on_board(roster, c.name, 3)
+        self.assertEqual((c.rank, c.multiplier), (3, 3), "back on: floors 4, 5 and 6")
+        roster = mg.generate(8, "medium", 4242, images=False, roster=roster).roster
+        self.assertEqual(c.multiplier, 4)
+        self.assertEqual([(e["floor"], e["event"]) for e in c.history],
+                         [(4, "entered"), (5, "fell off"), (6, "returned")])
+
+    def test_a_set_multiplier_keeps_climbing(self):
+        roster, _ = self._campaign((3, 4))
+        c = mg.board(roster)[0]
+        mg.set_multiplier(roster, c.name, 5)
+        self.assertEqual(c.multiplier, 5)
+        roster = mg.generate(5, "medium", 4242, images=False, roster=roster).roster
+        self.assertEqual(c.multiplier, 6)
+
+    def test_placing_someone_moves_everyone_below_down_one(self):
+        roster, _ = self._campaign((3, 4))
+        before = [c.name for c in mg.board(roster)]
+        new = mg.place_on_board(roster, "Hero of the Party", 3, race="Human", klass="Bard")
+        self.assertTrue(new.added)
+        after = [c.name for c in mg.board(roster)]
+        self.assertEqual(after, before[:2] + ["Hero of the Party"] + before[2:9])
+        tenth = mg.find_ranked(roster, before[9])
+        self.assertIsNone(tenth.rank)
+        self.assertEqual(tenth.history[-1]["event"], "fell off")
+        mg.place_on_board(roster, before[0], 5)          # moving, not adding
+        self.assertEqual([c.name for c in mg.board(roster)][4], before[0])
+        self._assert_full(roster, "after moves")
+
+    def test_dropping_someone_closes_the_ranks_and_a_floor_fills_them(self):
+        roster, _ = self._campaign((3, 4))
+        mg.drop_from_board(roster, mg.board(roster)[2].name)
+        self.assertEqual([c.rank for c in mg.board(roster)], list(range(1, 10)))
+        roster = mg.generate(5, "medium", 4242, images=False, roster=roster).roster
+        self._assert_full(roster, "the next floor")
+
+    def test_a_ranked_crawler_dies_with_their_group(self):
+        roster, _ = self._campaign((3, 4))
+        c = next(c for c in mg.board(roster) if c.team)
+        mg.set_status(roster, c.team, outcome="fatal")
+        self.assertFalse(c.alive)
+        self.assertIsNone(c.rank)
+        self.assertEqual(c.history[-1]["event"], "died")
+        self.assertEqual([x.rank for x in mg.board(roster)], list(range(1, 10)))
+        roster = mg.generate(5, "medium", 4242, images=False, roster=roster).roster
+        self.assertIsNone(c.rank, "the dead are never dealt back on")
+        self._assert_full(roster, "the next floor")
+
+    def test_a_generated_floor_buries_whoever_their_group_lost(self):
+        died = 0
+        for seed in range(1, 25):
+            roster, _ = self._campaign((3, 4, 5, 6), seed=seed, size="small")
+            for c in roster.leaderboard:
+                if not c.team:
+                    continue
+                team = mg.find_team(roster, c.team)
+                there = team.alive and any(m["race"] == c.race for m in team.members)
+                if c.alive:
+                    self.assertTrue(there, f"seed {seed}: {c.name} outlived {team.name}")
+                else:
+                    died += 1
+            self._assert_full(roster, f"seed {seed}")
+        self.assertTrue(died, "no ranked crawler died with their group, so nothing was checked")
+
+    def test_killing_a_ranked_crawler_costs_their_group_them(self):
+        roster, _ = self._campaign((3, 4))
+        c = next(c for c in mg.board(roster) if c.team)
+        team = mg.find_team(roster, c.team)
+        before = len(team.members)
+        mg.drop_from_board(roster, c.name, died=True)
+        self.assertEqual(c.died_on, 4)
+        if before > 1:
+            self.assertEqual(len(team.members), before - 1)
+            self.assertNotIn(c.race, [m["race"] for m in team.members])
+        else:
+            self.assertFalse(team.alive)
+        with self.assertRaises(mg.MapgenError):
+            mg.place_on_board(roster, c.name, 1)
+        mg.revive_ranked(roster, c.name)
+        self.assertTrue(c.alive)
+        self.assertIn(c.race, [m["race"] for m in team.members], "the group has them back")
+
+    def test_a_bad_edit_is_refused_and_changes_nothing(self):
+        roster, _ = self._campaign((3, 4))
+        before = roster.to_dict()
+        group = next(t for t in roster.active() if t.members)
+        name = mg.board(roster)[0].name
+        bad = [lambda: mg.place_on_board(roster, "Someone", 0),
+               lambda: mg.place_on_board(roster, "Someone", 11),
+               lambda: mg.place_on_board(roster, "Someone", "3"),
+               lambda: mg.place_on_board(roster, "  ", 3),
+               lambda: mg.place_on_board(roster, "Someone", 3, multiplier=0),
+               lambda: mg.place_on_board(roster, group.name, 3),
+               lambda: mg.place_on_board(roster, "Someone", 3, team="No Such Group"),
+               lambda: mg.place_on_board(roster, "Someone", 3, team=group.name,
+                                         race="Nobody"),
+               lambda: mg.set_multiplier(roster, name, 0),
+               lambda: mg.drop_from_board(roster, "nobody at all"),
+               lambda: mg.revive_ranked(roster, name)]
+        for i, edit in enumerate(bad):
+            with self.assertRaises(mg.MapgenError, msg=f"edit {i}"):
+                edit()
+        self.assertEqual(roster.to_dict(), before)
+
+    def test_the_write_up_says_what_changed(self):
+        roster, res = self._campaign((3, 4))
+        self.assertNotIn("Since the last floor", res[4].markdown,
+                         "everyone is new on the floor the list is dealt")
+        gone = mg.board(roster)[3].name
+        mg.drop_from_board(roster, gone)
+        mg.place_on_board(roster, "Hero of the Party", 1)
+        md = mg.generate(5, "medium", 4242, images=False, roster=roster).markdown
+        news = md[md.index("Since the last floor"):]
+        self.assertIn(f"**{gone}** fell off the list", news)
+        self.assertIn("**Hero of the Party** is new to the list, at rank 1", news)
+
+    def test_a_list_first_dealt_deeper_has_been_running_since_floor_4(self):
+        deep = []
+        for seed in range(1, 6):
+            board = mg.generate(8, "small", seed, images=False).floor.leaderboard
+            self.assertEqual(len(board), 10)
+            mults = [c.multiplier for c in board]
+            self.assertTrue(all(1 <= m <= 5 for m in mults), mults)   # floors 4-8
+            deep += mults
+        self.assertGreater(max(deep), 1)
+
+    def test_strangers_take_their_upgrade_from_floor_6(self):
+        for f, board in ((6, mg.generate(6, "small", 7, images=False).floor.leaderboard),
+                         (9, mg.generate(9, "small", 7, images=False).floor.leaderboard)):
+            for c in board:
+                self.assertNotIn(c.klass, mg.CRAWLER_CLASS_UPGRADE,
+                                 f"floor {f}: {c.name} is still a {c.klass}")
+        # And one dealt on Floor 4 takes it on reaching 6, not only one dealt there.
+        carried = 0
+        for seed in range(1, 9):
+            _, res = self._campaign((3, 4, 5, 6), seed=seed, size="small")
+            due = {c.name for c in res[5].floor.leaderboard
+                   if not c.team and c.klass in mg.CRAWLER_CLASS_UPGRADE}
+            for c in res[6].floor.leaderboard:
+                if c.name in due:
+                    carried += 1
+                    self.assertNotIn(c.klass, mg.CRAWLER_CLASS_UPGRADE, f"seed {seed}: {c.name}")
+        self.assertTrue(carried, "no stranger reached floor 6 owed an upgrade")
+
+    def test_nobody_is_ranked_twice_under_two_names(self):
+        """A group's crawler who falls off is still that crawler: a later floor
+        dealing a newcomer from the same group must not pick them again."""
+        checked = 0
+        for seed in range(1, 21):
+            roster, _ = self._campaign((3, 4), seed=seed, size="small")
+            # Everyone off, so the next floors deal ten newcomers each and the
+            # groups of the crawlers who fell off are in the running.
+            for c in mg.board(roster):
+                mg.drop_from_board(roster, c.name)
+            for f in (5, 6):
+                for c in mg.board(roster):
+                    mg.drop_from_board(roster, c.name)
+                roster = mg.generate(f, "small", seed, images=False, roster=roster).roster
+            alive = [(c.team, c.race) for c in roster.leaderboard if c.team and c.alive]
+            checked += len(alive)
+            self.assertEqual(len(alive), len(set(alive)), f"seed {seed}: {alive}")
+        self.assertGreater(checked, 30)
+
+    def test_the_leaderboard_survives_a_save_and_load(self):
+        roster, _ = self._campaign((3, 4, 5))
+        mg.place_on_board(roster, "Hero of the Party", 2, race="Human", klass="Bard")
+        back = mg.CampaignRoster.from_dict(json.loads(json.dumps(roster.to_dict())))
+        self.assertEqual(back.to_dict(), roster.to_dict())
+        self.assertEqual([c.multiplier for c in mg.board(back)],
+                         [c.multiplier for c in mg.board(roster)])
+        old = roster.to_dict()
+        old.pop("leaderboard")
+        self.assertEqual(mg.CampaignRoster.from_dict(old).leaderboard, [])
+
+
 class CrawlerPartyTest(unittest.TestCase):
     """Floor 3 is where every surviving crawler picks a race and a class.
 
