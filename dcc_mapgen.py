@@ -957,6 +957,9 @@ class OpenedBox:
     gold: int = 0              # none on Floor 1
     floor: int = 1
     item_tiers: List[str] = field(default_factory=list)   # one per item, headline first
+    outcome: str = ""          # a Fan box's vote: good, neutral or bad
+    threat: str = ""           # what a Benefactor box was prepared for
+    sponsor_note: str = ""     # who sent a Benefactor box, and what they said
 
     @property
     def label(self) -> str:
@@ -965,9 +968,14 @@ class OpenedBox:
     def markdown(self) -> str:
         """The box on one line, its items grouped under the tier each rolled at:
         a plain potion or tool says nothing about its own tier, and a DM handing
-        it out needs to know."""
+        it out needs to know. A Fan box groups under the vote instead."""
         note = f" *({self.note})*" if self.note else ""
-        if self.item_tiers:
+        if self.outcome:
+            head = self.outcome.title()
+            if self.outcome == "good":
+                head += f", {self.opened_at}"
+            body = f"{head}: " + "; ".join(self.items)
+        elif self.item_tiers:
             groups = {}
             for tier, item in zip(self.item_tiers, self.items):
                 groups.setdefault(tier, []).append(item)
@@ -975,7 +983,35 @@ class OpenedBox:
         else:
             body = "; ".join(self.items)           # a bounty, not a set of items
         gold = f". **{self.gold:,} gold**" if self.gold else ""
-        return f"- **{self.label}**{note} — {body}{gold}."
+        # The sponsor's note goes last: it ends in a quote with its own stop.
+        sponsor = f" {self.sponsor_note}" if self.sponsor_note else ""
+        return f"- **{self.label}**{note} — {body}{gold}.{sponsor}"
+
+
+def benefactor_threats() -> List[str]:
+    """The threats a sponsor can prepare a Benefactor box for, in bank order."""
+    return list(LOOT_BOXES["benefactor"]["threats"])
+
+
+def find_threat(name: str) -> str:
+    """A threat key from what a DM typed: "fire", "Fire", or its label, "the
+    undead". Raises MapgenError naming the choices when nothing matches."""
+    wanted = name.strip().lower()
+    for key, t in LOOT_BOXES["benefactor"]["threats"].items():
+        if wanted in (key, t["label"].lower()):
+            return key
+    raise MapgenError(f"no threat called {name!r}; a sponsor can prepare for: "
+                      + ", ".join(benefactor_threats()))
+
+
+def fan_odds(liked: float) -> dict:
+    """The audience votes twice. Two likes is good, two dislikes bad, a split
+    neutral, so at 70% liked the odds are 49% good, 42% neutral and 9% bad, and
+    only a crowd that loved it (100%) or hated it (0%) is ever certain."""
+    if not 0 <= liked <= 100:
+        raise MapgenError(f"how much the audience liked it is 0 to 100 (got {liked})")
+    p = liked / 100
+    return {"good": p * p, "neutral": 2 * p * (1 - p), "bad": (1 - p) * (1 - p)}
 
 
 class LootRoller:
@@ -1018,20 +1054,34 @@ class LootRoller:
                 out.append(effect)
         return out
 
-    def _make(self, pool: str, quality: str, headline: bool) -> str:
+    def _make(self, pool: str, quality: str, headline: bool,
+              counter: Optional[str] = None) -> str:
         """One item from a pool, at a quality: enchanted if the pool takes it and
         the quality has any to give, named if it is a Legendary or Celestial
-        headline. Plain pools draw from the quality's band instead."""
+        headline. Plain pools draw from the quality's band instead. `counter` is
+        a Benefactor box's threat counter, and takes one of the enchantment
+        slots rather than adding one."""
         lb = LOOT_BOXES
         item = self._item(pool, quality)
         fx_count = lb["effects_per_item"][quality]
         if fx_count and pool in lb["enchantable"]:
-            item = f"{item} ({'; '.join(self._effects(quality, pool, fx_count))})"
+            effects = self._effects(quality, pool, fx_count - (1 if counter else 0))
+            if counter:
+                effects = [counter] + effects
+            item = f"{item} ({'; '.join(effects)})"
             if headline and quality in ("Legendary", "Celestial"):
                 name = self._deck("first", BOSS_FIRST).draw()
                 epithet = self._deck("epithet", lb["epithets"]).draw()
                 item = f"**{name}'s {epithet}**, {item}"
         return item
+
+    def _weighted_pool(self, pools: List[str]) -> str:
+        """A pool picked in proportion to its size, so every item is equally likely."""
+        sizes = []
+        for p in pools:
+            bank = LOOT_BOXES["items"][p]
+            sizes.append(sum(map(len, bank.values())) if isinstance(bank, dict) else len(bank))
+        return self.rng.choices(pools, weights=sizes)[0]
 
     def _lesser_pool(self, main_pool: str) -> str:
         """Which pool a lesser item comes from, by LOOT_BOXES["secondary"]: the
@@ -1049,13 +1099,17 @@ class LootRoller:
             return main_pool
         pools = (sec["equip_pools"] if kind == "equip" else sec["consumable_pools"])
         pools = [p for p in pools if p != main_pool] or pools
-        sizes = []
-        for p in pools:
-            bank = LOOT_BOXES["items"][p]
-            sizes.append(sum(map(len, bank.values())) if isinstance(bank, dict) else len(bank))
-        return self.rng.choices(pools, weights=sizes)[0]
+        return self._weighted_pool(pools)
 
-    def open(self, tier: str, box_type, floor: int = 1) -> OpenedBox:
+    def _gold(self, tier: str, floor: int) -> int:
+        lb = LOOT_BOXES
+        if floor < lb["gold"]["from_floor"]:
+            return 0
+        lo, hi = lb["gold"]["roll"]
+        return self.rng.randint(lo, hi) * floor ** lb["gold"]["tier_power"][tier]
+
+    def open(self, tier: str, box_type, floor: int = 1, *,
+             threat: Optional[str] = None, liked: Optional[float] = None) -> OpenedBox:
         """Open one box. `box_type` is a type dict or a name; unknown names are
         achievement boxes and open from the Adventurer pools. `floor` sets the
         gold: none on Floor 1, then (1-10) x floor ^ tier.
@@ -1067,7 +1121,11 @@ class LootRoller:
         Silver to Platinum, a Gold box's four from Bronze or Silver. A Benefactor
         box opens three tiers above its label, which is how the books put a
         Bronze one ahead of a Gold Adventurer box -- but the promotion stops at
-        Legendary, and never demotes a box already above it."""
+        Legendary, and never demotes a box already above it.
+
+        `threat` prepares a Benefactor box for what its sponsor can see coming;
+        `liked` is how much the audience liked whatever earned a Fan box, 0-100.
+        Each is ignored by every other type."""
         lb = LOOT_BOXES
         if isinstance(box_type, str):
             box_type = find_box_type(box_type)
@@ -1079,48 +1137,92 @@ class LootRoller:
             # A Bounty or Venison box is gold already: the bounty, not a roll.
             return OpenedBox(tier, box_type["name"], tier, [box_type["holds"]],
                              box_type.get("note", ""), floor=floor)
+        if box_type["name"] == "Fan":
+            return self._open_fan(tier, box_type, floor, 50 if liked is None else liked)
         idx = LOOT_BOX_TIERS.index(tier)
-        if box_type["name"] == "Benefactor":
+        benefactor = box_type["name"] == "Benefactor"
+        if benefactor:
             cap = LOOT_BOX_TIERS.index(lb["benefactor_cap"])
             idx = max(idx, min(idx + lb["benefactor_bonus"], cap))
         top = LOOT_BOX_TIERS[idx]
         pools = box_type["pools"]
         enchantable = [p for p in pools if p in lb["enchantable"]]
         contents = lb["contents"][top]
+        prepared = find_threat(threat) if (benefactor and threat) else None
+        counters = lb["benefactor"]["threats"][prepared] if prepared else None
 
         # The headline comes from a pool that can carry the tier, so a Gold box
         # always shows it is Gold instead of turning out to be all rope.
         lead = enchantable if enchantable and lb["effects_per_item"][top] else pools
         main_pool = self.rng.choice(lead)
-        items = [self._make(main_pool, top, headline=True)]
+        counter = None
+        if counters and main_pool in lb["enchantable"]:
+            band = LOOT_BANDS[top]
+            counter = self._deck(f"counterfx:{prepared}:{band}",
+                                 counters["effects"][band]).draw()
+        items = [self._make(main_pool, top, headline=True, counter=counter)]
         tiers = [top]
         # Each lesser item rolls its own tier, evenly, from the box's list, and
         # its own kind: mostly support for the main item rather than more of it.
+        # A prepared Benefactor box spends every lesser item on the threat: the
+        # sponsor has seen what is coming and is not paying for anything else.
         lesser = []
         for _ in range(contents["extras"]):
             t = self.rng.choice(contents["extra_tiers"])
-            pool = self._lesser_pool(main_pool)
-            lesser.append((t, self._make(pool, t, headline=False)))
+            if counters:
+                band = LOOT_BANDS[t]
+                item = self._deck(f"counter:{prepared}:{band}",
+                                  counters["items"][band]).draw()
+            else:
+                item = self._make(self._lesser_pool(main_pool), t, headline=False)
+            lesser.append((t, item))
         # Best first, so the line reads down the tiers; sorting after the rolls
         # changes nothing about what was rolled.
         lesser.sort(key=lambda pair: -LOOT_BOX_TIERS.index(pair[0]))
         tiers += [t for t, _ in lesser]
         items += [item for _, item in lesser]
 
-        gold = 0
-        if floor >= lb["gold"]["from_floor"]:
-            lo, hi = lb["gold"]["roll"]
-            gold = self.rng.randint(lo, hi) * floor ** lb["gold"]["tier_power"][top]
+        sponsor_note = ""
+        if benefactor:
+            sponsor = self._deck("sponsor", lb["benefactor"]["sponsors"]).draw()
+            line = (self._deck(f"note:{prepared}", counters["notes"]).draw() if counters
+                    else self._deck("note:any", lb["benefactor"]["untargeted_notes"]).draw())
+            sponsor_note = f"From {sponsor}: \"{line}\""
+        gold = self._gold(top, floor)
         note = box_type.get("note", "")
         if box_type.get("unknown"):
             note = "an achievement box; opened from the Adventurer pools"
+        if prepared:
+            note = (f"opened at {top}; prepared for {counters['label']}")
         return OpenedBox(tier, box_type["name"], top, items, note, gold=gold, floor=floor,
-                         item_tiers=tiers)
+                         item_tiers=tiers, threat=prepared or "", sponsor_note=sponsor_note)
 
-    def open_text(self, text: str, floor: int = 1) -> OpenedBox:
+    def _open_fan(self, tier: str, box_type: dict, floor: int, liked: float) -> OpenedBox:
+        """A Fan box is whatever the audience decided. Good is one useful thing at
+        the box's tier; neutral is something harmless and probably at the
+        crawler's expense; bad costs them, and costs more the bigger the box.
+        Good and neutral boxes still carry the floor's gold; a bad one does not."""
+        fan = LOOT_BOXES["fan"]
+        odds = fan_odds(liked)
+        outcome = self.rng.choices(list(odds), weights=list(odds.values()))[0]
+        if outcome == "good":
+            item = self._make(self._weighted_pool(fan["good_pools"]), tier, headline=True)
+        elif outcome == "neutral":
+            item = self._deck("fan:neutral", fan["neutral"]).draw()
+        else:
+            band = LOOT_BANDS[tier]
+            item = self._deck(f"fan:bad:{band}", fan["bad"][band]).draw()
+        gold = 0 if outcome == "bad" else self._gold(tier, floor)
+        note = (f"{liked:g}% liked it: {odds['good']:.0%} good, {odds['neutral']:.0%} "
+                f"neutral, {odds['bad']:.0%} bad")
+        return OpenedBox(tier, box_type["name"], tier, [item], note, gold=gold, floor=floor,
+                         item_tiers=[tier], outcome=outcome)
+
+    def open_text(self, text: str, floor: int = 1, *, threat: Optional[str] = None,
+                  liked: Optional[float] = None) -> OpenedBox:
         """Open a box written the way a write-up names it: "a Silver Boss Box"."""
         tier, box_type = parse_box(text)
-        return self.open(tier, box_type, floor)
+        return self.open(tier, box_type, floor, threat=threat, liked=liked)
 
 
 @dataclass
@@ -1245,7 +1347,15 @@ def loot_box_section(fl) -> List[str]:
     o.append("```")
     o.append(f'python dcc_mapgen.py --open-box "a Silver Boss Box" --floor {floor}')
     o.append(f'python dcc_mapgen.py --open-box "Gold Weapon" --count 3 --floor {floor}')
+    if floor >= next(t for t in lb["types"] if t["name"] == "Benefactor")["from_floor"]:
+        o.append(f'python dcc_mapgen.py --open-box "Gold Benefactor" --for fire --floor {floor}')
+    o.append(f'python dcc_mapgen.py --open-box "Silver Fan" --liked 70 --floor {floor}')
     o.append("```")
+    o.append("")
+    o.append("A Fan box is the audience's call: `--liked` is how much they liked whatever "
+             "earned it, and sets the odds of a good, neutral or bad box. A Benefactor box "
+             "can be prepared with `--for` for what its sponsor can see coming: "
+             + ", ".join(benefactor_threats()) + ".")
     o.append("")
     o.append("`--floor` sets the gold, so keep it matching the floor the box was earned on. "
              "In the desktop app, the **Loot Boxes** tab lists this floor's boxes to "
@@ -5287,6 +5397,14 @@ def main(argv=None):
     p.add_argument("--count", type=int, default=1, metavar="N",
                    help="--open-box: how many of each box to open (default 1). Boxes opened "
                         "together work through each bank before repeating an item")
+    p.add_argument("--for", dest="threat", default=None, metavar="THREAT",
+                   help="--open-box: prepare Benefactor boxes for what the sponsor can see "
+                        "coming -- fire, cold, poison, undead, water, darkness, falls, traps, "
+                        "swarms, giants, flyers or casters. Other box types ignore it")
+    p.add_argument("--liked", type=float, default=None, metavar="PERCENT",
+                   help="--open-box: how much the audience liked whatever earned a Fan box, "
+                        "0-100 (default 50). Sets the odds of a good, neutral or bad box. "
+                        "Other box types ignore it")
     a = p.parse_args(argv)
 
     try:
@@ -5300,9 +5418,13 @@ def _open_boxes(a) -> None:
     so asking for ten Gold Weapon boxes gets ten different weapons."""
     if a.count < 1:
         raise MapgenError("--count must be at least 1")
+    if a.threat:
+        find_threat(a.threat)                  # refuse a typo before rolling anything
+    if a.liked is not None:
+        fan_odds(a.liked)
     roller = LootRoller(a.seed)
-    lines = [roller.open_text(spec, a.floor).markdown() for spec in a.open_box
-             for _ in range(a.count)]
+    lines = [roller.open_text(spec, a.floor, threat=a.threat, liked=a.liked).markdown()
+             for spec in a.open_box for _ in range(a.count)]
     text = "\n".join(lines)
     if a.out:
         with open(a.out, "w", encoding="utf-8") as f:

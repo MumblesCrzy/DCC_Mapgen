@@ -1034,7 +1034,10 @@ class LootBoxTest(unittest.TestCase):
                     cls.item_pool[item], cls.item_band[item] = pool, band
         # A spread of boxes: every rollable type at every tier, several times over.
         roller = mg.LootRoller(2024)
-        types = [t for t in cls.lb["types"] + cls.lb["themed_types"] if not t.get("special")]
+        # Fan boxes are the audience's call, one item and a vote, and have their
+        # own tests below.
+        types = [t for t in cls.lb["types"] + cls.lb["themed_types"]
+                 if not t.get("special") and t["name"] != "Fan"]
         cls.opened = [roller.open(tier, t["name"])
                       for _ in range(6) for t in types for tier in mg.LOOT_BOX_TIERS]
 
@@ -1579,6 +1582,206 @@ class LootBoxTest(unittest.TestCase):
         self.assertGreater(found, 50, "the pattern stopped matching anything")
 
 
+class BenefactorBoxTest(unittest.TestCase):
+    """A sponsor can see what the crawler is about to face. A Benefactor box the
+    DM prepares for a threat leads with a counter worked into its main item, spends
+    every lesser item on the same threat, and carries a note from the sponsor
+    hinting at it. Unprepared, it is the ordinary Benefactor box."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.ben = mg.LOOT_BOXES["benefactor"]
+        cls.bands = mg.LOOT_BANDS
+
+    def _counter_band(self, threat, item):
+        for band, items in self.ben["threats"][threat]["items"].items():
+            if item in items:
+                return band
+        return None
+
+    def test_every_lesser_item_counters_the_threat_at_its_own_tier(self):
+        roller = mg.LootRoller(12)
+        for threat in mg.benefactor_threats():
+            for tier in mg.LOOT_BOX_TIERS:
+                box = roller.open(tier, "Benefactor", 4, threat=threat)
+                self.assertEqual(box.threat, threat)
+                for t, item in zip(box.item_tiers[1:], box.items[1:]):
+                    band = self._counter_band(threat, item)
+                    self.assertIsNotNone(band, f"{box.label} for {threat}: {item!r} is "
+                                               f"not a counter to it")
+                    self.assertEqual(band, self.bands[t],
+                                     f"{box.label} for {threat}: a {t} slot holds a {band} counter")
+
+    def test_the_main_item_carries_the_threats_counter(self):
+        roller = mg.LootRoller(13)
+        for threat in mg.benefactor_threats():
+            for tier in ("Bronze", "Gold", "Celestial"):
+                box = roller.open(tier, "Benefactor", 4, threat=threat)
+                band = self.bands[box.opened_at]
+                counters = self.ben["threats"][threat]["effects"][band]
+                self.assertTrue(any(c in box.items[0] for c in counters),
+                                f"{box.label} for {threat}: {box.items[0]}")
+
+    def test_the_counter_takes_a_slot_rather_than_adding_one(self):
+        """A prepared main item carries exactly as many enchantments as any other
+        item of its tier; the counter replaces one of them. Added on top, a
+        Platinum main item would carry three."""
+        per_item = {"Platinum": 2, "Legendary": 2, "Celestial": 3}
+        roller = mg.LootRoller(16)
+        for threat in mg.benefactor_threats():
+            for tier in ("Bronze", "Silver", "Celestial"):
+                box = roller.open(tier, "Benefactor", 4, threat=threat)
+                head = re.sub(r"^\*\*.*?\*\*, ", "", box.items[0])
+                if " (" not in head:
+                    continue                       # a plain main item has no slots
+                effects = head[head.index(" (") + 2:-1].split("; ")
+                self.assertEqual(len(effects), per_item[box.opened_at],
+                                 f"{box.label} for {threat}: {box.items[0]}")
+
+    def test_the_sponsor_hints_and_signs_it(self):
+        roller = mg.LootRoller(14)
+        for threat in mg.benefactor_threats():
+            box = roller.open("Silver", "Benefactor", 4, threat=threat)
+            self.assertTrue(any(f'"{n}"' in box.sponsor_note
+                                for n in self.ben["threats"][threat]["notes"]), box.sponsor_note)
+            self.assertTrue(any(f"From {sp}:" in box.sponsor_note for sp in self.ben["sponsors"]))
+            self.assertTrue(box.markdown().endswith(box.sponsor_note), box.markdown())
+            self.assertIn(f"prepared for {self.ben['threats'][threat]['label']}", box.markdown())
+
+    def test_unprepared_it_is_the_ordinary_benefactor_box(self):
+        """No counters, the usual 15/35/50 lesser items, and a sponsor's compliments."""
+        every_counter = {i for t in self.ben["threats"].values()
+                         for band in t["items"].values() for i in band}
+        roller = mg.LootRoller(15)
+        for _ in range(60):
+            box = roller.open("Gold", "Benefactor", 4)
+            self.assertEqual(box.threat, "")
+            self.assertFalse(set(box.items) & every_counter, box.markdown())
+            self.assertTrue(any(f'"{n}"' in box.sponsor_note
+                                for n in self.ben["untargeted_notes"]))
+
+    def test_a_threat_can_be_named_by_key_or_label(self):
+        self.assertEqual(mg.find_threat("Fire"), "fire")
+        self.assertEqual(mg.find_threat("the undead"), "undead")
+        self.assertEqual(mg.find_threat("  SPELLCASTERS "), "casters")
+        with self.assertRaises(mg.MapgenError):
+            mg.find_threat("lava")
+
+    def test_only_a_benefactor_box_is_prepared(self):
+        box = mg.LootRoller(1).open("Gold", "Boss", 4, threat="fire")
+        self.assertEqual(box.threat, "")
+        self.assertEqual(box.sponsor_note, "")
+
+    # A floor under each threat's stock, stated here rather than read from it.
+    def test_every_threat_is_stocked(self):
+        self.assertGreaterEqual(len(mg.benefactor_threats()), 12)
+        self.assertGreaterEqual(len(self.ben["sponsors"]), 20)
+        for key, t in self.ben["threats"].items():
+            for band in ("low", "mid", "high"):
+                self.assertGreaterEqual(len(t["items"][band]), 4, f"{key}/{band} items")
+                self.assertGreaterEqual(len(t["effects"][band]), 1, f"{key}/{band} effects")
+            self.assertGreaterEqual(len(t["notes"]), 3, f"{key} notes")
+
+
+class FanBoxTest(unittest.TestCase):
+    """A Fan box is whatever the audience decided. The DM sets how much they liked
+    whatever earned it; the audience votes twice -- two likes good, two dislikes
+    bad, a split neutral. Good is one useful item at the box's tier, neutral one
+    harmless and probably humiliating thing, bad a cost that grows with the box."""
+
+    # The vote, stated here rather than read from mg.fan_odds.
+    @staticmethod
+    def ODDS(liked):
+        p = liked / 100
+        return {"good": p * p, "neutral": 2 * p * (1 - p), "bad": (1 - p) ** 2}
+
+    GOOD_POOLS = {"weapons", "apparel", "footwear", "consumables"}
+
+    @classmethod
+    def setUpClass(cls):
+        cls.fan = mg.LOOT_BOXES["fan"]
+        cls.pool_of = {}
+        for pool, bank in mg.LOOT_BOXES["items"].items():
+            for item in ([i for b in bank.values() for i in b] if isinstance(bank, dict)
+                         else bank):
+                cls.pool_of[item] = pool
+
+    def test_the_odds_are_a_double_vote(self):
+        for liked in (0, 10, 25, 50, 70, 90, 100):
+            want = self.ODDS(liked)
+            got = mg.fan_odds(liked)
+            for k in want:
+                self.assertAlmostEqual(got[k], want[k], places=9, msg=f"{liked}% {k}")
+        for bad in (-1, 101):
+            with self.assertRaises(mg.MapgenError):
+                mg.fan_odds(bad)
+
+    def test_the_rolls_follow_the_odds(self):
+        roller = mg.LootRoller(21)
+        for liked in (30, 70):
+            seen = collections.Counter(roller.open("Silver", "Fan", 3, liked=liked).outcome
+                                       for _ in range(2000))
+            for k, want in self.ODDS(liked).items():
+                self.assertAlmostEqual(seen[k] / 2000, want, delta=0.04,
+                                       msg=f"{liked}% liked: {k} came up {seen[k] / 2000:.0%}")
+
+    def test_a_crowd_that_loved_or_hated_it_is_certain(self):
+        roller = mg.LootRoller(22)
+        self.assertEqual({roller.open("Gold", "Fan", 3, liked=100).outcome
+                          for _ in range(50)}, {"good"})
+        self.assertEqual({roller.open("Gold", "Fan", 3, liked=0).outcome
+                          for _ in range(50)}, {"bad"})
+
+    def test_good_is_one_useful_item_at_the_boxs_tier(self):
+        roller = mg.LootRoller(23)
+        fx_tier = {e: t for t, tier in mg.LOOT_BOXES["effects"].items() for e, _ in tier}
+        for tier in mg.LOOT_BOX_TIERS:
+            for _ in range(20):
+                box = roller.open(tier, "Fan", 3, liked=100)
+                self.assertEqual(len(box.items), 1, box.markdown())
+                base = re.sub(r"^\*\*.*?\*\*, ", "", box.items[0]).split(" (")[0]
+                self.assertIn(self.pool_of.get(base), self.GOOD_POOLS, box.items[0])
+                inner = box.items[0][len(re.sub(r" \(.*", "", box.items[0])) + 2:-1]
+                for e in (inner.split("; ") if " (" in box.items[0] else []):
+                    self.assertEqual(fx_tier[e], tier, f"{box.label}: {e!r}")
+
+    def test_neutral_is_one_harmless_thing(self):
+        roller = mg.LootRoller(24)
+        for _ in range(60):
+            box = roller.open("Gold", "Fan", 3, liked=50)
+            if box.outcome == "neutral":
+                self.assertEqual(len(box.items), 1)
+                self.assertIn(box.items[0], self.fan["neutral"])
+
+    def test_bad_gets_worse_with_the_box(self):
+        roller = mg.LootRoller(25)
+        for tier in mg.LOOT_BOX_TIERS:
+            band = mg.LOOT_BANDS[tier]
+            for _ in range(10):
+                box = roller.open(tier, "Fan", 3, liked=0)
+                self.assertIn(box.items[0], self.fan["bad"][band],
+                              f"a {tier} Fan box drew a bad outcome from outside {band}")
+
+    def test_a_bad_box_holds_no_gold(self):
+        roller = mg.LootRoller(26)
+        self.assertGreater(roller.open("Gold", "Fan", 6, liked=100).gold, 0)
+        self.assertEqual(roller.open("Gold", "Fan", 6, liked=0).gold, 0)
+        neutral = next(b for b in (roller.open("Gold", "Fan", 6, liked=50) for _ in range(40))
+                       if b.outcome == "neutral")
+        self.assertGreater(neutral.gold, 0)
+
+    def test_the_line_shows_the_vote(self):
+        box = mg.LootRoller(27).open("Gold", "Fan", 3, liked=70)
+        line = box.markdown()
+        self.assertIn("70% liked it: 49% good, 42% neutral, 9% bad", line)
+        self.assertIn(f"— {box.outcome.title()}", line)
+
+    def test_the_fan_banks_are_stocked(self):
+        self.assertGreaterEqual(len(self.fan["neutral"]), 30)
+        for band in ("low", "mid", "high"):
+            self.assertGreaterEqual(len(self.fan["bad"][band]), 10, band)
+
+
 class LootCommandLineTest(unittest.TestCase):
     """--open-box, run as a subprocess the way a DM would."""
 
@@ -1617,6 +1820,17 @@ class LootCommandLineTest(unittest.TestCase):
         top = self._run("--open-box", "Gold Boss", "--seed", "3")
         self.assertNotIn(" gold**", top.stdout)
         self.assertIn("no gold", top.stderr)
+
+    def test_for_and_liked(self):
+        r = self._run("--open-box", "Gold Benefactor", "--for", "the undead",
+                      "--open-box", "Gold Fan", "--liked", "0", "--floor", "5", "--seed", "4")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("prepared for the undead", r.stdout)
+        self.assertIn("— Bad: ", r.stdout)
+        for bad in (("--for", "lava"), ("--liked", "140")):
+            r = self._run("--open-box", "Gold Benefactor", *bad)
+            self.assertNotEqual(r.returncode, 0)
+            self.assertNotIn("Traceback", r.stderr)
 
     def test_a_box_without_a_tier_is_refused_plainly(self):
         r = self._run("--open-box", "Shiny Boss")

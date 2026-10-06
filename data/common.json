@@ -1510,7 +1510,7 @@
     "name": "Fan",
     "from_floor": 1,
     "earned": "a surge of followers, or a moment that raised the crawler's profile",
-    "note": "contents picked by audience vote",
+    "note": "the audience votes: set how much they liked it",
     "pools": [
      "oddities",
      "apparel"
@@ -1538,7 +1538,7 @@
     "name": "Benefactor",
     "from_floor": 4,
     "earned": "bought by a sponsor; a crawler can hold three sponsors",
-    "note": "opens three tiers above its label, up to Legendary",
+    "note": "opens three tiers above its label, up to Legendary, and can be prepared for a threat ahead",
     "pools": [
      "offworld",
      "magic"
@@ -2954,6 +2954,604 @@
    "consumable_pools": [
     "consumables"
    ]
+  },
+  "benefactor": {
+   "threats": {
+    "fire": {
+     "label": "fire",
+     "effects": {
+      "low": [
+       "takes a third less damage from fire"
+      ],
+      "mid": [
+       "halves fire damage to its owner"
+      ],
+      "high": [
+       "turns fire aimed at its owner into healing"
+      ]
+     },
+     "items": {
+      "low": [
+       "a jar of sponsor-issue burn gel",
+       "a potion of minor fire resistance",
+       "a soaked wool blanket",
+       "a canteen of ice water"
+      ],
+      "mid": [
+       "a sponsor-grade fire resistance draught",
+       "a scroll of frost shield",
+       "a fireproof cloak",
+       "an off-world fire extinguisher"
+      ],
+      "high": [
+       "a potion of fire immunity",
+       "a dragon-scale cloak",
+       "a scroll of mass fire ward",
+       "a frost grenade that puts out a room"
+      ]
+     },
+     "notes": [
+      "It gets warm where you're going.",
+      "Pack light. And fireproof.",
+      "We've seen the next room. Bring water."
+     ]
+    },
+    "cold": {
+     "label": "freezing cold",
+     "effects": {
+      "low": [
+       "keeps its owner warm in any cold"
+      ],
+      "mid": [
+       "immunity to cold for one fight a day"
+      ],
+      "high": [
+       "immunity to cold"
+      ]
+     },
+     "items": {
+      "low": [
+       "a pair of thermal socks",
+       "a flask of hot cocoa",
+       "a chemical heat pack",
+       "a wool balaclava"
+      ],
+      "mid": [
+       "a draught of cold resistance",
+       "an insulated survival suit",
+       "a scroll of firewall",
+       "a portable heater"
+      ],
+      "high": [
+       "a potion of cold immunity",
+       "a phoenix-down parka",
+       "a scroll of mass warmth",
+       "a thermite torch that melts through ice walls"
+      ]
+     },
+     "notes": [
+      "Wrap up.",
+      "Where you're going, the cold kills first.",
+      "Layers. Trust us."
+     ]
+    },
+    "poison": {
+     "label": "poison and gas",
+     "effects": {
+      "low": [
+       "slows any poison in its owner's blood"
+      ],
+      "mid": [
+       "immunity to poison for one fight a day"
+      ],
+      "high": [
+       "immunity to poison and disease"
+      ]
+     },
+     "items": {
+      "low": [
+       "two vials of broad-spectrum antidote",
+       "a cloth gas mask",
+       "a jar of activated charcoal",
+       "a snakebite kit"
+      ],
+      "mid": [
+       "a sealed rebreather",
+       "a draught of universal antitoxin",
+       "a scroll of purify",
+       "a potion of venom immunity, good for an hour"
+      ],
+      "high": [
+       "an elixir of total immunity",
+       "a hazmat suit rated for the Syndicate",
+       "a scroll of mass purification",
+       "a vial of basilisk-blood antivenom"
+      ]
+     },
+     "notes": [
+      "Don't breathe it in.",
+      "Something down there bites.",
+      "Hold your breath. Better, hold this."
+     ]
+    },
+    "undead": {
+     "label": "the undead",
+     "effects": {
+      "low": [
+       "glows near the undead"
+      ],
+      "mid": [
+       "deals double damage to the undead"
+      ],
+      "high": [
+       "the undead cannot touch its owner"
+      ]
+     },
+     "items": {
+      "low": [
+       "a vial of holy water",
+       "a string of garlic",
+       "a silvered knife",
+       "a box of church candles"
+      ],
+      "mid": [
+       "a flask of blessed oil",
+       "a scroll of turn undead",
+       "a case of silver-tipped bolts",
+       "a consecrated lantern"
+      ],
+      "high": [
+       "a relic of a saint who meant it",
+       "a scroll of mass exorcism",
+       "a sun in a jar",
+       "a writ of final rest"
+      ]
+     },
+     "notes": [
+      "They don't stay down.",
+      "Bring something holy. Anything.",
+      "The dead are restless down there. So are we."
+     ]
+    },
+    "water": {
+     "label": "deep water",
+     "effects": {
+      "low": [
+       "lets its owner hold their breath twice as long"
+      ],
+      "mid": [
+       "breathes for its owner underwater for an hour a day"
+      ],
+      "high": [
+       "lets its owner breathe and move underwater as on land"
+      ]
+     },
+     "items": {
+      "low": [
+       "a pair of inflatable arm bands",
+       "a snorkel",
+       "a waterproof pouch",
+       "a coil of floating rope"
+      ],
+      "mid": [
+       "a long-lasting draught of water breathing",
+       "a pair of swim fins",
+       "a scroll of part water",
+       "an inflatable raft"
+      ],
+      "high": [
+       "a gill amulet",
+       "a bathysphere in a box",
+       "a scroll of mass water walking",
+       "a potion that makes water hold you up"
+      ]
+     },
+     "notes": [
+      "Learn to swim.",
+      "It floods. Soon.",
+      "Water's rising. Ours isn't."
+     ]
+    },
+    "darkness": {
+     "label": "darkness",
+     "effects": {
+      "low": [
+       "sheds a steady light around its owner"
+      ],
+      "mid": [
+       "lets its owner see in total darkness"
+      ],
+      "high": [
+       "lets its owner see through any darkness, magical or not"
+      ]
+     },
+     "items": {
+      "low": [
+       "a bundle of glow sticks",
+       "a head torch",
+       "a box of flares",
+       "a jar of luminous moss"
+      ],
+      "mid": [
+       "a pair of night-vision goggles",
+       "a scroll of daylight",
+       "a crate of road flares",
+       "a hovering light drone"
+      ],
+      "high": [
+       "a lantern that cannot be put out",
+       "a scroll of mass true sight",
+       "a captured star",
+       "a permanent darkvision elixir"
+      ]
+     },
+     "notes": [
+      "Bring a light. Bring two.",
+      "The lights go out down there.",
+      "You'll want to see what's coming."
+     ]
+    },
+    "falls": {
+     "label": "long falls",
+     "effects": {
+      "low": [
+       "cushions any fall of up to thirty feet"
+      ],
+      "mid": [
+       "slows any fall to a drift"
+      ],
+      "high": [
+       "lets its owner walk on air for a minute a day"
+      ]
+     },
+     "items": {
+      "low": [
+       "a climbing harness",
+       "a coil of stout rope",
+       "a set of knee and elbow pads",
+       "a box of pitons"
+      ],
+      "mid": [
+       "a feather-fall charm",
+       "a grappling gun",
+       "a scroll of levitate",
+       "a folding hang glider"
+      ],
+      "high": [
+       "a pair of wingsuit boots",
+       "a scroll of mass flight",
+       "an anti-gravity belt",
+       "a potion of featherweight"
+      ]
+     },
+     "notes": [
+      "Watch your step.",
+      "It's a long way down. Don't find out.",
+      "Look down. Now don't."
+     ]
+    },
+    "traps": {
+     "label": "traps",
+     "effects": {
+      "low": [
+       "warns its owner of the next trap in their path"
+      ],
+      "mid": [
+       "shows every trap in the room"
+      ],
+      "high": [
+       "triggers no trap its owner walks over"
+      ]
+     },
+     "items": {
+      "low": [
+       "an extendable probe pole",
+       "a sack of ball bearings",
+       "a can of tracer dust",
+       "a spool of tripwire-finding thread"
+      ],
+      "mid": [
+       "a trap-spotting monocle",
+       "a scroll of find traps",
+       "a sponsor-issue set of disarming tools",
+       "a pressure-plate jammer"
+      ],
+      "high": [
+       "a scroll of mass trap immunity",
+       "a remote that sets off every trap in a room",
+       "a trapmaster's grimoire",
+       "a clockwork mouse that walks ahead of you"
+      ]
+     },
+     "notes": [
+      "Every floor tile is a liar.",
+      "Someone built that hallway to kill you.",
+      "Mind the floor. And the walls. And the ceiling."
+     ]
+    },
+    "swarms": {
+     "label": "swarms",
+     "effects": {
+      "low": [
+       "+1 damage against anything in a group"
+      ],
+      "mid": [
+       "each hit splashes onto one more enemy"
+      ],
+      "high": [
+       "each hit splashes onto every enemy within ten feet"
+      ]
+     },
+     "items": {
+      "low": [
+       "a crate of road spikes",
+       "a can of industrial bug spray",
+       "a bundle of pitch-soaked torches",
+       "a riot shield"
+      ],
+      "mid": [
+       "a scroll of chain lightning",
+       "a crate of cluster mines",
+       "a one-tank flamethrower",
+       "a scroll of mass fear"
+      ],
+      "high": [
+       "a scroll of meteor swarm",
+       "a one-use orbital strike beacon",
+       "a scroll of mass sleep",
+       "a crate of plasma mines"
+      ]
+     },
+     "notes": [
+      "There are a lot of them.",
+      "Count them. Then stop counting and run.",
+      "You'll be outnumbered. Fix that."
+     ]
+    },
+    "giants": {
+     "label": "something huge",
+     "effects": {
+      "low": [
+       "+1 damage against anything bigger than its owner"
+      ],
+      "mid": [
+       "+5 damage against anything bigger than its owner"
+      ],
+      "high": [
+       "takes a tenth of a huge target's health with its first hit"
+      ]
+     },
+     "items": {
+      "low": [
+       "a pot of armor-piercing grease",
+       "a set of ankle hobbles",
+       "a whetstone",
+       "a vial of giant-sleep powder"
+      ],
+      "mid": [
+       "a scroll of shrink",
+       "a potion of giant strength, good for a day",
+       "a harpoon and winch",
+       "a scroll of slow"
+      ],
+      "high": [
+       "a scroll of mass enlarge",
+       "a giant-killer's ballista bolt",
+       "a potion of titan's might",
+       "a scroll of petrify"
+      ]
+     },
+     "notes": [
+      "It's big. Bigger than that.",
+      "Aim for the knees.",
+      "The bigger they are. You know the rest."
+     ]
+    },
+    "flyers": {
+     "label": "flying things",
+     "effects": {
+      "low": [
+       "+1 to hit anything in the air"
+      ],
+      "mid": [
+       "brings down anything it hits in the air"
+      ],
+      "high": [
+       "grounds every flier within thirty feet once a fight"
+      ]
+     },
+     "items": {
+      "low": [
+       "a weighted throwing net",
+       "a bird-scaring whistle",
+       "a box of flak darts",
+       "a shoulder-mounted spotlight"
+      ],
+      "mid": [
+       "a net launcher",
+       "a scroll of gust",
+       "a scroll of earthbind",
+       "a pair of anti-air rockets"
+      ],
+      "high": [
+       "a scroll of mass earthbind",
+       "a flak cannon on a tripod",
+       "a scroll of storm",
+       "a hawk-hunter's longbow"
+      ]
+     },
+     "notes": [
+      "Look up.",
+      "They come from above.",
+      "Keep your head down and your aim up."
+     ]
+    },
+    "casters": {
+     "label": "spellcasters",
+     "effects": {
+      "low": [
+       "shrugs off the first minor spell each fight"
+      ],
+      "mid": [
+       "reflects every third spell cast at its owner"
+      ],
+      "high": [
+       "the first spell cast at its owner each fight fails"
+      ]
+     },
+     "items": {
+      "low": [
+       "a tinfoil hat that works",
+       "a bag of anti-magic chalk",
+       "a vial of focus salts",
+       "a ward stone"
+      ],
+      "mid": [
+       "a scroll of counterspell",
+       "a silence grenade",
+       "a ring of minor warding",
+       "a sponsor-issue scroll of dispel"
+      ],
+      "high": [
+       "a scroll of antimagic field",
+       "a mage-hunter's cloak",
+       "a spell-eating amulet",
+       "a scroll of mass spell turning"
+      ]
+     },
+     "notes": [
+      "Someone down there casts.",
+      "Magic, and a lot of it.",
+      "Don't let them finish the sentence."
+     ]
+    }
+   },
+   "sponsors": [
+    "Hennessy-Krol Holdings",
+    "the Saturnine Benevolent Society",
+    "Orbital Fluids Corporation",
+    "the Third Moon Collective",
+    "Velvet Spine Media",
+    "the Glorious Unified Brine Co-op",
+    "Pellucid Arms",
+    "the Society for Earthling Appreciation",
+    "Kesh-Varro Pharmaceuticals",
+    "Brightwater Finance of Andromeda",
+    "the Long Hunger Trust",
+    "Clattermore Entertainment",
+    "the Grand Order of Polite Spectators",
+    "Nine Suns Logistics",
+    "Ossuary Mutual Insurance",
+    "the Quietest Monastery of Ul",
+    "Fennick & Daughters, Purveyors",
+    "the Hollow Crown Trust",
+    "Stellar Gristle Foods",
+    "Morrow-Quinn Defense",
+    "the Tidepool Opera Board",
+    "Gleam Cosmetics Intergalactic",
+    "the Eternal Brunch Club",
+    "Vantablack Ventures"
+   ],
+   "untargeted_notes": [
+    "With compliments.",
+    "Do us proud.",
+    "Don't die on camera.",
+    "Our logo goes on the outside, if you don't mind."
+   ]
+  },
+  "fan": {
+   "good_pools": [
+    "weapons",
+    "apparel",
+    "footwear",
+    "consumables"
+   ],
+   "neutral": [
+    "a framed photo of your ex, signed 'thinking of you'",
+    "a T-shirt printed with your worst moment",
+    "a bobblehead of you mid-scream",
+    "a mixtape of your most-replayed screams",
+    "a participation trophy engraved 'Tried'",
+    "a fan-written novel about you, very explicit",
+    "a heart-shaped locket holding a stranger's hair",
+    "a fake mustache",
+    "a single shoe in your size",
+    "your high school yearbook photo, framed",
+    "a mug reading 'World's Okayest Crawler'",
+    "a box of tissues",
+    "a dinner voucher that expired before the Collapse",
+    "a body pillow of a rival crawler",
+    "a fan's drawing of you, with too many fingers",
+    "a cookbook titled 'Cooking for One'",
+    "a greeting card that plays your death cry when opened",
+    "a self-help book called 'So You've Been Eaten'",
+    "a wedding invitation from your ex",
+    "a 'Get Well Soon' balloon",
+    "a diploma for a course you never took",
+    "a photo of your old house, now a hole",
+    "a rubber chicken",
+    "a tiara that says 'Birthday Girl'",
+    "a can of air from your hometown",
+    "a fan club card for a different crawler",
+    "a bag of sand",
+    "a framed screenshot of your lowest rating",
+    "a sock puppet that looks like you",
+    "a signed photo of you, signed by someone else",
+    "a ukulele with one string",
+    "a commemorative plate of a fight you lost",
+    "a gift card for a store that no longer exists",
+    "a parking ticket",
+    "a love letter addressed to somebody else",
+    "a jigsaw puzzle of your face with one piece missing",
+    "a pet rock named after you",
+    "a voice message from your mother, asking if you're eating",
+    "a calendar of your best faceplants",
+    "a 'Hang In There' poster"
+   ],
+   "bad": {
+    "low": [
+     "a glitter bomb: the crawler sparkles until the next safe room and cannot hide",
+     "itching powder: -1 Dexterity until the next safe room",
+     "a stink bomb: mobs within a hundred yards can track the party by smell for an hour",
+     "a cursed hat that will not come off until the next safe room, at -1 Charisma while worn",
+     "a box of live spiders: harmless, furious and very fast",
+     "the crawler's worst moment, playing on a loop from the box for an hour, and it cannot be switched off",
+     "a cream pie, delivered at speed",
+     "a potion labelled 'healing' that turns the drinker blue for a day",
+     "an alarm that goes off every ten minutes until the next safe room",
+     "a pair of handcuffs that lock on as the box opens, and the key is in the next box",
+     "a loudspeaker that announces the crawler's location every five minutes for an hour",
+     "a sock of wet sand to the face: 1 damage and a bruised ego"
+    ],
+    "mid": [
+     "a cursed ring that slips on and will not come off until the next floor, at -2 to a stat while worn",
+     "the box is a mimic, at the crawler's level",
+     "a summons: a mob a level above the crawler, already out of the box",
+     "a hex: every potion the crawler drinks for a day works at half strength",
+     "a live grenade with the pin already out",
+     "a curse of fumbling: the crawler drops their weapon on a roll of 1 to 5 for a floor",
+     "a swap: one random item from the crawler's inventory is gone, and this note is in its place",
+     "the crawler's location, broadcast to every hostile team on the floor for a day",
+     "a hex on the crawler's sponsors: no Benefactor box can reach them until the next floor",
+     "a curse of loud steps: the crawler cannot sneak until the next floor",
+     "a System debt: the next shopkeeper the crawler meets charges double for everything",
+     "a love potion, already in the air: the nearest mob adores the crawler and follows them for a day"
+    ],
+    "high": [
+     "a cursed weapon that bonds to the crawler's hand for a floor: -5 to every stat but Strength while held",
+     "a summons: an elite mob from two floors further down, furious and already out",
+     "a hex: the crawler cannot enter a safe room until the next floor",
+     "an exile vote: the crawler's party may not group with them for a day",
+     "a curse of the spotlight: the crawler shows on every crawler's minimap for a floor",
+     "the box explodes for a tenth of the crawler's maximum health, and the audience loves it",
+     "a curse that halves the crawler's maximum health until the next floor",
+     "a debt to the audience: the next three boxes the crawler earns go to the viewers instead",
+     "a hex: every enchantment the crawler carries goes dormant for a day",
+     "a doppelganger of the crawler, hostile, with every one of their skills",
+     "a curse of bad luck: for a day the crawler rolls twice and takes the worse",
+     "the crawler's ex, reanimated, armed and still upset about the thing"
+    ]
+   }
   }
  }
 }

@@ -494,6 +494,27 @@ class LootView(ttk.Frame):
         ttk.Button(row, text="Clear", command=self.clear).pack(side="right")
         ttk.Button(row, text="Copy", command=self.copy).pack(side="right", padx=(0, 4))
 
+        # Two boxes take one more thing. A sponsor can see what is coming and
+        # prepare a Benefactor box for it; a Fan box is whatever the audience
+        # decided, and how much they liked it sets the odds.
+        extra = ttk.Frame(self)
+        extra.pack(fill="x", padx=PAD, pady=(0, PAD))
+        ttk.Label(extra, text="Benefactor prepared for").pack(side="left")
+        self.NO_THREAT = "nothing in particular"
+        self.threat = tk.StringVar(value=self.NO_THREAT)
+        ttk.Combobox(extra, textvariable=self.threat, state="readonly", width=18,
+                     values=[self.NO_THREAT] + mg.benefactor_threats()).pack(
+            side="left", padx=(4, PAD * 2))
+        ttk.Label(extra, text="Fan box liked").pack(side="left")
+        self.liked = tk.StringVar(value="50")
+        ttk.Spinbox(extra, from_=0, to=100, increment=5, textvariable=self.liked,
+                    width=5, command=self._show_odds).pack(side="left", padx=(4, 2))
+        ttk.Label(extra, text="%").pack(side="left")
+        self.odds_lbl = ttk.Label(extra, text="", foreground="#666")
+        self.odds_lbl.pack(side="left", padx=(PAD, 0))
+        self.liked.trace_add("write", lambda *_: self._show_odds())
+        self._show_odds()
+
         wrap = ttk.Frame(self)
         wrap.pack(fill="both", expand=True, padx=PAD, pady=(0, PAD))
         self.out = tk.Text(wrap, wrap="word", font=("Consolas", 10), background="#fbfbfb",
@@ -505,6 +526,16 @@ class LootView(ttk.Frame):
         ttk.Label(self, text=f"Session seed {self.roller.seed}. Newest boxes at the top.",
                   foreground="#666", font=("Segoe UI", 8)).pack(anchor="w", padx=PAD,
                                                                 pady=(0, PAD))
+
+    def _show_odds(self):
+        """Show what the Fan box's % liked works out to, as it is typed."""
+        try:
+            odds = mg.fan_odds(float(self.liked.get()))
+        except (ValueError, mg.MapgenError):
+            self.odds_lbl.configure(text="0 to 100")
+            return
+        self.odds_lbl.configure(text=f"good {odds['good']:.0%} / neutral "
+                                     f"{odds['neutral']:.0%} / bad {odds['bad']:.0%}")
 
     def load_floor(self, res):
         """List the boxes a freshly generated floor names."""
@@ -541,8 +572,14 @@ class LootView(ttk.Frame):
             messagebox.showerror("Which floor?", "The floor sets the gold, so it needs "
                                  "to be a number.", parent=self)
             return
+        threat = None if self.threat.get() == self.NO_THREAT else self.threat.get()
         try:
-            boxes = [self.roller.open(self.tier.get(), kind, floor) for _ in range(count)]
+            liked = float(self.liked.get())
+        except ValueError:
+            liked = 50.0
+        try:
+            boxes = [self.roller.open(self.tier.get(), kind, floor, threat=threat, liked=liked)
+                     for _ in range(count)]
         except mg.MapgenError as e:
             messagebox.showerror("Could not open that box", str(e), parent=self)
             return
@@ -1117,6 +1154,21 @@ def selftest() -> int:
     loot.open_boxes()
     app.update()
     check(" gold**" in loot.out.get("1.0", "2.0"), "a Floor 6 box holds gold")
+    loot.tier.set("Gold")
+    loot.box_type.set("Benefactor")
+    loot.threat.set("fire")
+    loot.open_boxes()
+    app.update()
+    top_line = loot.out.get("1.0", "2.0")
+    check("prepared for fire" in top_line and "From " in top_line,
+          "a Benefactor box prepared for fire, with its sponsor's note")
+    loot.box_type.set("Fan")
+    loot.liked.set("0")
+    app.update()
+    check("bad 100%" in loot.odds_lbl.cget("text"), "0% liked shows certain bad odds")
+    loot.open_boxes()
+    app.update()
+    check("Bad: " in loot.out.get("1.0", "2.0"), "a Fan box nobody liked comes out bad")
 
     # An option combination the generator must reject rather than crash on.
     errs = []

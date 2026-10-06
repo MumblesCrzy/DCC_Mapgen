@@ -171,6 +171,54 @@ band. Achievement boxes the banks already award (Shoe,
 Sapper's, Goblin, Lucky Bastard…) open from pools that match their names, and any
 name the bank does not know still opens, from the Adventurer pools.
 
+**Benefactor boxes.** A sponsor can see what their crawler is about to face, and a
+DM handing over a Benefactor box is usually setting up something specific. Prepare
+the box for it:
+
+```
+python dcc_mapgen.py --open-box "Silver Benefactor" --for "the undead" --floor 6
+```
+
+```
+- **Silver Benefactor Box** *(opened at Legendary; prepared for the undead)* —
+  Legendary: **Lettice's Punchline**, a bundle of incense (the undead cannot touch its
+  owner; +10 to Charisma while visible, which sponsors notice). Platinum: a scroll of
+  turn undead. Silver: a vial of holy water. **15,552 gold**. From the Society for
+  Earthling Appreciation: "They don't stay down."
+```
+
+The main item takes a counter as one of its enchantments, every lesser item is a
+counter to the same threat at the tier it rolled, and the sponsor signs a note that
+hints without telling — they are not allowed to just say. There are twelve threats:
+fire, cold, poison, undead, water, darkness, falls, traps, swarms, giants, flyers and
+casters, each with counters at three power levels in `LOOT_BOXES.benefactor`.
+Unprepared, a Benefactor box is the ordinary one, with a sponsor's compliments.
+
+**Fan boxes.** A Fan box is the audience's call. Set how much they liked whatever
+earned it, and they vote twice: two likes is good, two dislikes bad, a split neutral.
+
+| Liked | Good | Neutral | Bad |
+|---:|---:|---:|---:|
+| 90% | 81% | 18% | 1% |
+| 70% | 49% | 42% | 9% |
+| 50% | 25% | 50% | 25% |
+| 30% | 9% | 42% | 49% |
+| 10% | 1% | 18% | 81% |
+
+Good is one useful item — equipment or a consumable — at the box's tier. Neutral is
+one harmless thing, probably at the crawler's expense: *a framed photo of your ex,
+signed "thinking of you"*. Bad costs them, and costs more the bigger the box — a
+Bronze Fan box glitter-bombs the crawler until the next safe room; a Legendary one
+might reanimate their ex, armed and still upset about the thing. Good and neutral
+boxes carry the floor's gold; a bad one does not.
+
+```
+python dcc_mapgen.py --open-box "Gold Fan" --liked 70 --floor 6
+```
+
+In the app, both are on the **Loot Boxes** tab: a "Benefactor prepared for" list and a
+"Fan box liked %" box that shows the odds as you type.
+
 Floors 3 and 6 give every region a day mob and a `NIGHT_THREATS` line saying what
 changes after dark. Most of those lines are the same mob behaving differently, but
 some mean it is only there for half the cycle — and those need a second creature.
@@ -493,6 +541,14 @@ each pool has a floor stated in the test —
 not read from the bank — so the banks cannot quietly shrink back. And every box
 named anywhere, in any word bank or any floor's output, uses one of the six canon
 tiers.
+
+Benefactor and Fan boxes have their own groups. A prepared Benefactor box spends every
+lesser item on a counter to its threat at the tier it rolled, its main item carries
+the counter in place of an enchantment rather than beside one, and its sponsor's note
+hints at the threat; no other box type takes a threat. A Fan box's odds are the
+double vote, stated in the test and checked over two thousand rolls; 100% liked is
+always good and 0% always bad; good is one useful item at the box's tier, neutral one
+harmless thing, bad one cost from the box's band, and a bad box pays no gold.
 
 A seventh group covers the stat rules, where the risk is drift rather than variety:
 the section renders identically on every floor and seed, it is the last section of
