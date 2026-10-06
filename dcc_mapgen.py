@@ -446,6 +446,10 @@ class CrawlerTeam:
     first_seen: int = 1
     died_on: Optional[int] = None
     history: List[dict] = field(default_factory=list)
+    # Met at the table rather than dealt by the generator. Such a team carries
+    # from floor to floor like any other, but is never renamed and never has its
+    # standing re-dealt: the DM gave it both.
+    added: bool = False
 
     @property
     def alive(self) -> bool:
@@ -494,13 +498,13 @@ class CampaignRoster:
         return cls(teams=[_team_from_dict(t) for t in raw.get("teams", [])])
 
 
-# Still 1 with `members` added: a roster written before parties existed loads
+# Still 1 with `members` and `added` added: a roster written before parties existed loads
 # fine (the field defaults to empty and fills on the next floor 3+), and an older
 # build reading a newer file drops the key it does not know. Bumping this would
 # reject both, for no incompatibility.
 ROSTER_VERSION = 1
 _TEAM_FIELDS = ("name", "origin", "surname", "disposition", "members", "status",
-                "outcome", "day", "floor", "first_seen", "died_on", "history")
+                "outcome", "day", "floor", "first_seen", "died_on", "history", "added")
 
 
 def _team_to_dict(t: CrawlerTeam) -> dict:
@@ -5282,7 +5286,10 @@ def build_crawler_teams(fl, size: str, seed: int, floor: int,
 
     # Standings are only dealt to teams that do not have one yet: a carried team
     # keeps where it stands with the party, including wherever the party moved it.
-    newcomers = [i for i, t in enumerate(active) if t.first_seen == floor]
+    # A team the DM added by hand is never a newcomer here, even on the floor it
+    # was met: renaming it, or dealing it a standing, would overwrite what the DM
+    # wrote down.
+    newcomers = [i for i, t in enumerate(active) if t.first_seen == floor and not t.added]
     spread = _pick_distinct(rng, TEAM_DISPOSITION, len(newcomers))
     for i, disp in zip(newcomers, spread):
         active[i].disposition = disp["label"]
@@ -5325,10 +5332,10 @@ def build_crawler_teams(fl, size: str, seed: int, floor: int,
     return roster
 
 
-def set_standing(roster: CampaignRoster, name: str, standing: str) -> CrawlerTeam:
-    """Move a team's standing with the party, matching its name case-insensitively
-    and allowing a unique partial, so a DM does not have to retype
-    "What's Left of Juniper Flats" exactly. Raises MapgenError if it is unclear."""
+def find_team(roster: CampaignRoster, name: str) -> CrawlerTeam:
+    """A team on the roster by name, case-insensitively, allowing a unique partial
+    so a DM does not have to retype "What's Left of Juniper Flats" exactly.
+    Raises MapgenError if nothing matches or more than one team does."""
     if roster is None or not roster.teams:
         raise MapgenError(f"no teams on the roster yet, so {name!r} cannot be found")
     wanted = name.strip().lower()
@@ -5340,8 +5347,85 @@ def set_standing(roster: CampaignRoster, name: str, standing: str) -> CrawlerTea
     if len(matches) > 1:
         raise MapgenError(f"{name!r} matches more than one team: "
                           + ", ".join(t.name for t in matches))
-    matches[0].disposition = standing
     return matches[0]
+
+
+def set_standing(roster: CampaignRoster, name: str, standing: str) -> CrawlerTeam:
+    """Move a team's standing with the party. See find_team for the matching."""
+    team = find_team(roster, name)
+    team.disposition = standing
+    return team
+
+
+def team_outcomes() -> List[str]:
+    """The fates a team's report can carry, mildest first: steady, thriving,
+    costly, fatal. Fatal is the one that kills them."""
+    return list(TEAM_STATUS)
+
+
+def add_team(roster: CampaignRoster, name: str, *, origin: str = "",
+             standing: str = "wary", floor: int = 1, status: str = "",
+             outcome: str = "steady") -> CrawlerTeam:
+    """Add a team the party met at the table rather than one the generator dealt.
+
+    From the next floor generated on, it is carried like any other team: it is
+    dealt a fresh report, picks races and classes on floor 3, can thrive or die.
+    What the generator never does is rename it or re-deal its standing, both of
+    which it does to a team it has just met itself. Raises MapgenError for an
+    empty or duplicate name, or an outcome that is not one of team_outcomes()."""
+    clean = name.strip()
+    if not clean:
+        raise MapgenError("a team needs a name")
+    if roster is None:
+        raise MapgenError("there is no campaign to add a team to")
+    taken = [t.name for t in roster.teams if t.name.lower() == clean.lower()]
+    if taken:
+        raise MapgenError(f"there is already a team called {taken[0]!r} on the roster")
+    if outcome not in TEAM_STATUS:
+        raise MapgenError(f"a team's outcome is one of {', '.join(team_outcomes())} "
+                          f"(got {outcome!r})")
+    if floor < 1:
+        raise MapgenError(f"a team is met on floor 1 or deeper (got {floor})")
+    team = CrawlerTeam(
+        name=clean, origin=origin.strip() or "an unrecorded group",
+        # The full name stands in for the place name the generator reserves, so
+        # it never deals a second team under the same name.
+        surname=clean, disposition=standing.strip() or "wary",
+        status=status.strip(), outcome=outcome, floor=floor, first_seen=floor,
+        died_on=floor if outcome == "fatal" else None, added=True)
+    team.history.append({"floor": floor, "day": None, "outcome": outcome,
+                         "status": team.status, "by_dm": True})
+    roster.teams.append(team)
+    return team
+
+
+def set_status(roster: CampaignRoster, name: str, *, status: Optional[str] = None,
+               outcome: Optional[str] = None) -> CrawlerTeam:
+    """Rewrite a team's latest report, its fate, or both.
+
+    A fatal outcome kills the team on the floor it was last seen, and it stops
+    carrying to later floors; any other outcome brings a dead team back, which
+    is how a DM undoes a mistake (or runs a resurrection). The latest entry in
+    the team's history is corrected to match rather than a second one added for
+    the same floor, and is marked as the DM's."""
+    team = find_team(roster, name)
+    if outcome is not None:
+        if outcome not in TEAM_STATUS:
+            raise MapgenError(f"a team's outcome is one of {', '.join(team_outcomes())} "
+                              f"(got {outcome!r})")
+        team.outcome = outcome
+        if outcome == "fatal":
+            team.died_on = team.died_on or team.floor
+        else:
+            team.died_on = None
+    if status is not None:
+        team.status = status.strip()
+    if team.history and team.history[-1].get("floor") == team.floor:
+        team.history[-1].update(outcome=team.outcome, status=team.status, by_dm=True)
+    else:
+        team.history.append({"floor": team.floor, "day": team.day, "outcome": team.outcome,
+                             "status": team.status, "by_dm": True})
+    return team
 
 
 def _set_standing(roster: CampaignRoster, name: str, standing: str) -> str:

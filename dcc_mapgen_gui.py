@@ -270,7 +270,11 @@ class CampaignView(ttk.Frame):
     Open a campaign file and teams still alive carry onto each floor generated
     after it, keeping their name, origin and standing. Standing is the part the
     party changes in play -- befriend the group that attacked them on floor 2 --
-    so it is editable here, and takes effect on the next floor generated."""
+    so it is editable here, and takes effect on the next floor generated.
+
+    Not every group the party meets comes out of the generator, so a group met at
+    the table can be added here too, and any group's latest report and fate can
+    be rewritten -- including killing it, or bringing it back."""
 
     COLUMNS = (("name", "Team", 210), ("standing", "Standing", 85),
                ("party", "Crawlers", 60), ("met", "Met", 40),
@@ -286,6 +290,9 @@ class CampaignView(ttk.Frame):
         ttk.Button(bar, text="New campaign...", command=self.new).pack(side="left", padx=(4, 0))
         self.close_btn = ttk.Button(bar, text="Close", command=self.close, state="disabled")
         self.close_btn.pack(side="left", padx=(4, 0))
+        self.add_btn = ttk.Button(bar, text="Add group...", command=self.add_dialog,
+                                  state="disabled")
+        self.add_btn.pack(side="left", padx=(PAD, 0))
         self.path_lbl = ttk.Label(bar, text="No campaign open", foreground="#666")
         self.path_lbl.pack(side="left", padx=(PAD, 0))
 
@@ -303,24 +310,39 @@ class CampaignView(ttk.Frame):
         self.tree.tag_configure("dead", foreground="#999")
         self.tree.bind("<<TreeviewSelect>>", lambda e: self._on_select())
 
-        edit = ttk.Labelframe(self, text="Where they stand with the party", padding=PAD)
+        edit = ttk.Labelframe(self, text="Selected group", padding=PAD)
         edit.pack(fill="x", padx=PAD, pady=(0, PAD))
         self.sel_lbl = ttk.Label(edit, text="Select a team above.", foreground="#666",
                                  justify="left")
         self.sel_lbl.pack(anchor="w")
         row = ttk.Frame(edit)
         row.pack(fill="x", pady=(6, 0))
+        ttk.Label(row, text="Standing").pack(side="left")
         self.standing = tk.StringVar()
         # Not readonly: a table can decide a group is "owed a favour" or "blood
         # feud", and the generator takes any wording -- the listed five are just
         # the ones that come with reaction text.
-        self.standing_cb = ttk.Combobox(row, textvariable=self.standing,
+        self.standing_cb = ttk.Combobox(row, textvariable=self.standing, width=14,
                                         values=mg.disposition_labels(), state="disabled")
-        self.standing_cb.pack(side="left", fill="x", expand=True)
-        self.apply_btn = ttk.Button(row, text="Set", command=self.apply, state="disabled")
-        self.apply_btn.pack(side="left", padx=(4, 0))
-        self.standing_cb.bind("<Return>", lambda e: self.apply())
-        ttk.Label(edit, text="Takes effect on the next floor you generate.",
+        self.standing_cb.pack(side="left", padx=(4, PAD))
+        ttk.Label(row, text="Fate").pack(side="left")
+        self.outcome = tk.StringVar()
+        # Fatal is the one that kills them; anything else brings a dead group back.
+        self.outcome_cb = ttk.Combobox(row, textvariable=self.outcome, width=9,
+                                       values=mg.team_outcomes(), state="disabled")
+        self.outcome_cb.pack(side="left", padx=(4, PAD))
+        self.apply_btn = ttk.Button(row, text="Save", command=self.apply, state="disabled")
+        self.apply_btn.pack(side="right")
+        report = ttk.Frame(edit)
+        report.pack(fill="x", pady=(4, 0))
+        ttk.Label(report, text="Latest report").pack(side="left")
+        self.report = tk.StringVar()
+        self.report_entry = ttk.Entry(report, textvariable=self.report, state="disabled")
+        self.report_entry.pack(side="left", fill="x", expand=True, padx=(4, 0))
+        for widget in (self.standing_cb, self.report_entry):
+            widget.bind("<Return>", lambda e: self.apply())
+        ttk.Label(edit, text="Standing and fate carry onto the next floor you generate; "
+                             "that floor deals every living group a fresh report.",
                   foreground="#666", font=("Segoe UI", 8)).pack(anchor="w", pady=(4, 0))
 
         self.refresh()
@@ -375,6 +397,7 @@ class CampaignView(ttk.Frame):
         path = self.app.campaign_path
         roster = self.app.roster
         self.close_btn.configure(state="normal" if path else "disabled")
+        self.add_btn.configure(state="normal" if roster is not None else "disabled")
         self.path_lbl.configure(
             text=os.path.basename(path) if path else "No campaign open",
             foreground="#222" if path else "#666")
@@ -389,8 +412,9 @@ class CampaignView(ttk.Frame):
             # A dash until floor 3, where the System has everyone pick a race
             # and a class and there is finally a party to count.
             party = str(len(t.members)) if t.members else "-"
+            shown = f"{t.name} (added)" if t.added else t.name
             self.tree.insert("", "end", iid=t.name,
-                             values=(t.name, t.disposition, party, t.first_seen,
+                             values=(shown, t.disposition, party, t.first_seen,
                                      seen, fate),
                              tags=() if t.alive else ("dead",))
         self._select(None)
@@ -407,35 +431,148 @@ class CampaignView(ttk.Frame):
         self._selected = team
         if team is None:
             self.sel_lbl.configure(text="Select a team above.", foreground="#666")
-            self.standing.set("")
-            self.standing_cb.configure(state="disabled")
-            self.apply_btn.configure(state="disabled")
+            for var in (self.standing, self.outcome, self.report):
+                var.set("")
+            for widget in (self.standing_cb, self.outcome_cb, self.report_entry,
+                           self.apply_btn):
+                widget.configure(state="disabled")
             return
         note = "" if team.alive else f"  (died on floor {team.died_on})"
+        added = "  (added by the DM)" if team.added else ""
         who = "\n" + mg.party_line(team) if team.members else ""
-        self.sel_lbl.configure(text=f"{team.name} - formed from {team.origin}{note}{who}",
-                               foreground="#222")
+        self.sel_lbl.configure(
+            text=f"{team.name} - formed from {team.origin}{note}{added}{who}",
+            foreground="#222")
         self.standing.set(team.disposition)
+        self.outcome.set(team.outcome)
+        self.report.set(team.status)
         self.standing_cb.configure(state="normal")
+        self.outcome_cb.configure(state="readonly")
+        self.report_entry.configure(state="normal")
         self.apply_btn.configure(state="normal")
 
     def apply(self):
+        """Save the selected group's standing, fate and latest report."""
         team = getattr(self, "_selected", None)
         standing = self.standing.get().strip()
         if not team or not standing:
             return
+        was_alive = team.alive
         team.disposition = standing
-        if self.app.campaign_path:
-            try:
-                mg.save_roster(self.app.roster, self.app.campaign_path)
-            except mg.MapgenError as e:
-                messagebox.showerror("Could not save the campaign", str(e), parent=self)
-                return
+        try:
+            mg.set_status(self.app.roster, team.name, status=self.report.get(),
+                          outcome=self.outcome.get() or team.outcome)
+        except mg.MapgenError as e:
+            messagebox.showerror("Could not change that group", str(e), parent=self)
+            return
+        if not self._save():
+            return
         self.refresh()
         self.tree.selection_set(team.name)
-        known = standing in mg.disposition_labels()
-        self.app._set_status(f"{team.name} now stands {standing} with the party"
-                             + ("" if known else " (no reaction text for that one)"))
+        if was_alive and not team.alive:
+            msg = f"{team.name} is dead, as of floor {team.died_on}"
+        elif not was_alive and team.alive:
+            msg = f"{team.name} is back, and carries onto the next floor"
+        else:
+            known = standing in mg.disposition_labels()
+            msg = (f"{team.name} now stands {standing} with the party"
+                   + ("" if known else " (no reaction text for that one)"))
+        self.app._set_status(msg)
+
+    def _save(self) -> bool:
+        if not self.app.campaign_path:
+            return True
+        try:
+            mg.save_roster(self.app.roster, self.app.campaign_path)
+        except mg.MapgenError as e:
+            messagebox.showerror("Could not save the campaign", str(e), parent=self)
+            return False
+        return True
+
+    # -- groups met at the table -------------------------------------------------
+
+    def _current_floor(self) -> int:
+        """The floor a new group was most likely met on: the deepest one the
+        campaign has seen, or the floor on screen if it has seen none."""
+        roster = self.app.roster
+        if roster and roster.teams:
+            return max(t.floor for t in roster.teams)
+        return self.app.result.number if self.app.result else 1
+
+    def add_dialog(self):
+        """Ask for a group met at the table, then add it."""
+        if self.app.roster is None:
+            messagebox.showinfo("No campaign open",
+                                "Open or start a campaign first; that is where the "
+                                "group is kept.", parent=self)
+            return
+        dlg = tk.Toplevel(self)
+        dlg.title("Add a group")
+        dlg.transient(self.winfo_toplevel())
+        dlg.resizable(False, False)
+        body = ttk.Frame(dlg, padding=PAD * 2)
+        body.pack(fill="both", expand=True)
+        fields = {"name": tk.StringVar(), "origin": tk.StringVar(),
+                  "standing": tk.StringVar(value="wary"),
+                  "floor": tk.StringVar(value=str(self._current_floor())),
+                  "status": tk.StringVar(), "outcome": tk.StringVar(value="steady")}
+        rows = (("Name", ttk.Entry(body, textvariable=fields["name"], width=36)),
+                ("Formed from", ttk.Entry(body, textvariable=fields["origin"], width=36)),
+                ("Standing", ttk.Combobox(body, textvariable=fields["standing"], width=34,
+                                          values=mg.disposition_labels())),
+                ("Met on floor", ttk.Spinbox(body, from_=1, to=18, width=6,
+                                             textvariable=fields["floor"])),
+                ("Latest report", ttk.Entry(body, textvariable=fields["status"], width=36)),
+                ("Fate", ttk.Combobox(body, textvariable=fields["outcome"], width=34,
+                                      values=mg.team_outcomes(), state="readonly")))
+        for r, (label, widget) in enumerate(rows):
+            ttk.Label(body, text=label).grid(row=r, column=0, sticky="w", pady=2)
+            widget.grid(row=r, column=1, sticky="w", padx=(PAD, 0), pady=2)
+        ttk.Label(body, text="Formed from reads as \"formed from a hen party on a zeppelin "
+                             "tour\". Leave it blank if nobody knows.",
+                  foreground="#666", font=("Segoe UI", 8), wraplength=360,
+                  justify="left").grid(row=len(rows), column=0, columnspan=2,
+                                       sticky="w", pady=(6, 0))
+        buttons = ttk.Frame(body)
+        buttons.grid(row=len(rows) + 1, column=0, columnspan=2, sticky="e", pady=(PAD, 0))
+
+        def ok():
+            values = {k: v.get() for k, v in fields.items()}
+            if self.add_group(values):
+                dlg.destroy()
+
+        ttk.Button(buttons, text="Add", command=ok).pack(side="left")
+        ttk.Button(buttons, text="Cancel", command=dlg.destroy).pack(side="left", padx=(4, 0))
+        dlg.bind("<Return>", lambda e: ok())
+        dlg.bind("<Escape>", lambda e: dlg.destroy())
+        rows[0][1].focus_set()
+        dlg.grab_set()
+
+    def add_group(self, values: dict) -> bool:
+        """Add a group from the dialog's values. Kept apart from the dialog so it
+        can be driven without one. Returns whether the group was added."""
+        try:
+            floor = int(values.get("floor") or self._current_floor())
+        except ValueError:
+            messagebox.showerror("Which floor?", "Met on floor needs to be a number.",
+                                 parent=self)
+            return False
+        try:
+            team = mg.add_team(self.app.roster, values.get("name", ""),
+                               origin=values.get("origin", ""),
+                               standing=values.get("standing", "wary"), floor=floor,
+                               status=values.get("status", ""),
+                               outcome=values.get("outcome") or "steady")
+        except mg.MapgenError as e:
+            messagebox.showerror("Could not add that group", str(e), parent=self)
+            return False
+        if not self._save():
+            return False
+        self.refresh()
+        self.tree.selection_set(team.name)
+        self.tree.see(team.name)
+        self.app._set_status(f"Added {team.name}; it carries onto the next floor you generate")
+        return True
 
 
 class LootView(ttk.Frame):
@@ -1145,6 +1282,40 @@ def selftest() -> int:
     app.update()
     check(mg.party_line(picked) in app.campaign_tab.sel_lbl.cget("text"),
           "selecting a team names its crawlers")
+    cv = app.campaign_tab
+    errors = []
+    messagebox.showerror = lambda title, msg, **kw: errors.append(msg)
+    added = cv.add_group({"name": "The Sky Pirates", "origin": "a hen party on a zeppelin tour",
+                          "standing": "friendly", "floor": "3",
+                          "status": "arguing over a map", "outcome": "thriving"})
+    app.update()
+    check(added and "The Sky Pirates" in cv.tree.get_children(),
+          "a group met at the table can be added")
+    check(cv.tree.set("The Sky Pirates", "name") == "The Sky Pirates (added)",
+          "an added group is marked as added")
+    check(not cv.add_group({"name": "the sky pirates"}) and errors,
+          "a second group with the same name is refused")
+    cv.add_dialog()
+    app.update()
+    dialogs = [w for w in cv.winfo_children() if isinstance(w, tk.Toplevel)]
+    check(len(dialogs) == 1 and len([w for w in dialogs[0].winfo_children()[0].winfo_children()
+                                     if isinstance(w, (ttk.Entry, ttk.Combobox))]) >= 5,
+          "the Add group dialog opens with its fields")
+    for d in dialogs:
+        d.grab_release()
+        d.destroy()
+    cv.tree.selection_set("The Sky Pirates")
+    app.update()
+    check(cv.report.get() == "arguing over a map" and cv.outcome.get() == "thriving",
+          "selecting a group fills its report and fate")
+    cv.outcome.set("fatal")
+    cv.report.set("shot down over the market")
+    cv.apply()
+    app.update()
+    sky = mg.find_team(app.roster, "Sky Pirates")
+    check(not sky.alive and "dead" in cv.tree.item("The Sky Pirates", "tags"),
+          "setting a group's fate to fatal kills it")
+    check(sky.status == "shot down over the market", "the report can be rewritten")
     app.roster = None
     app.campaign_tab.refresh()
 

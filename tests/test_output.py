@@ -443,6 +443,113 @@ def _t(team):
     return {f: getattr(team, f) for f in mg._TEAM_FIELDS}
 
 
+class CampaignEditTest(unittest.TestCase):
+    """Groups the party meets at the table, and reports a DM rewrites.
+
+    An added group carries from floor to floor like any other -- a fresh report
+    each floor, a party from floor 3 -- but the generator never renames it or
+    re-deals its standing, which it does to every group it has just met itself."""
+
+    @staticmethod
+    def _campaign(floors=(1, 2, 3), seed=4242):
+        roster = None
+        for f in floors:
+            roster = mg.generate(f, "small", seed, images=False, roster=roster).roster
+        return roster
+
+    def test_an_added_group_carries_like_any_other(self):
+        roster = self._campaign()
+        mg.add_team(roster, "The Sky Pirates", origin="a hen party on a zeppelin tour",
+                    standing="friendly", floor=3, status="arguing over a map")
+        roster = mg.generate(4, "small", 4242, images=False, roster=roster).roster
+        team = next(t for t in mg.floor_teams(roster, 4) if t.name == "The Sky Pirates")
+        self.assertEqual(team.origin, "a hen party on a zeppelin tour")
+        self.assertEqual(team.disposition, "friendly")
+        self.assertTrue(team.members, "an added group picks races and classes like any other")
+        self.assertEqual(len(team.history), 2)
+        self.assertNotEqual(team.status, "arguing over a map", "a new floor deals a new report")
+
+    def test_an_added_group_is_never_renamed_or_redealt(self):
+        """The case that matters: added on the very floor about to be generated,
+        which is when the generator treats a group as newly met -- and newly met
+        groups get a name form ("Team X", "The X Crew") and a dealt standing."""
+        for seed in range(1, 13):
+            roster = self._campaign(floors=(1, 2), seed=seed)
+            mg.add_team(roster, "The Sky Pirates", standing="owed a favour", floor=3)
+            roster = mg.generate(3, "small", seed, images=False, roster=roster).roster
+            team = mg.find_team(roster, "Sky Pirates")
+            self.assertEqual(team.name, "The Sky Pirates", f"seed {seed}: renamed")
+            self.assertEqual(team.disposition, "owed a favour", f"seed {seed}: re-dealt")
+            self.assertTrue(team.added)
+
+    def test_a_bad_group_is_refused(self):
+        roster = self._campaign()
+        existing = roster.teams[0].name
+        for name in (existing, existing.upper(), "  ", ""):
+            with self.assertRaises(mg.MapgenError, msg=repr(name)):
+                mg.add_team(roster, name)
+        with self.assertRaises(mg.MapgenError):
+            mg.add_team(roster, "The Sky Pirates", outcome="exploded")
+        with self.assertRaises(mg.MapgenError):
+            mg.add_team(roster, "The Sky Pirates", floor=0)
+        with self.assertRaises(mg.MapgenError):
+            mg.add_team(None, "The Sky Pirates")
+
+    def test_an_added_group_can_arrive_dead(self):
+        roster = self._campaign()
+        team = mg.add_team(roster, "The Late Arrivals", floor=3, outcome="fatal",
+                           status="found in pieces by the stairwell")
+        self.assertFalse(team.alive)
+        self.assertEqual(team.died_on, 3)
+        roster = mg.generate(4, "small", 4242, images=False, roster=roster).roster
+        self.assertNotIn("The Late Arrivals", [t.name for t in mg.floor_teams(roster, 4)])
+
+    def test_fatal_kills_and_anything_else_brings_back(self):
+        roster = self._campaign()
+        alive = roster.active()[0]
+        mg.set_status(roster, alive.name, outcome="fatal", status="killed by the party")
+        self.assertFalse(alive.alive)
+        self.assertEqual(alive.died_on, alive.floor)
+        roster = mg.generate(4, "small", 4242, images=False, roster=roster).roster
+        self.assertNotIn(alive.name, [t.name for t in mg.floor_teams(roster, 4)])
+        mg.set_status(roster, alive.name, outcome="costly", status="dragged back somehow")
+        self.assertTrue(alive.alive)
+        roster = mg.generate(5, "small", 4242, images=False, roster=roster).roster
+        self.assertIn(alive.name, [t.name for t in mg.floor_teams(roster, 5)],
+                      "a team brought back carries onto the next floor")
+
+    def test_editing_corrects_the_latest_entry_rather_than_adding_one(self):
+        roster = self._campaign()
+        team = roster.active()[0]
+        before = len(team.history)
+        mg.set_status(roster, team.name, status="holed up in a launderette")
+        self.assertEqual(len(team.history), before, "a second entry for the same floor")
+        self.assertEqual(team.history[-1]["status"], "holed up in a launderette")
+        self.assertTrue(team.history[-1]["by_dm"])
+        self.assertEqual(team.status, "holed up in a launderette")
+        mg.set_status(roster, team.name, outcome="thriving")
+        self.assertEqual(team.status, "holed up in a launderette", "the report survived")
+
+    def test_a_status_edit_finds_teams_the_way_standing_does(self):
+        roster = self._campaign()
+        mg.add_team(roster, "The Sky Pirates", floor=3)
+        self.assertEqual(mg.set_status(roster, "sky pir", status="x").name, "The Sky Pirates")
+        with self.assertRaises(mg.MapgenError):
+            mg.set_status(roster, "nobody at all", status="x")
+        with self.assertRaises(mg.MapgenError):
+            mg.set_status(roster, "The Sky Pirates", outcome="exploded")
+
+    def test_added_survives_a_save_and_load_and_old_rosters_still_load(self):
+        roster = self._campaign()
+        mg.add_team(roster, "The Sky Pirates", floor=3)
+        back = mg.CampaignRoster.from_dict(roster.to_dict())
+        self.assertTrue(mg.find_team(back, "Sky Pirates").added)
+        old = roster.to_dict()
+        for t in old["teams"]:
+            t.pop("added", None)
+        self.assertFalse(any(t.added for t in mg.CampaignRoster.from_dict(old).teams))
+
+
 class CrawlerPartyTest(unittest.TestCase):
     """Floor 3 is where every surviving crawler picks a race and a class.
 
