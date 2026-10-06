@@ -67,15 +67,6 @@
    "Exit-only cavern. Mobs get their Rev-Up here; the 'rollercoaster' track at the back runs to the trainyard.",
    "Exit-only cavern: a dispensary counter, a queue of twitching porters, and a rusted coaster rail.",
    "Exit-only cavern. Whatever gets off here does not get back on this train."
-  ],
-  "safe_room": [
-   "Safe room on the mezzanine between platforms.",
-   "Safe room is the old station pub; the taps still work.",
-   "Two platforms stacked; the safe room is the stationmaster's office between them.",
-   "Safe room doubles as the lost-and-found.",
-   "Safe room is a noodle counter with six stools and a proprietor who has seen everything.",
-   "Safe room in the old ticket hall; the ticket windows sell sandwiches now.",
-   "Safe room is a launderette. The machines are always mid-cycle."
   ]
  },
  "NAMED_PREFIX": [
@@ -128,7 +119,6 @@
  ],
  "NAMED_GIMMICK": [
   "The engineer's compartment is a boiler fed by a bound demon who will negotiate.",
-  "Triggers a quest on boarding: the crew wants the engineer dead and the engineer knows it.",
   "Runs through the Abyss on every loop; the doors open over the pit.",
   "Cars rearrange between stops. Count them.",
   "Carries a working portal scoop on the front; can pull stranded crawlers off a platform at speed.",
@@ -526,6 +516,324 @@
      45
     ],
     "does": "they build themselves into a station of their own, platform and all, and wait for someone to board"
+   }
+  ]
+ },
+ "ACHIEVEMENTS4": [
+  [
+   "All Aboard",
+   "Get your whole party onto a moving train.",
+   "Bronze Adventurer Box"
+  ],
+  [
+   "Commuter",
+   "Ride a colored line for a full day without leaving your car.",
+   "Silver Survivor's Box"
+  ],
+  [
+   "Rush Hour",
+   "Hold a passenger car when mobs break in at a fifth stop.",
+   "Silver Brawler Box"
+  ],
+  [
+   "Wrong Way Round",
+   "Walk the tunnels all the way back to station 72.",
+   "Gold Survivor's Box"
+  ],
+  [
+   "Off the Rails",
+   "Bring a train off its tracks.",
+   "Gold Mechanic's Box"
+  ],
+  [
+   "Driver's Seat",
+   "Drive a train, for any distance.",
+   "Gold Mechanic's Box"
+  ],
+  [
+   "Staff Only",
+   "Spend an hour in car 5 without being thrown out.",
+   "Silver Lucky Bastard Box"
+  ],
+  [
+   "Missed Your Stop",
+   "Be in the car when a mob misses its stop.",
+   "flavor only"
+  ],
+  [
+   "Interchange",
+   "Change trains at five different transfer stations.",
+   "Silver Adventurer Box"
+  ],
+  [
+   "Roof Rider",
+   "Ride on the roof of a moving train from one station to the next.",
+   "Gold Lucky Bastard Box"
+  ],
+  [
+   "Exit Only",
+   "Leave a line through an exit-only cavern.",
+   "Bronze Survivor's Box"
+  ],
+  [
+   "Last Stop",
+   "Get off at 435 and live.",
+   "Platinum Survivor's Box"
+  ],
+  [
+   "Uncoupled",
+   "Uncouple a car from a moving train.",
+   "Silver Sapper's Box"
+  ],
+  [
+   "Commuter's Revenge",
+   "Throw a mob off a moving train.",
+   "Bronze Brawler Box"
+  ],
+  [
+   "Season Ticket",
+   "Ride five different colored lines.",
+   "Gold Adventurer Box"
+  ],
+  [
+   "Cold Turkey",
+   "Kill a mob in the last stage of withdrawal.",
+   "Silver Hunter Box"
+  ],
+  [
+   "Regular",
+   "Sleep in the same safe room three nights running.",
+   "Bronze Adventurer Box"
+  ]
+ ],
+ "SAFE_ROOMS4": {
+  "businesses": [
+   {
+    "name": "The Third Rail",
+    "what": "the old station pub, where the taps still work",
+    "offers": "a pint on the house for anyone with a good story about the floor"
+   },
+   {
+    "name": "Six Stools",
+    "what": "a noodle counter with six stools",
+    "offers": "a broth that takes the edge off any debuff by morning"
+   },
+   {
+    "name": "Spin Cycle",
+    "what": "a launderette whose machines are always mid-cycle",
+    "offers": "clothes washed and mended overnight, bloodstains extra"
+   },
+   {
+    "name": "Platform Nine Diner",
+    "what": "an all-night diner in the old ticket hall",
+    "offers": "breakfast at any hour, and the booths are long enough to sleep in"
+   },
+   {
+    "name": "The Waiting Room",
+    "what": "a station waiting room full of somebody's armchairs",
+    "offers": "a nap that counts as a full night's sleep, if nobody wakes you"
+   },
+   {
+    "name": "Last Doughnut",
+    "what": "a doughnut shop that only ever has one flavor left",
+    "offers": "a box of a dozen, each good for a little healing"
+   },
+   {
+    "name": "The Food Court",
+    "what": "a whole food court, every counter run by the same proprietor in a different hat",
+    "offers": "a meal from any counter, and gossip from every one"
+   },
+   {
+    "name": "The Signal Tower",
+    "what": "a signal tower turned cocktail bar, with a view down the line",
+    "offers": "warning of what is coming in on the next train"
+   },
+   {
+    "name": "Platform Two Barbers",
+    "what": "a barbershop with three chairs",
+    "offers": "a shave, and the latest from the death feed"
+   },
+   {
+    "name": "Left Luggage",
+    "what": "the left-luggage office, shelves to the ceiling",
+    "offers": "storage for anything you can carry, until the floor collapses"
+   },
+   {
+    "name": "The Sleeper Car",
+    "what": "a decommissioned sleeper carriage, bunks made up",
+    "offers": "a private compartment for the whole party"
+   },
+   {
+    "name": "The Lamp Room",
+    "what": "the station lamp room, all brass and paraffin",
+    "offers": "lanterns refilled, and any light source recharged"
+   }
+  ],
+  "proprietors": [
+   "Mabel",
+   "Pip",
+   "Old Teodor",
+   "Nan Brisket",
+   "Gus",
+   "Ottoline",
+   "Jeb",
+   "Mrs. Varga",
+   "Hollis",
+   "Little Moss",
+   "Agatha Pole",
+   "Fen",
+   "Barnaby",
+   "Queenie",
+   "Tobiah",
+   "Dot"
+  ],
+  "species": [
+   "a Bopca",
+   "a Bopca",
+   "a Bopca",
+   "a Bopca",
+   "a retired porter",
+   "a gnome with a ledger",
+   "a very patient troll"
+  ]
+ },
+ "HUBS4": {
+  "lines": [
+   8,
+   30
+  ],
+  "shops": [
+   "a general store",
+   "an armorer's stall",
+   "a potion counter",
+   "a map shop that sells the wrong maps",
+   "a pawnbroker who buys loot by weight",
+   "a ticket office that sells tickets to nowhere",
+   "a scroll seller",
+   "a tailor",
+   "a bookstall of crawler memoirs, all of them unfinished"
+  ],
+  "guilds": [
+   "a fighters' guild",
+   "a thieves' guild behind the vending machines",
+   "a mages' guild in the old lost-property office",
+   "a rangers' guild that has never seen the sky",
+   "a healers' guild",
+   "an engineers' guild that will not talk about the trains"
+  ],
+  "sights": [
+   "departure boards covering a whole wall, every one of them wrong",
+   "a fountain of brown water nobody drinks from",
+   "a busker who knows every crawler's name",
+   "a lost-and-found the size of a warehouse",
+   "a clock tower in the middle of the concourse, running backwards",
+   "a statue of a conductor, polished bright where people touch it for luck"
+  ]
+ },
+ "STATION_QUESTS4": {
+  "objectives": [
+   "Recover {item} that went missing on the {line} Line somewhere between here and {station}.",
+   "Clear the {mob} out of car 10 on the next {line} Line train through here.",
+   "Walk a porter who missed their stop back to the exit cavern at {cavern} before their withdrawal turns.",
+   "Find out why {line} Line trains have stopped stopping at {station}.",
+   "Deliver a sealed lunch pail to the engineer of the {line} Line. Do not open the lunch pail.",
+   "Find a regular who went to {ghoul_station} ({ghoul_number}) and never came back.",
+   "Bring back a sealed dose of Rev-Up from an exit cavern, without being seen taking it.",
+   "Get a conductor on the {line} Line to sign a complaint form. They will not want to.",
+   "Fetch {item} from the left-luggage office at {station}. The ticket says it is there.",
+   "Mind the counter here for one shift. Nobody can know."
+  ],
+  "items": [
+   "the good coffee",
+   "a crate of spare fuses",
+   "a box of ticket stock",
+   "a wedding photograph",
+   "a case of tinned peaches",
+   "a barrel of the house ale",
+   "a mop bucket of great sentimental value",
+   "the station cat"
+  ],
+  "titles": [
+   "A Favor for {giver}",
+   "{giver}'s Errand",
+   "Trouble on the {line} Line",
+   "The {Item} Job",
+   "One More Stop",
+   "Counter Business"
+  ],
+  "rewards": [
+   "a Bronze Quest Box",
+   "a Silver Quest Box",
+   "a Gold Quest Box",
+   "a Silver Quest Box and free meals here for the rest of the floor",
+   "a Bronze Quest Box and a favor owed"
+  ],
+  "flavor": [
+   "The proprietor has asked four other parties. Two came back.",
+   "The System marks this quest optional. The proprietor does not.",
+   "Whoever had this job last left their coat on the hook. It is still there.",
+   "The reward is real. The proprietor's account of events is decoratively arranged.",
+   "This has a time limit nobody has mentioned, least of all the proprietor.",
+   "Two of the regulars have bets on how this goes. Neither bet is on you.",
+   "The proprietor would do it themselves, but the trains frighten them.",
+   "Accepting this makes an enemy somewhere on the line. The System declines to say which line.",
+   "A previous crawler accepted this and is still, technically, on it.",
+   "The advice from the counter is free, and worth exactly that."
+  ]
+ },
+ "TRAIN_QUESTS4": {
+  "minutes": [
+   10,
+   30
+  ],
+  "quests": [
+   {
+    "title": "Hold the Cab",
+    "objective": "Keep the engineer alive until the next stop, {minutes} minutes out. The {crew} come for the cab the moment the doors close.",
+    "reward": "a Silver Quest Box",
+    "failure": "The train runs on with nobody driving, and every door stays shut until it stops on its own."
+   },
+   {
+    "title": "Tickets, Please",
+    "objective": "Every passenger must hold a ticket by the next stop, {minutes} minutes away. You are passengers, and the {crew} are selling.",
+    "reward": "a Bronze Quest Box",
+    "failure": "Fare dodgers are put off the train, wherever the train happens to be."
+   },
+   {
+    "title": "Running Late",
+    "objective": "Get the train to its next stop on time: {minutes} minutes, with something on the line ahead.",
+    "reward": "a Silver Quest Box",
+    "failure": "The train is late, and the {crew} take it out on the passengers."
+   },
+   {
+    "title": "Quiet Carriage",
+    "objective": "Keep your car silent for {minutes} minutes. Something in the next car is listening, and so are the {crew}.",
+    "reward": "a Gold Quest Box",
+    "failure": "It comes through the connecting door."
+   },
+   {
+    "title": "Last Car",
+    "objective": "The cars are uncoupling one at a time from the back. Get your party to the front within {minutes} minutes, through the {crew}.",
+    "reward": "a Silver Quest Box",
+    "failure": "Whoever is still behind the break goes wherever the loose cars go."
+   },
+   {
+    "title": "Stowaway",
+    "objective": "A lost pet is somewhere aboard. Find it within {minutes} minutes, before the {crew} do.",
+    "reward": "a Silver Quest Box, and the pet, if it likes you",
+    "failure": "The {crew} find it first, and they are still hungry."
+   },
+   {
+    "title": "Dining Car",
+    "objective": "Sit through dinner service: {minutes} minutes at the {crew}'s table, eating what you are served.",
+    "reward": "a Silver Quest Box",
+    "failure": "You are on the menu for the next sitting."
+   },
+   {
+    "title": "Overcrowded",
+    "objective": "The train takes on more {crew} at every stop. Keep them out of the passenger cars for {minutes} minutes.",
+    "reward": "a Gold Quest Box",
+    "failure": "The passenger cars are theirs, and so is everything in them."
    }
   ]
  }

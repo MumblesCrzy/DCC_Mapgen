@@ -916,6 +916,137 @@ class Floor4LayoutTest(unittest.TestCase):
                 self.assertIn(cavern, [st.number for st in ln.stations
                                        if st.kind == "exit_cavern"], where)
 
+    # -- safe rooms, hubs, quests and achievements ---------------------------------
+
+    HUBS = {"small": 1, "medium": 1, "large": 2}
+
+    def test_every_safe_room_is_somebodys_business(self):
+        for size, seed, res in self._floors():
+            fl, where = res.floor, f"{size} seed {seed}"
+            primes = sorted({st.number for ln in fl.lines for st in ln.stations
+                             if st.transfer_to and st.number in self.PRIMES})
+            self.assertEqual([sr["number"] for sr in fl.safe_rooms], primes, where)
+            names = [sr["business"]["name"] for sr in fl.safe_rooms]
+            self.assertEqual(len(set(names)), len(names), f"{where}: {names}")
+            owners = [sr["proprietor"].split(",")[0] for sr in fl.safe_rooms]
+            self.assertEqual(len(set(owners)), len(owners), f"{where}: {owners}")
+            for sr in fl.safe_rooms:
+                b = sr["business"]
+                # Every line the transfer is on says so. The same number on a third
+                # line is that line's own platform, and none of this.
+                through = [ln.color for ln in fl.lines for st in ln.stations
+                           if st.number == sr["number"] and st.transfer_to]
+                self.assertEqual(sorted(sr["lines"]), sorted(through), where)
+                for ln in fl.lines:
+                    for st in ln.stations:
+                        if st.number == sr["number"] and st.transfer_to:
+                            self.assertEqual(st.note, f"Safe room: {b['name']}, {b['what']}.",
+                                             where)
+                        elif st.number == sr["number"]:
+                            self.assertFalse(st.safe_room, where)
+                self.assertIn(f"### {sr['number']} — {b['name']} (", res.markdown, where)
+
+    def test_hubs_are_where_many_lines_meet(self):
+        for size, seed, res in self._floors():
+            fl, where = res.floor, f"{size} seed {seed}"
+            transfers = {st.number for ln in fl.lines for st in ln.stations if st.transfer_to}
+            plain = transfers - self.PRIMES
+            self.assertEqual(len(fl.hubs), min(self.HUBS[size], len(plain) or 1), where)
+            for h in fl.hubs:
+                self.assertIn(h["number"], transfers, where)
+                if plain:
+                    self.assertNotIn(h["number"], self.PRIMES,
+                                     f"{where}: a hub on a safe room with others free")
+                self.assertTrue(max(8, len(h["lines"])) <= h["n_lines"] <= 30, where)
+                self.assertEqual(len(set(h["shops"])), 2, where)
+                self.assertTrue(1 <= len(set(h["guilds"])) <= 2, where)
+                for ln in fl.lines:
+                    for st in ln.stations:
+                        if st.number == h["number"]:
+                            self.assertEqual(st.hub_lines,
+                                             h["n_lines"] if st.transfer_to else 0, where)
+                self.assertIn(f"### {h['number']} — Hub, {h['n_lines']} lines", res.markdown)
+                self.assertIn(f"station {h['number']} ({h['n_lines']} lines)", res.markdown)
+
+    def test_a_station_number_shared_by_chance_is_still_two_stations(self):
+        """At volume, the two coincidences a few dozen floors rarely produce: a
+        safe-room transfer dealt onto one of its own lines' spawn platforms, which
+        must then name the business; and a hub whose number is also a third line's
+        plain platform, which is not part of the hub."""
+        merged = elsewhere = 0
+        for seed in range(1, 301):
+            fl = mg.generate(4, "large", seed, images=False).floor
+            hubs = {h["number"] for h in fl.hubs}
+            names = {sr["number"]: sr["business"]["name"] for sr in fl.safe_rooms}
+            for ln in fl.lines:
+                for st in ln.stations:
+                    if st.kind == "spawn" and st.safe_room:
+                        merged += 1
+                        self.assertTrue(st.note.startswith(f"Safe room: {names[st.number]},"),
+                                        f"seed {seed}: {ln.color} {st.number}: {st.note}")
+                    if st.number in hubs and not st.transfer_to:
+                        elsewhere += 1
+                        self.assertEqual(st.hub_lines, 0, f"seed {seed}: {ln.color} {st.number}")
+        self.assertTrue(merged and elsewhere,
+                        f"never met: spawn safe rooms {merged}, other platforms {elsewhere}")
+
+    def test_floor_4_lists_its_achievements(self):
+        res = mg.generate(4, "medium", 4242, images=False)
+        md = res.markdown
+        section = md[md.index("## Achievements"):md.index("## Loot Boxes")]
+        boxed = {s.source for s in mg.floor_box_suggestions(res.floor) if s.kind == "achievement"}
+        self.assertGreaterEqual(len(mg.ACHIEVEMENTS4), 12)
+        for name, trigger, reward in mg.ACHIEVEMENTS4:
+            self.assertIn(f"- **{name}:** {trigger} → {reward}", section)
+            if reward != "flavor only":
+                self.assertRegex(reward, r"^(Bronze|Silver|Gold|Platinum|Legendary|Celestial) ")
+                self.assertIn(name, boxed)
+
+    def test_each_safe_room_and_hub_posts_a_quest(self):
+        items = [re.sub(r"^(?:a|an|the)\s+", "", i).lower()
+                 for i in mg.STATION_QUESTS4["items"]]
+        for size, seed, res in self._floors():
+            fl, where = res.floor, f"{size} seed {seed}"
+            posted = [sr["quest"] for sr in fl.safe_rooms] + [h["quest"] for h in fl.hubs]
+            self.assertEqual(fl.quests, posted, where)
+            suggested = {s.source for s in mg.floor_box_suggestions(fl) if s.kind == "quest"}
+            for q in posted:
+                text = f"{q.title} {q.objective} {q.reward}"
+                self.assertNotIn("{", text, where)
+                self.assertNotIn("The The", q.title, where)
+                self.assertIn("Quest Box", q.reward, where)
+                self.assertIn(q.flavor, mg.STATION_QUESTS4["flavor"],
+                              f"{where}: borrowed another floor's flavor: {q.flavor}")
+                self.assertIn(q.title, suggested, where)
+                if q.title.endswith(" Job"):
+                    named = q.title[4:-4].lower()
+                    self.assertIn(named, items, where)
+                    self.assertIn(named, q.objective.lower(),
+                                  f"{where}: {q.title!r} names something the quest doesn't")
+            for h in fl.hubs:
+                self.assertNotIn("noticeboard", h["quest"].title, where)
+
+    def test_every_named_train_starts_a_quest_when_boarded(self):
+        self.assertFalse([g for g in mg.NAMED_GIMMICK if "quest" in g.lower()],
+                         "a gimmick still promises the quest every train now has")
+        lo, hi = mg.TRAIN_QUESTS4["minutes"]
+        for size, seed, res in self._floors():
+            fl, where = res.floor, f"{size} seed {seed}"
+            titles = [t.quest["title"] for t in fl.named]
+            self.assertEqual(len(set(titles)), len(titles), f"{where}: {titles}")
+            suggested = {s.source for s in mg.floor_box_suggestions(fl) if s.kind == "quest"}
+            for t in fl.named:
+                q = t.quest
+                self.assertTrue(lo <= q["minutes"] <= hi, where)
+                self.assertIn(f"{q['minutes']} minutes", q["objective"], where)
+                self.assertIn(t.crew.name, f"{q['objective']} {q['failure']}",
+                              f"{where}: the train's own crew play no part")
+                for part in ("objective", "failure", "title"):
+                    self.assertNotIn("{", q[part], where)
+                self.assertIn("Quest Box", q["reward"], where)
+                self.assertIn(f"- **Quest on boarding — {q['title']}:**", res.markdown, where)
+                self.assertIn(f"{q['title']}, {t.name}", suggested, where)
+
     # -- the tail ---------------------------------------------------------------
 
     def test_station_435_is_on_the_map_and_in_the_text(self):

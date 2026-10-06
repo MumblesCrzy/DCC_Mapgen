@@ -1478,11 +1478,26 @@ def floor_box_suggestions(fl) -> List[BoxSuggestion]:
             if m:
                 out.append(BoxSuggestion(m.group(1), m.group(2), "quest",
                                          f"{q.title}, {cell.name}"))
+    # Floor 4 keeps its station quests on the floor, and a quest on every named
+    # train.
+    for q in getattr(fl, "quests", None) or []:
+        m = _BOX_RE.search(q.reward)
+        if m:
+            out.append(BoxSuggestion(m.group(1), m.group(2), "quest", q.title))
+    for t in getattr(fl, "named", None) or []:
+        quest = getattr(t, "quest", None)
+        m = quest and _BOX_RE.search(quest["reward"])
+        if m:
+            out.append(BoxSuggestion(m.group(1), m.group(2), "quest",
+                                     f"{quest['title']}, {t.name}"))
     if getattr(fl, "neighborhoods", None):           # floors 1 and 2 list them
-        for name, _, reward in ACHIEVEMENTS:
-            m = _BOX_RE.search(reward)
-            if m:
-                out.append(BoxSuggestion(m.group(1), m.group(2), "achievement", name))
+        achievements = ACHIEVEMENTS
+    else:                                            # and floor 4 its own
+        achievements = getattr(fl, "achievements", None) or []
+    for name, _, reward in achievements:
+        m = _BOX_RE.search(reward)
+        if m:
+            out.append(BoxSuggestion(m.group(1), m.group(2), "achievement", name))
     return out
 
 
@@ -2889,9 +2904,9 @@ FLOOR4_CFG = {
 }
 
 SIZE4_CFG = {
-    "small":  {"lines": 2, "named": 1},
-    "medium": {"lines": 4, "named": 2},
-    "large":  {"lines": 7, "named": 3},
+    "small":  {"lines": 2, "named": 1, "hubs": 1},
+    "medium": {"lines": 4, "named": 2, "hubs": 1},
+    "large":  {"lines": 7, "named": 3, "hubs": 2},
 }
 
 F4_RULES = [
@@ -2969,10 +2984,11 @@ class Station:
     transfer_to: List[str] = field(default_factory=list)
     has_stairwell: bool = False
     safe_room: bool = False
+    hub_lines: int = 0            # a hub: how many lines meet here, most not detailed
 
     # What a transfer station has follows from its number: a safe room if it is
     # prime, a Desperado Club if it ends in 1, a Club Vanquisher if it ends in 9.
-    # Only transfers have any of them.
+    # Only transfers have any of them. A hub is dealt, not numbered.
     @property
     def desperado(self) -> bool:
         return bool(self.transfer_to) and self.number % 10 == 1
@@ -2984,7 +3000,8 @@ class Station:
     def amenities(self) -> List[str]:
         return ([name for name, has in (("safe room", self.safe_room),
                                         ("Desperado Club", self.desperado),
-                                        ("Club Vanquisher", self.vanquisher)) if has])
+                                        ("Club Vanquisher", self.vanquisher)) if has]
+                + ([f"hub of {self.hub_lines} lines"] if self.hub_lines else []))
 
 
 @dataclass
@@ -3013,6 +3030,8 @@ class NamedTrain:
     entry: str
     gimmick: str
     crew: Mob
+    # The quest boarding starts: title, objective, minutes, reward, failure.
+    quest: Optional[dict] = None
 
 
 @dataclass
@@ -3037,6 +3056,12 @@ class Floor4:
     # name, ghoul {name, level, does, from}, feed, tide, opening, and at one of
     # them a merged boss.
     ghoul_stations: List[dict] = field(default_factory=list)
+    # Safe rooms are businesses: number, lines, business {name, what, offers},
+    # proprietor, quest. Hubs: number, lines, n_lines, shops, guilds, sight, quest.
+    safe_rooms: List[dict] = field(default_factory=list)
+    hubs: List[dict] = field(default_factory=list)
+    quests: List[Quest] = field(default_factory=list)      # every station quest
+    achievements: List[list] = field(default_factory=list)
 
 
 class Generator4:
@@ -3108,7 +3133,20 @@ class Generator4:
         # 103 is the same safe room whichever line the party arrives on. Dealt
         # from decks, so two transfers on a floor differ while the bank lasts.
         transfer_notes = {}
-        note_decks = {k: Deck(self.rng, STATION_FLAVOR[k]) for k in ("transfer", "safe_room")}
+        transfer_deck = Deck(self.rng, STATION_FLAVOR["transfer"])
+        # A safe room is a business: the station's note names it, and the Safe
+        # Rooms and Hubs section has its proprietor, what it offers, and a quest.
+        business_deck = Deck(self.rng, SAFE_ROOMS4["businesses"])
+        businesses = {}
+
+        def transfer_note(number):
+            if number not in transfer_notes:
+                if _is_prime(number):
+                    b = businesses[number] = business_deck.draw()
+                    transfer_notes[number] = f"Safe room: {b['name']}, {b['what']}."
+                else:
+                    transfer_notes[number] = transfer_deck.draw()
+            return transfer_notes[number]
 
         def add(ln, number, kind, **kw):
             d = stmap[ln.color]
@@ -3117,14 +3155,15 @@ class Generator4:
                 if kind == "transfer":
                     st.transfer_to.extend(kw.get("transfer_to", []))
                     st.safe_room = _is_prime(number)
+                    # A transfer landing on a line's spawn platform: if it makes
+                    # a safe room, the business is what that line should say too.
+                    if st.safe_room:
+                        st.note = transfer_note(number)
                 return st
             if kind == "stairwell":
                 note = stair_notes[number]
             elif kind == "transfer":
-                if number not in transfer_notes:
-                    transfer_notes[number] = note_decks[
-                        "safe_room" if _is_prime(number) else "transfer"].draw()
-                note = transfer_notes[number]
+                note = transfer_note(number)
             else:
                 note = self.rng.choice(STATION_FLAVOR[kind]) if kind in STATION_FLAVOR else ""
             st = Station(number, kind, note, list(kw.get("transfer_to", [])),
@@ -3162,10 +3201,34 @@ class Generator4:
         for ln in lines:
             ln.stations = sorted(stmap[ln.color].values(), key=lambda s_: s_.number)
 
+        # Hubs: transfers where many lines meet -- far more than the floor details --
+        # with shops and guilds. Not a safe room where there is a choice: a hub
+        # is a concourse, and a safe room is somebody's business.
+        transfers = sorted({st.number for ln in lines for st in ln.stations if st.transfer_to})
+        plain = [n for n in transfers if not _is_prime(n)]
+        hub_numbers = sorted(self.rng.sample(plain, min(self.sc["hubs"], len(plain)))
+                             if plain else transfers[:1])
+        hubs = []
+        lo_lines, hi_lines = HUBS4["lines"]
+        for num in hub_numbers:
+            through = [ln.color for ln in lines
+                       if any(st.number == num and st.transfer_to for st in ln.stations)]
+            n_lines = self.rng.randint(max(lo_lines, len(through)), hi_lines)
+            for ln in lines:
+                for st in ln.stations:
+                    if st.number == num and st.transfer_to:
+                        st.hub_lines = n_lines
+            hubs.append({"number": num, "lines": through, "n_lines": n_lines,
+                         "shops": self.rng.sample(HUBS4["shops"], 2),
+                         "guilds": self.rng.sample(HUBS4["guilds"], self.rng.randint(1, 2)),
+                         "sight": self.rng.choice(HUBS4["sights"])})
+
         # Named trains: loops over 3-4 detailed stations on 2+ lines. Not the
         # stairwell stations: every line has all five, and a loop of them would
         # crowd out everything else.
         named = []
+        # Every named train starts a quest when boarded, none the same on a floor.
+        train_quests = Deck(self.rng, TRAIN_QUESTS4["quests"])
         for _ in range(self.sc["named"]):
             name = self._unique(lambda: f"{self.rng.choice(NAMED_PREFIX)} {self.rng.choice(NAMED_SUFFIX)}")
             k = self.rng.randint(3, 4)
@@ -3184,12 +3247,18 @@ class Generator4:
             if self.rng.random() < 0.5:
                 stops.append(("Abyss", c["abyss"]))
             crew = self.make_mob()
+            tq = train_quests.draw()
+            minutes = self.rng.randint(*TRAIN_QUESTS4["minutes"])
+            quest = {"title": tq["title"], "minutes": minutes,
+                     "objective": tq["objective"].format(minutes=minutes, crew=crew.name),
+                     "reward": tq["reward"],
+                     "failure": tq["failure"].format(minutes=minutes, crew=crew.name)}
             named.append(NamedTrain(
                 name=name, stock=self.rng.choice(NAMED_STOCK),
                 interval=self.rng.choice([30, 45, 48, 60, 75, 90, 120]),
                 cars=self.rng.choice([2, 3, 6, 12, 24, 38, 40]),
                 stops=stops, entry=self.rng.choice(NAMED_ENTRY),
-                gimmick=self.rng.choice(NAMED_GIMMICK), crew=crew))
+                gimmick=self.rng.choice(NAMED_GIMMICK), crew=crew, quest=quest))
 
         jan = self.make_mob()
         jan.quirk = self.rng.choice(JANITOR_MECHANICS) + " Board at station 12 and ride to 435."
@@ -3205,12 +3274,66 @@ class Generator4:
         janitor_level = self.rng.randint(*c["janitor_level"])
         ghoul_stations = self._ghoul_stations(stairs, stair_notes, days, jan, janitor_level,
                                               withdrawal)
+
+        # Each safe room's proprietor has a quest, and so does each hub's
+        # noticeboard. Built last, since a quest can send the party to a ghoul
+        # station.
+        decks = {"objective": Deck(self.rng, STATION_QUESTS4["objectives"]),
+                 "item": Deck(self.rng, STATION_QUESTS4["items"]),
+                 "title": Deck(self.rng, STATION_QUESTS4["titles"]),
+                 "reward": Deck(self.rng, STATION_QUESTS4["rewards"]),
+                 "flavor": Deck(self.rng, STATION_QUESTS4["flavor"])}
+        owners = Deck(self.rng, SAFE_ROOMS4["proprietors"])
+        safe_rooms, quests = [], []
+        for num in sorted(businesses):
+            owner = f"{owners.draw()}, {self.rng.choice(SAFE_ROOMS4['species'])}"
+            q = self._station_quest(num, owner.split(",")[0], lines, ghoul_stations, decks)
+            through = [ln.color for ln in lines
+                       if any(st.number == num and st.transfer_to for st in ln.stations)]
+            safe_rooms.append({"number": num, "lines": through, "business": businesses[num],
+                               "proprietor": owner, "quest": q})
+            quests.append(q)
+        for hub in hubs:
+            hub["quest"] = self._station_quest(hub["number"], "the station noticeboard", lines,
+                                               ghoul_stations, decks)
+            quests.append(hub["quest"])
+
         return Floor4(size=self.size, name=f"The {self.rng.choice(NAMED_PREFIX)} Tangle", days=days,
                       janitor=jan, janitor_level=janitor_level,
                       lines=lines, named=named, mimic_tell=self.rng.choice(MIMIC_TELL),
                       story=story, seed=self.seed, withdrawal=withdrawal,
                       last_day=last_day, stair_notes=stair_notes,
-                      ghoul_stations=ghoul_stations)
+                      ghoul_stations=ghoul_stations, safe_rooms=safe_rooms, hubs=hubs,
+                      quests=quests, achievements=[list(a) for a in ACHIEVEMENTS4])
+
+    def _station_quest(self, number, giver, lines, ghoul_stations, decks) -> Quest:
+        """A quest given at a station: by a safe room's proprietor, or posted on a
+        hub's noticeboard. It sends the party along a line that stops there."""
+        ln = self.rng.choice([ln for ln in lines
+                              if any(st.number == number and st.transfer_to
+                                     for st in ln.stations)])
+        elsewhere = [st.number for st in ln.stations
+                     if st.number != number and st.kind != "stairwell"]
+        caverns = [st.number for st in ln.stations if st.kind == "exit_cavern"]
+        gs = self.rng.choice(ghoul_stations)
+        item = decks["item"].draw()
+        form = decks["objective"].draw()
+        objective = form.format(item=item, line=ln.color,
+                                station=f"station {self.rng.choice(elsewhere)}",
+                                mob=ln.line_mob.name, cavern=self.rng.choice(caverns),
+                                ghoul_station=gs["name"], ghoul_number=gs["number"])
+        # A title names the item only if the objective has one, and a noticeboard
+        # is not somebody a favor can be for.
+        for _ in range(12):
+            title_form = decks["title"].draw()
+            if "{Item}" in title_form and "{item}" not in form:
+                continue
+            if "{giver}" in title_form and giver.startswith("the "):
+                continue
+            break
+        bare = re.sub(r"^(?:a|an|the)\s+", "", item)
+        title = title_form.format(giver=giver, line=ln.color, Item=cap_words(bare))
+        return Quest(title, giver, objective, decks["flavor"].draw(), decks["reward"].draw())
 
     def _ghoul_stations(self, stairs, stair_notes, days, jan, janitor_level, withdrawal):
         """Who gathers at each of the five stairwell stations, and what it means.
@@ -3253,6 +3376,50 @@ def _miles_text(miles: float) -> str:
         return "under a mile"
     n = round(miles)
     return f"{n} mile{'s' if n != 1 else ''}"
+
+
+def _lines_text(colors: List[str]) -> str:
+    if len(colors) == 1:
+        return f"{colors[0]} Line"
+    return f"{', '.join(colors[:-1])} and {colors[-1]} Lines"
+
+
+def _quest_lines(q: Quest, label: str) -> List[str]:
+    return [f"- **{label} — {q.title}.** {q.objective} Reward: {q.reward}.",
+            f"  - *{q.flavor}*"]
+
+
+def _safe_rooms_and_hubs4(fl: Floor4) -> List[str]:
+    """The safe rooms the detailed lines pass, each somebody's business, and the
+    hubs where far more lines meet than the floor details."""
+    o = ["## Safe Rooms and Hubs", "",
+         "A safe room on the Iron Tangle is somebody's business, and its proprietor always "
+         "has something that needs doing. Only a prime-numbered transfer has one. A hub is "
+         "where far more lines meet than this floor details: a concourse with shops and "
+         "guilds, and a noticeboard.", ""]
+    for sr in fl.safe_rooms:
+        b = sr["business"]
+        st = next(s for ln in fl.lines for s in ln.stations
+                  if s.number == sr["number"] and s.transfer_to)
+        also = [a for a in st.amenities() if a != "safe room"]
+        o.append(f"### {sr['number']} — {b['name']} ({_lines_text(sr['lines'])})")
+        o.append("")
+        o.append(f"- **What it is:** {b['what']}."
+                 + (f" Also here: {', '.join(also)}." if also else ""))
+        o.append(f"- **Proprietor:** {sr['proprietor']}.")
+        o.append(f"- **On offer:** {b['offers']}.")
+        o += _quest_lines(sr["quest"], "Proprietor's quest")
+        o.append("")
+    for h in fl.hubs:
+        o.append(f"### {h['number']} — Hub, {h['n_lines']} lines ({_lines_text(h['lines'])} "
+                 f"among them)")
+        o.append("")
+        o.append(f"- **Shops:** {'; '.join(h['shops'])}.")
+        o.append(f"- **Guilds:** {'; '.join(h['guilds'])}.")
+        o.append(f"- **Also:** {h['sight']}.")
+        o += _quest_lines(h["quest"], "On the noticeboard")
+        o.append("")
+    return o
 
 
 def _getting_around4(fl: Floor4) -> List[str]:
@@ -3305,8 +3472,15 @@ def render4(fl: Floor4) -> str:
                        ("Club Vanquisher", lambda s_: s_.vanquisher)):
         nums = sorted(n for n, st in transfers.items() if has(st))
         if nums:
+            names = {sr["number"]: sr["business"]["name"] for sr in fl.safe_rooms}
+            where = ", ".join(f"{n} ({names[n]})" if label == "Safe rooms" and n in names
+                              else str(n) for n in nums)
             o.append(f"- **{label} on the detailed lines:** "
-                     f"station{'s' if len(nums) != 1 else ''} {', '.join(map(str, nums))}")
+                     f"station{'s' if len(nums) != 1 else ''} {where}")
+    if fl.hubs:
+        o.append("- **Hubs:** " + ", ".join(f"station {h['number']} ({h['n_lines']} lines)"
+                                             for h in fl.hubs)
+                 + ". See [Safe Rooms and Hubs](#safe-rooms-and-hubs).")
     o.append(f"- **Train mob levels:** {c['mob_band'][0]}–{c['mob_band'][1]}, rising with withdrawal stage")
     o.append(f"- **Janitor mob:** {fl.janitor.name} (Level {fl.janitor_level}). {fl.janitor.quirk}")
     o.append(f"  - *{fl.janitor.description}*")
@@ -3373,6 +3547,7 @@ def render4(fl: Floor4) -> str:
             o.append(f"- **If enough of them gather:** they merge into **{m['name']}** "
                      f"({m['tier']}, L{m['level'][0]}–{m['level'][1]}): {m['does']}.")
         o.append("")
+    o.extend(_safe_rooms_and_hubs4(fl))
     o.append("## Colored Lines")
     o.append("")
     for ln in fl.lines:
@@ -3431,8 +3606,21 @@ def render4(fl: Floor4) -> str:
         o.append(f"- **Gimmick:** {t.gimmick}")
         o.append(f"- **Crew:** {t.crew.name}. {t.crew.quirk}")
         o.append(f"  - *{t.crew.description}*")
+        if t.quest:
+            q = t.quest
+            o.append(f"- **Quest on boarding — {q['title']}:** {q['objective']} "
+                     f"Reward: {q['reward']}. Failure: {q['failure']}")
         o.append("")
     o.extend(crawler_section(fl))
+    # Like floors 1 and 2, the achievements this floor is likeliest to hand out.
+    o.append("## Achievements")
+    o.append("")
+    o.append("System-wide behaviors, not unique to this floor, but most commonly earned "
+             "on the Iron Tangle:")
+    o.append("")
+    for name, trigger, reward in fl.achievements:
+        o.append(f"- **{name}:** {trigger} → {reward}")
+    o.append("")
     return "\n".join(o)
 
 
