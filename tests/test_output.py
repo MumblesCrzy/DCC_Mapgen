@@ -1126,8 +1126,8 @@ class LootBoxTest(unittest.TestCase):
         for floor in (1, 3, 6, 11):
             md = mg.generate(floor, "large" if floor != 11 else "medium", 4242,
                              images=False).markdown
-            section = md[md.index("### What this floor hands out"):
-                         md.index("### Opening a box")]
+            start = md.index("### What this floor hands out")
+            section = md[start:md.index("###", start + 3)]     # to the next heading
             rows = [ln for ln in section.splitlines()
                     if ln.startswith("| ") and "---" not in ln and "How many" not in ln]
             listed = sum(int(r.split("|")[2]) for r in rows)
@@ -1681,6 +1681,126 @@ class BenefactorBoxTest(unittest.TestCase):
                 self.assertGreaterEqual(len(t["items"][band]), 4, f"{key}/{band} items")
                 self.assertGreaterEqual(len(t["effects"][band]), 1, f"{key}/{band} effects")
             self.assertGreaterEqual(len(t["notes"]), 3, f"{key} notes")
+
+
+class ThreatSuggestionTest(unittest.TestCase):
+    """From Floor 4, where sponsors start, each floor suggests what a Benefactor
+    box could be prepared for, read from the floor's own bosses, mobs and hazards.
+    It suggests; the DM picks. The risks are a floor reporting threats that are
+    not on it, and the shared sections drowning out the ones that are."""
+
+    def test_the_ghost_floor_is_about_the_undead(self):
+        """Floor 8 is Ghosts of Earth. If the scan cannot see that, it sees nothing."""
+        for seed in range(1, 6):
+            md = mg.generate(8, "medium", seed, images=False).markdown
+            top = mg.threat_suggestions(mg.floor_body(md))
+            self.assertTrue(top, f"floor 8 seed {seed} suggests nothing")
+            self.assertEqual(top[0].threat, "undead", f"floor 8 seed {seed}: {top}")
+
+    def test_only_the_floors_own_text_counts(self):
+        """Every floor carries the loot rules, which name all twelve threats, the
+        stat rules and the crawler roster. None of that is about this floor."""
+        body = "- Mob: Spore Hounds\n- Flora: spore clouds and a slow disease debuff\n"
+        shared = ("\n## Other Crawlers\n- a team of fire mages, burning everything\n"
+                  "\n## Loot Boxes\nfire, cold, poison, undead, water, darkness\n"
+                  "\n## Crawler Stats\nPoison, disease, cold, heat are all Constitution\n")
+        found = {t.threat for t in mg.threat_suggestions(mg.floor_body(body + shared))}
+        self.assertEqual(found, {"poison"})
+        for floor in mg.FLOORS:
+            md = mg.generate(floor, "small", 4242, images=False).markdown
+            body = mg.floor_body(md)
+            for head in ("## Other Crawlers", "## Loot Boxes", "## Crawler Stats",
+                         "## Achievements"):
+                self.assertNotIn(head, body, f"floor {floor} body still holds {head}")
+
+    def test_one_stray_word_is_not_a_theme(self):
+        self.assertEqual(mg.threat_suggestions("- A brazier gives off a little fire.\n"), [])
+        two = "- A brazier gives off fire.\n- The boss breathes flames.\n"
+        self.assertEqual([t.threat for t in mg.threat_suggestions(two)], ["fire"])
+
+    def test_signs_of_more_than_one_word_still_count(self):
+        """Words are looked up one at a time, so a sign with a space or a hyphen in
+        it needs its own pass. Without it these read as nothing at all."""
+        plates = "- A pressure plate by the door.\n- Another pressure plate under the rug.\n"
+        self.assertEqual([t.threat for t in mg.threat_suggestions(plates)], ["traps"])
+        black = "- The tunnel goes pitch-black.\n- Pitch-black again past the bend.\n"
+        self.assertEqual([t.threat for t in mg.threat_suggestions(black)], ["darkness"])
+
+    def test_a_hyphen_still_splits_words(self):
+        """The old pattern split on \\b, so "Rot-Touched" yielded "rot". Splitting
+        on whole words must keep doing that."""
+        text = "- Janitor mob: Rot-Touched Ursines.\n- Their bite leaves rot behind.\n"
+        self.assertEqual([t.threat for t in mg.threat_suggestions(text)], ["poison"])
+
+    def test_names_do_not_count(self):
+        """A warlord called Ember is not a fire hazard; a boss called The Burning
+        Goblin is a name. A mob that is literally made of fire still is."""
+        names = "- Warlord: Peregrine Ember\n- Neighborhood Boss: The Burning Goblin\n"
+        self.assertEqual(mg.threat_suggestions(names), [])
+        real = "- Mob: Fire Changelings\n- They burn whatever they touch.\n"
+        self.assertEqual([t.threat for t in mg.threat_suggestions(real)], ["fire"])
+
+    # Phrases measured as false signals, stated here so the words that caused them
+    # cannot quietly go back into the sign lists.
+    FALSE_SIGNALS = [
+        "Segment 1: rival pit lane", "Segment 4: rival pit lane",
+        "After dark they go quiet and stalk.", "At night they go quiet after dark.",
+        "Blind, but hunt by sound.", "Blind, but they hunt by smell.",
+        "No magical repair, no consumable refresh.", "No magical healing between heats.",
+        "A dead end with a draft.", "Another dead end.",
+        "436 is the Abyss: bare platform.", "The Abyss again.",
+        "The racer falls behind.", "A flight of stairs, then another flight.",
+    ]
+
+    def test_measured_false_signals_stay_out(self):
+        text = "\n".join(f"- {p}" for p in self.FALSE_SIGNALS)
+        self.assertEqual(mg.threat_suggestions(text, top=12), [],
+                         "a phrase that is not a hazard read as one")
+
+    def test_floors_before_sponsors_suggest_nothing(self):
+        for floor in mg.FLOORS:
+            md = mg.generate(floor, "medium", 4242, images=False).markdown
+            has = "### What a sponsor would see coming" in md
+            if floor < 4:
+                self.assertFalse(has, f"floor {floor} suggests threats before sponsors exist")
+
+    def test_the_floor_table_and_command_use_the_suggestions(self):
+        for floor in (6, 8, 10):
+            md = mg.generate(floor, "medium", 4242, images=False).markdown
+            top = mg.threat_suggestions(mg.floor_body(md))
+            self.assertTrue(top)
+            for t in top:
+                self.assertEqual(mg.find_threat(t.threat), t.threat)
+                self.assertIn(f"`--for {t.threat}` ({t.label}) | {t.count} |", md)
+            self.assertIn(f'--open-box "Gold Benefactor" --for {top[0].threat} --floor {floor}', md)
+
+    def test_the_written_table_reads_only_the_floor_body(self):
+        """Checked across many floors, because the roster's text -- a team of Fire
+        Mage Arcanists, a status about being caught in the open -- only tips the
+        count now and then, and three floors can agree by chance."""
+        for floor in (4, 5, 6, 8, 9, 10, 11):
+            for seed in range(1, 9):
+                md = mg.generate(floor, "medium", seed, images=False).markdown
+                want = mg.threat_suggestions(mg.floor_body(md))
+                section = md.split("### What a sponsor would see coming")
+                rows = []
+                if len(section) > 1:
+                    table = section[1].split("###")[0]
+                    rows = re.findall(r"\| `--for (\w+)` \([^)]*\) \| (\d+) \|", table)
+                self.assertEqual([(r, int(n)) for r, n in rows],
+                                 [(t.threat, t.count) for t in want],
+                                 f"floor {floor} seed {seed}")
+
+    def test_the_example_is_from_the_floor(self):
+        md = mg.generate(6, "medium", 4242, images=False).markdown
+        body = re.sub(r"[*_`]", "", mg.floor_body(md))
+        for t in mg.threat_suggestions(mg.floor_body(md)):
+            core = t.example.strip("…").strip()
+            self.assertIn(core[:30], re.sub(r"\s+", " ", body), t.example)
+
+    def test_every_threat_has_signs(self):
+        for key, t in mg.LOOT_BOXES["benefactor"]["threats"].items():
+            self.assertGreaterEqual(len(t["signs"]), 8, f"{key} has too few signs")
 
 
 class FanBoxTest(unittest.TestCase):

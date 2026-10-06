@@ -993,6 +993,134 @@ def benefactor_threats() -> List[str]:
     return list(LOOT_BOXES["benefactor"]["threats"])
 
 
+@dataclass
+class ThreatSign:
+    threat: str            # a key find_threat accepts
+    label: str
+    count: int             # how many lines of the floor point at it
+    example: str           # one of them, trimmed around the word that matched
+
+
+# Sections every floor carries whatever is on it. Scanning them would find the same
+# threats everywhere -- the loot section lists all twelve by name.
+_SHARED_SECTIONS = ("## Other Crawlers", "## Achievements", "## Loot Boxes",
+                    "## Crawler Stats")
+
+
+def floor_body(markdown: str) -> str:
+    """A write-up cut off before the first section every floor shares."""
+    cut = len(markdown)
+    for head in _SHARED_SECTIONS:
+        at = markdown.find("\n" + head)
+        if at != -1:
+            cut = min(cut, at)
+    return markdown[:cut]
+
+
+def _threat_patterns() -> dict:
+    """One pattern per threat. Kept for callers that want to look at a single one."""
+    return {key: re.compile(r"\b(?:" + "|".join(re.escape(w) for w in t["signs"]) + r")\b",
+                            re.IGNORECASE)
+            for key, t in LOOT_BOXES["benefactor"]["threats"].items()}
+
+
+_WORD = re.compile(r"\w+")
+
+
+def _sign_index():
+    """Which threats each sign belongs to, and a pattern for the few signs that
+    are more than one word.
+
+    Single words are looked up in a dict, one token at a time. A regex of all
+    250-odd signs tries every one of them at every character, and running one
+    pattern per threat over every line made the scan as slow as building the
+    floor. Tokens split on \\w+, which is exactly where the old \\b boundaries
+    fell, so "Rot-Touched" still yields "rot"."""
+    owners = {}
+    for key, t in LOOT_BOXES["benefactor"]["threats"].items():
+        for word in t["signs"]:
+            owners.setdefault(word.lower(), []).append(key)
+    phrases = sorted((w for w in owners if not _WORD.fullmatch(w)), key=len, reverse=True)
+    phrase_re = (re.compile(r"\b(?:" + "|".join(re.escape(p) for p in phrases) + r")\b",
+                            re.IGNORECASE) if phrases else None)
+    return owners, phrase_re
+
+
+def threat_suggestions(text: str, top: int = 3) -> List[ThreatSign]:
+    """The threats a floor's own text points to, strongest first.
+
+    Counts lines rather than words, so a boss whose mechanic says "fire" three
+    times is one sign, and a floor with fire in four different places is four.
+    Pass a floor's body (floor_body) rather than its whole write-up. Nothing here
+    is rolled: the same floor always suggests the same threats."""
+    threats = LOOT_BOXES["benefactor"]["threats"]
+    owners, phrase_re = _sign_index()
+    hits = {key: [] for key in threats}
+    in_code = False
+    for line in text.splitlines():
+        if line.strip().startswith("```"):
+            in_code = not in_code
+            continue
+        if in_code or not line.strip():
+            continue
+        found = {}                                  # threat -> its matches on this line
+        matches = [m for m in _WORD.finditer(line) if m.group(0).lower() in owners]
+        if phrase_re is not None:
+            matches += list(phrase_re.finditer(line))
+        matches.sort(key=lambda m: m.start())
+        for m in matches:
+            if _inside_a_name(line, m):
+                continue
+            for key in owners[m.group(0).lower()]:
+                found.setdefault(key, []).append(m)
+        for key, ms in found.items():
+            hits[key].append((len(ms), line, ms[0].start(), ms[0].end()))
+    # One stray word is not a theme; it takes a few to mean the floor is about it.
+    least = LOOT_BOXES["benefactor"]["min_signs"]
+    ranked = sorted((k for k in threats if len(hits[k]) >= least),
+                    key=lambda k: (-len(hits[k]), k))
+    out = []
+    for key in ranked[:top]:
+        # The example is the line that says it most, which tends to be the most
+        # specific one: a hazard spelled out rather than a map key's "~ = river".
+        _, line, start, end = max(hits[key], key=lambda h: h[0])
+        out.append(ThreatSign(key, threats[key]["label"], len(hits[key]),
+                              _excerpt(line, start, end)))
+    return out
+
+
+_NAME_WORD = re.compile(r"[A-Z][\w'’-]*")
+
+
+def _inside_a_name(line: str, m) -> bool:
+    """A capitalised match straight after another capitalised word is part of a
+    name: the warlord Peregrine Ember, the boss The Burning Goblin, the Ossuary
+    Water Tower. Those say nothing about the floor. One after a label or a comma
+    -- "Mob: Fire Changelings", "Air, Land, Sea" -- still counts.
+
+    Only the one word before the match is looked at. Searching the whole start
+    of the line for it, as a regex anchored at the end does, made the scan as
+    slow as building the floor."""
+    if not m.group(0)[0].isupper():
+        return False
+    before = line[:m.start()]
+    if not before[-1:].isspace():
+        return False
+    words = before.split()
+    return bool(words) and bool(_NAME_WORD.fullmatch(words[-1]))
+
+
+def _excerpt(line: str, start: int, end: int, width: int = 48) -> str:
+    """The words around a match, without the line's markdown."""
+    lo, hi = max(0, start - width), min(len(line), end + width)
+    snippet = line[lo:hi]
+    # Headings and list markers are layout, not evidence -- and a "###" inside a
+    # table cell reads as a stray heading.
+    snippet = re.sub(r"[*_`]", "", snippet).lstrip("# ").strip(" -|")
+    snippet = re.sub(r"\s+", " ", snippet)
+    return ("…" if lo > 0 else "") + snippet + ("…" if hi < len(line) else "")
+
+
 def find_threat(name: str) -> str:
     """A threat key from what a DM typed: "fire", "Fire", or its label, "the
     undead". Raises MapgenError naming the choices when nothing matches."""
@@ -1274,7 +1402,7 @@ def floor_box_suggestions(fl) -> List[BoxSuggestion]:
     return out
 
 
-def loot_box_section(fl) -> List[str]:
+def loot_box_section(fl, body: str = "") -> List[str]:
     """Loot boxes on this floor: the rules, the tiers, the types that exist yet,
     and the boxes the floor itself names as suggestions. Nothing here is rolled:
     a box is opened apart from the floor, after a DM has decided what it is."""
@@ -1338,6 +1466,21 @@ def loot_box_section(fl) -> List[str]:
             o.append(f"| {label} | {len(members)} | {src} |")
         o.append("")
 
+    benefactor_from = next(t for t in lb["types"] if t["name"] == "Benefactor")["from_floor"]
+    threats = threat_suggestions(body) if floor >= benefactor_from else []
+    if threats:
+        o.append("### What a sponsor would see coming")
+        o.append("")
+        o.append("The threats this floor's own bosses, mobs and hazards point to, "
+                 "strongest first. A sponsor watching would prepare a Benefactor box for "
+                 "one of them; pick whichever fits what the party is about to walk into.")
+        o.append("")
+        o.append("| Prepare for | Signs | For example |")
+        o.append("|---|---:|---|")
+        for t in threats:
+            o.append(f"| `--for {t.threat}` ({t.label}) | {t.count} | {t.example.replace('|', '/')} |")
+        o.append("")
+
     o.append("### Opening a box")
     o.append("")
     o.append("Boxes are rolled on their own, not with the floor, so a DM decides what "
@@ -1348,7 +1491,8 @@ def loot_box_section(fl) -> List[str]:
     o.append(f'python dcc_mapgen.py --open-box "a Silver Boss Box" --floor {floor}')
     o.append(f'python dcc_mapgen.py --open-box "Gold Weapon" --count 3 --floor {floor}')
     if floor >= next(t for t in lb["types"] if t["name"] == "Benefactor")["from_floor"]:
-        o.append(f'python dcc_mapgen.py --open-box "Gold Benefactor" --for fire --floor {floor}')
+        lead = threats[0].threat if threats else "fire"
+        o.append(f'python dcc_mapgen.py --open-box "Gold Benefactor" --for {lead} --floor {floor}')
     o.append(f'python dcc_mapgen.py --open-box "Silver Fan" --liked 70 --floor {floor}')
     o.append("```")
     o.append("")
@@ -4916,7 +5060,7 @@ def _render_floor(fl, floor: int) -> str:
     text = renderers.get(floor, render)(fl)
     # Loot boxes exist on every floor, so their section is added here for all of
     # them rather than taught to nine renderers one at a time.
-    text = text.rstrip("\n") + "\n\n" + "\n".join(loot_box_section(fl))
+    text = text.rstrip("\n") + "\n\n" + "\n".join(loot_box_section(fl, floor_body(text)))
     # The stat rules go on here rather than inside crawler_section, so that they
     # land at the end of every floor instead of wherever that floor happens to
     # print its roster -- on floors 1 and 2 that is halfway up, ahead of the loot

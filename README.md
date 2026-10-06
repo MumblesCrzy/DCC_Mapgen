@@ -194,6 +194,28 @@ fire, cold, poison, undead, water, darkness, falls, traps, swarms, giants, flyer
 casters, each with counters at three power levels in `LOOT_BOXES.benefactor`.
 Unprepared, a Benefactor box is the ordinary one, with a sponsor's compliments.
 
+From Floor 4, where sponsors start, each floor's write-up suggests what to prepare
+for. It reads the floor's own bosses, mobs, hazards and features for words that
+point at a threat and lists the strongest, with the line that shows it best:
+
+```
+| Prepare for | Signs | For example |
+|---|---:|---|
+| `--for poison` (poison and gas) | 9 | Flora: Spore clouds at dusk: a slow disease debuff unless yo… |
+| `--for water` (deep water) | 9 | River: runs through here; crossing is no crossing:… |
+| `--for giants` (something huge) | 4 | Dr. Havel-Sung's party (Half-Giant, 3 hunters, Level 50) |
+```
+
+It suggests; the DM picks. Floor 8, Ghosts of Earth, comes out undead every time;
+Floor 11's parade, with nothing in particular to prepare for, suggests nothing. The
+sections every floor shares — the crawler roster, the loot rules that name all twelve
+threats, the stat rules — are left out of the reading. So are names (a warlord called
+Peregrine Ember is not a fire hazard), single stray words, and a handful of words
+measured as false signals: "pit" is Floor 10's pit lane, "after dark" is about night,
+"Blind, but hunt by sound" is a mob quirk. The signal words for each threat are in
+`LOOT_BOXES.benefactor.threats.<threat>.signs`. In the app, the threat suggestions
+head the Loot Boxes tab's list; picking one sets up a prepared Benefactor box.
+
 **Fan boxes.** A Fan box is the audience's call. Set how much they liked whatever
 earned it, and they vote twice: two likes is good, two dislikes bad, a split neutral.
 
@@ -548,7 +570,11 @@ the counter in place of an enchantment rather than beside one, and its sponsor's
 hints at the threat; no other box type takes a threat. A Fan box's odds are the
 double vote, stated in the test and checked over two thousand rolls; 100% liked is
 always good and 0% always bad; good is one useful item at the box's tier, neutral one
-harmless thing, bad one cost from the box's band, and a bad box pays no gold.
+harmless thing, bad one cost from the box's band, and a bad box pays no gold. The
+threat suggestions are checked against Floor 8 always reading undead, the shared
+sections never counting, names and single stray words never counting, words of more
+than one word still counting, every measured false signal staying out, and the table
+in fifty-six written floors matching a fresh reading of each floor's own text.
 
 A seventh group covers the stat rules, where the risk is drift rather than variety:
 the section renders identically on every floor and seed, it is the last section of

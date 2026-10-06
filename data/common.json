@@ -2994,6 +2994,31 @@
       "It gets warm where you're going.",
       "Pack light. And fireproof.",
       "We've seen the next room. Bring water."
+     ],
+     "signs": [
+      "fire",
+      "fires",
+      "flame",
+      "flames",
+      "flaming",
+      "burn",
+      "burns",
+      "burning",
+      "burned",
+      "burnt",
+      "blaze",
+      "blazing",
+      "lava",
+      "magma",
+      "ember",
+      "embers",
+      "inferno",
+      "molten",
+      "scorch",
+      "scorched",
+      "scorching",
+      "incendiary",
+      "pyre"
      ]
     },
     "cold": {
@@ -3033,6 +3058,27 @@
       "Wrap up.",
       "Where you're going, the cold kills first.",
       "Layers. Trust us."
+     ],
+     "signs": [
+      "ice",
+      "icy",
+      "frost",
+      "frosted",
+      "freeze",
+      "freezing",
+      "frozen",
+      "cold",
+      "snow",
+      "snowy",
+      "blizzard",
+      "glacier",
+      "glacial",
+      "hail",
+      "sleet",
+      "chill",
+      "chilled",
+      "polar",
+      "tundra"
      ]
     },
     "poison": {
@@ -3072,6 +3118,31 @@
       "Don't breathe it in.",
       "Something down there bites.",
       "Hold your breath. Better, hold this."
+     ],
+     "signs": [
+      "poison",
+      "poisoned",
+      "poisonous",
+      "venom",
+      "venomous",
+      "toxic",
+      "toxin",
+      "toxins",
+      "gas",
+      "gases",
+      "fumes",
+      "spore",
+      "spores",
+      "plague",
+      "disease",
+      "diseased",
+      "rot",
+      "rotting",
+      "acid",
+      "acidic",
+      "miasma",
+      "infected",
+      "infection"
      ]
     },
     "undead": {
@@ -3111,6 +3182,38 @@
       "They don't stay down.",
       "Bring something holy. Anything.",
       "The dead are restless down there. So are we."
+     ],
+     "signs": [
+      "undead",
+      "zombie",
+      "zombies",
+      "skeleton",
+      "skeletons",
+      "skeletal",
+      "ghost",
+      "ghosts",
+      "ghostly",
+      "ghoul",
+      "ghouls",
+      "wraith",
+      "wraiths",
+      "corpse",
+      "corpses",
+      "lich",
+      "revenant",
+      "revenants",
+      "mummy",
+      "mummies",
+      "vampire",
+      "vampires",
+      "spectral",
+      "specter",
+      "spectre",
+      "banshee",
+      "haunted",
+      "haunting",
+      "necromancer",
+      "necromancy"
      ]
     },
     "water": {
@@ -3150,6 +3253,30 @@
       "Learn to swim.",
       "It floods. Soon.",
       "Water's rising. Ours isn't."
+     ],
+     "signs": [
+      "water",
+      "waters",
+      "flood",
+      "flooded",
+      "flooding",
+      "drown",
+      "drowned",
+      "drowning",
+      "swim",
+      "swimming",
+      "river",
+      "rivers",
+      "lake",
+      "sea",
+      "tide",
+      "tides",
+      "underwater",
+      "submerged",
+      "sunken",
+      "marsh",
+      "swamp",
+      "canal"
      ]
     },
     "darkness": {
@@ -3189,6 +3316,18 @@
       "Bring a light. Bring two.",
       "The lights go out down there.",
       "You'll want to see what's coming."
+     ],
+     "signs": [
+      "darkness",
+      "darkened",
+      "shadow",
+      "shadows",
+      "shadowy",
+      "unlit",
+      "pitch-black",
+      "gloom",
+      "gloomy",
+      "lightless"
      ]
     },
     "falls": {
@@ -3228,6 +3367,23 @@
       "Watch your step.",
       "It's a long way down. Don't find out.",
       "Look down. Now don't."
+     ],
+     "signs": [
+      "fall",
+      "falling",
+      "chasm",
+      "chasms",
+      "cliff",
+      "cliffs",
+      "ledge",
+      "ledges",
+      "heights",
+      "plunge",
+      "plunges",
+      "sheer",
+      "rooftop",
+      "rooftops",
+      "gorge"
      ]
     },
     "traps": {
@@ -3267,6 +3423,22 @@
       "Every floor tile is a liar.",
       "Someone built that hallway to kill you.",
       "Mind the floor. And the walls. And the ceiling."
+     ],
+     "signs": [
+      "trap",
+      "traps",
+      "trapped",
+      "tripwire",
+      "tripwires",
+      "snare",
+      "snares",
+      "pressure plate",
+      "landmine",
+      "landmines",
+      "booby",
+      "rigged",
+      "mine",
+      "mines"
      ]
     },
     "swarms": {
@@ -3306,6 +3478,26 @@
       "There are a lot of them.",
       "Count them. Then stop counting and run.",
       "You'll be outnumbered. Fix that."
+     ],
+     "signs": [
+      "swarm",
+      "swarms",
+      "swarming",
+      "horde",
+      "hordes",
+      "pack",
+      "packs",
+      "dozens",
+      "hundreds",
+      "flock",
+      "flocks",
+      "hive",
+      "hives",
+      "infested",
+      "infestation",
+      "teeming",
+      "colony",
+      "colonies"
      ]
     },
     "giants": {
@@ -3345,6 +3537,20 @@
       "It's big. Bigger than that.",
       "Aim for the knees.",
       "The bigger they are. You know the rest."
+     ],
+     "signs": [
+      "giant",
+      "giants",
+      "colossal",
+      "colossus",
+      "titan",
+      "titans",
+      "titanic",
+      "enormous",
+      "towering",
+      "gargantuan",
+      "behemoth",
+      "hulking"
      ]
     },
     "flyers": {
@@ -3384,6 +3590,28 @@
       "Look up.",
       "They come from above.",
       "Keep your head down and your aim up."
+     ],
+     "signs": [
+      "fly",
+      "flies",
+      "flying",
+      "wing",
+      "wings",
+      "winged",
+      "airborne",
+      "bird",
+      "birds",
+      "bat",
+      "bats",
+      "swoop",
+      "swoops",
+      "swooping",
+      "aerial",
+      "soar",
+      "soars",
+      "soaring",
+      "harpy",
+      "harpies"
      ]
     },
     "casters": {
@@ -3423,6 +3651,35 @@
       "Someone down there casts.",
       "Magic, and a lot of it.",
       "Don't let them finish the sentence."
+     ],
+     "signs": [
+      "spell",
+      "spells",
+      "cast",
+      "casts",
+      "casting",
+      "caster",
+      "casters",
+      "mage",
+      "mages",
+      "wizard",
+      "wizards",
+      "witch",
+      "witches",
+      "sorcerer",
+      "sorcery",
+      "warlock",
+      "warlocks",
+      "magic",
+      "arcane",
+      "hex",
+      "hexes",
+      "curse",
+      "cursed",
+      "curses",
+      "shaman",
+      "ritual",
+      "rituals"
      ]
     }
    },
@@ -3457,7 +3714,8 @@
     "Do us proud.",
     "Don't die on camera.",
     "Our logo goes on the outside, if you don't mind."
-   ]
+   ],
+   "min_signs": 2
   },
   "fan": {
    "good_pools": [

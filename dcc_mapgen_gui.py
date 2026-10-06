@@ -538,23 +538,42 @@ class LootView(ttk.Frame):
                                      f"{odds['neutral']:.0%} / bad {odds['bad']:.0%}")
 
     def load_floor(self, res):
-        """List the boxes a freshly generated floor names."""
+        """List what a freshly generated floor suggests: first the threats a
+        sponsor would prepare a Benefactor box for, then every box it names."""
         self.suggestions = mg.floor_box_suggestions(res.floor)
+        benefactor_from = next(t for t in mg.LOOT_BOXES["types"]
+                               if t["name"] == "Benefactor")["from_floor"]
+        self.threat_suggestions = (mg.threat_suggestions(mg.floor_body(res.markdown))
+                                   if res.number >= benefactor_from else [])
         self.floor.set(str(res.number))
         self.sugg_list.delete(0, "end")
-        if not self.suggestions:
+        # One row per suggestion, in the order the list shows them, so a pick can
+        # be read straight back.
+        self.rows = [("threat", t) for t in self.threat_suggestions]
+        self.rows += [("box", sg) for sg in self.suggestions]
+        if not self.rows:
             self.sugg_list.insert("end", "This floor names no boxes. Pick a tier and type below.")
             return
-        for sg in self.suggestions:
-            self.sugg_list.insert("end", f"{sg.label}   -   {sg.kind}: {sg.source}")
+        for kind, item in self.rows:
+            if kind == "threat":
+                self.sugg_list.insert("end", f"Benefactor prepared for {item.label}   -   "
+                                             f"{item.count} signs on this floor")
+            else:
+                self.sugg_list.insert("end", f"{item.label}   -   {item.kind}: {item.source}")
 
     def _pick(self):
         sel = self.sugg_list.curselection()
-        if not sel or sel[0] >= len(self.suggestions):
+        rows = getattr(self, "rows", [])
+        if not sel or sel[0] >= len(rows):
             return
-        sg = self.suggestions[sel[0]]
-        self.tier.set(sg.tier)
-        self.box_type.set(sg.box_type)
+        kind, item = rows[sel[0]]
+        if kind == "threat":
+            # The tier stays the DM's call; the sponsor only knows what is coming.
+            self.box_type.set("Benefactor")
+            self.threat.set(item.threat)
+        else:
+            self.tier.set(item.tier)
+            self.box_type.set(item.box_type)
 
     def open_boxes(self):
         kind = self.box_type.get().strip()
@@ -1169,6 +1188,18 @@ def selftest() -> int:
     loot.open_boxes()
     app.update()
     check("Bad: " in loot.out.get("1.0", "2.0"), "a Fan box nobody liked comes out bad")
+    res6 = mg.generate(6, "medium", 4242, images=False)
+    loot.load_floor(res6)
+    app.update()
+    first = loot.sugg_list.get(0)
+    check(first.startswith("Benefactor prepared for "),
+          f"a Floor 6 floor leads with what a sponsor would prepare for ({first[:40]})")
+    loot.sugg_list.selection_clear(0, "end")
+    loot.sugg_list.selection_set(0)
+    loot._pick()
+    check(loot.box_type.get() == "Benefactor"
+          and loot.threat.get() == loot.threat_suggestions[0].threat,
+          "picking a threat sets a Benefactor box prepared for it")
 
     # An option combination the generator must reject rather than crash on.
     errs = []
