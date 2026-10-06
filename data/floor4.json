@@ -384,5 +384,149 @@
    "Every car's speakers count down the hours to collapse, and don't stop.",
    "The yards empty: every train in them is sent out at once, crewed or not."
   ]
+ },
+ "GHOUL_STATIONS": {
+  "names": [
+   "Lantern Hollow",
+   "Rattle Junction",
+   "Cinder Halt",
+   "Gallows Cut",
+   "Mourning Crossing",
+   "Brass Bell Interchange",
+   "Low Tide Terminal",
+   "Kettle Yard",
+   "Ashpit Depot",
+   "Last Light Junction",
+   "Sootfall",
+   "Coldwater Cut",
+   "Grey Lantern Halt",
+   "Saint Ottilie Sidings",
+   "Hollow Hill"
+  ],
+  "ghouls": [
+   {
+    "name": "Signal Ghouls",
+    "level": [
+     18,
+     22
+    ],
+    "does": "they stand at the platform edge swinging lanterns, and trains stop for them, and so do crawlers who shouldn't"
+   },
+   {
+    "name": "Ticket Inspectors",
+    "level": [
+     19,
+     23
+    ],
+    "does": "they ask to see your ticket. There is no right answer"
+   },
+   {
+    "name": "Stowaway Ghouls",
+    "level": [
+     17,
+     21
+    ],
+    "does": "they ride folded into the luggage racks and drop on whoever sits beneath"
+   },
+   {
+    "name": "Crush Load",
+    "level": [
+     20,
+     24
+    ],
+    "does": "a crowd of the dead that moves as one and fills any space it is let into"
+   },
+   {
+    "name": "Mind the Gap",
+    "level": [
+     16,
+     20
+    ],
+    "does": "long-armed things that live in the gap between train and platform, as the signs always warned"
+   },
+   {
+    "name": "Night Shift",
+    "level": [
+     21,
+     25
+    ],
+    "does": "they only move while the station lights are dimmed, and the lights dim every hour"
+   }
+  ],
+  "feeds": [
+   "Every mob that dies of withdrawal anywhere on the floor gets up here, a day later.",
+   "A birthing tank in the old signal box turns out one an hour, faster as collapse nears.",
+   "Every crawler who dies on the floor's lines adds one.",
+   "Every dose handed out at an exit cavern adds one: the supply feeds them too.",
+   "Each train that passes without stopping leaves one behind on the platform.",
+   "Nothing makes them here. They come: anything that dies within a few stations walks here to join them.",
+   "A broken vending machine in the concourse dispenses one whenever anyone feeds it gold.",
+   "The station's own speakers call them. One answers every announcement."
+  ],
+  "tides": [
+   "A handful at first. They fill the platform by day {mid} and the concourse by day {late}.",
+   "Quiet until day {mid}, then they arrive by the trainload.",
+   "They drift in and out until day {early}, then stop leaving.",
+   "A few more every day, and none of them ever leave.",
+   "They double every two days, from day 1.",
+   "A dozen most days. Hundreds by day {late}, all at once, when the last line hits stage 3.",
+   "They only gather at night, and by day {mid} the station is never not night."
+  ],
+  "openings": [
+   "They all turn toward the stairwell door at once.",
+   "They pack the stairwell room and will not give ground to anything but fire.",
+   "They ignore crawlers until the stairwell opens. Then crawlers are all they see.",
+   "They hold the stairwell door shut from the inside.",
+   "They queue for it. Anyone who pushes in is torn apart by the queue.",
+   "They go perfectly still six hours out. Any noise wakes the whole room.",
+   "They flee the stairwell and swarm the trains instead, so the trains are the danger."
+  ],
+  "merged": [
+   {
+    "name": "The Rush Hour",
+    "tier": "borough boss",
+    "level": [
+     36,
+     40
+    ],
+    "does": "every ghoul in the room pressed into one heaving body that fills the stairwell door"
+   },
+   {
+    "name": "The Commuter Mass",
+    "tier": "borough boss",
+    "level": [
+     34,
+     38
+    ],
+    "does": "a wall of arms and briefcases that rolls forward a yard at a time and does not stop"
+   },
+   {
+    "name": "Standing Room Only",
+    "tier": "borough boss",
+    "level": [
+     35,
+     39
+    ],
+    "does": "a column of the dead stacked to the ceiling that topples onto whatever it is aimed at"
+   },
+   {
+    "name": "Lost and Found",
+    "tier": "borough boss",
+    "level": [
+     33,
+     37
+    ],
+    "does": "a heap that reaches out with whichever arms are nearest and keeps whatever it catches"
+   },
+   {
+    "name": "The Terminus",
+    "tier": "city boss",
+    "level": [
+     40,
+     45
+    ],
+    "does": "they build themselves into a station of their own, platform and all, and wait for someone to board"
+   }
+  ]
  }
 }

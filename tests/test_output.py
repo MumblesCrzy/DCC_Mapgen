@@ -783,7 +783,7 @@ class Floor4LayoutTest(unittest.TestCase):
             fl, md = res.floor, res.markdown
             self.assertEqual(len(fl.withdrawal), 3)
             self.assertEqual(len(set(fl.last_day)), 2)
-            section = md[md.index("## Withdrawal"):md.index("## Stairwell Stations")]
+            section = md[md.index("## Withdrawal"):md.index("## Ghoul Stations")]
             for n, st in enumerate(fl.withdrawal, start=1):
                 self.assertIn(f"| {n} | ", section)
                 self.assertIn(st["risen"]["name"], section)
@@ -802,6 +802,78 @@ class Floor4LayoutTest(unittest.TestCase):
             notes = res.floor.stair_notes
             self.assertEqual(sorted(notes), self.STAIRS)
             self.assertEqual(len(set(notes.values())), 5, f"{size} seed {seed}")
+
+    # -- the ghoul stations ---------------------------------------------------
+
+    def test_each_stairwell_station_is_a_ghoul_station(self):
+        """One kind of ghoul each, nothing repeated: twelve is the janitors',
+        since they already board there; three hold what each withdrawal stage
+        raises; one holds a ghoul of its own. One of the last four can merge."""
+        for size, seed, res in self._floors():
+            fl, where = res.floor, f"{size} seed {seed}"
+            stations = fl.ghoul_stations
+            self.assertEqual([gs["number"] for gs in stations], self.STAIRS, where)
+            self.assertEqual(stations[0]["ghoul"]["name"], fl.janitor.name, where)
+            names = [gs["ghoul"]["name"] for gs in stations]
+            self.assertEqual(len(set(names)), 5, f"{where}: {names}")
+            risen = {w["risen"]["name"] for w in fl.withdrawal}
+            self.assertTrue(risen <= set(names[1:]),
+                            f"{where}: withdrawal's dead {risen} not all at a station")
+            for key in ("name", "feed", "tide", "opening", "stair"):
+                self.assertEqual(len({gs[key] for gs in stations}), 5, f"{where}: {key}")
+            merged = [gs["number"] for gs in stations if gs["merged"]]
+            self.assertEqual(len(merged), 1, where)
+            self.assertNotEqual(merged[0], 12, f"{where}: the janitors merged")
+
+    def test_a_ghoul_stations_days_are_inside_the_countdown(self):
+        for days in (3, 5, 10, 15):
+            for seed in range(1, 13):
+                fl = mg.generate(4, "small", seed, days=days, images=False).floor
+                for gs in fl.ghoul_stations:
+                    self.assertNotIn("{", gs["tide"])
+                    for day in map(int, re.findall(r"day (\d+)", gs["tide"])):
+                        self.assertTrue(1 <= day <= days, f"{days} days: {gs['tide']}")
+
+    def test_the_write_up_gives_each_ghoul_station_its_own_entry(self):
+        for size, seed, res in self._floors(seeds=range(1, 5)):
+            md = res.markdown
+            section = md[md.index("## Ghoul Stations"):md.index("## Colored Lines")]
+            for gs in res.floor.ghoul_stations:
+                self.assertIn(f"### {gs['number']} — {gs['name']}", section)
+                self.assertIn(gs["ghoul"]["name"], section)
+                self.assertIn(gs["opening"], section)
+            self.assertEqual(section.count("**If enough of them gather:**"), 1)
+            self.assertNotIn("[Stairwell Stations]", md)
+
+    def test_the_map_names_the_ghoul_stations(self):
+        for size in ("small", "large"):
+            res = mg.generate(4, size, 4242)
+            svg = res.svgs[0][1]
+            for gs in res.floor.ghoul_stations:
+                for word in gs["name"].split():
+                    self.assertIn(word, svg, f"{size}: {gs['name']}")
+
+    # -- the tail ---------------------------------------------------------------
+
+    def test_station_435_is_on_the_map_and_in_the_text(self):
+        for size in ("small", "medium", "large"):
+            res = mg.generate(4, size, 4242)
+            md, svg = res.markdown, res.svgs[0][1]
+            self.assertIn("**435, End of the Line:**", md)
+            self.assertEqual(md.count("**435** — END OF THE LINE"), len(res.floor.lines),
+                             f"{size}: 435 missing from a line's stations")
+            self.assertIn("END OF LINE", svg)
+            self.assertIn("End of the line 435", svg)
+            self.assertEqual(svg.count(">435<"), len(res.floor.lines),
+                             f"{size}: 435 not numbered on every line")
+
+    def test_the_keys_and_the_hat_are_left_out(self):
+        """Both spoil the books. Neither the rule nor the Abyss summary says what
+        opens the portals there."""
+        for size, seed, res in self._floors(seeds=range(1, 5)):
+            md = mg.floor_body(res.markdown)
+            for phrase in ("conductor's hat", "souvenir hat", "Engineer keys open"):
+                self.assertNotIn(phrase, md, f"{size} seed {seed}")
 
 
 class LeaderboardTest(unittest.TestCase):

@@ -2889,7 +2889,6 @@ F4_RULES = [
     "A transfer station has a safe room only if its number is prime (11, 13, 17 and so on). Transfers ending in 1 also have a Desperado Club; those ending in 9, a Club Vanquisher.",
     "Exit-only caverns sit at every fifth station. Mobs disembark there for their Rev-Up dose; a rollercoaster track at the back runs to the trainyard.",
     "Mobs get off every five stops. A mob that misses its stop panics; it cannot stay aboard and live. They break into cars 10 and 15, never car 5.",
-    "Engineer keys open cars on their own line only. A conductor's souvenir hat opens the wall portals at the Abyss.",
     "Trains reset to the trainyard (ring 10) after every run. Employees remember 435, then blink, then they are boarding again.",
 ]
 
@@ -2970,6 +2969,10 @@ class Floor4:
     withdrawal: List[dict] = field(default_factory=list)
     last_day: List[str] = field(default_factory=list)
     stair_notes: Dict[int, str] = field(default_factory=dict)   # by station number
+    # The five stairwell stations, each where one kind of ghoul gathers: number,
+    # name, ghoul {name, level, does, from}, feed, tide, opening, and at one of
+    # them a merged boss.
+    ghoul_stations: List[dict] = field(default_factory=list)
 
 
 class Generator4:
@@ -3038,8 +3041,10 @@ class Generator4:
 
         stmap = {ln.color: {} for ln in lines}
         # A transfer is one station on two lines, so one note: the safe room at
-        # 103 is the same safe room whichever line the party arrives on.
+        # 103 is the same safe room whichever line the party arrives on. Dealt
+        # from decks, so two transfers on a floor differ while the bank lasts.
         transfer_notes = {}
+        note_decks = {k: Deck(self.rng, STATION_FLAVOR[k]) for k in ("transfer", "safe_room")}
 
         def add(ln, number, kind, **kw):
             d = stmap[ln.color]
@@ -3053,8 +3058,8 @@ class Generator4:
                 note = stair_notes[number]
             elif kind == "transfer":
                 if number not in transfer_notes:
-                    transfer_notes[number] = self.rng.choice(
-                        STATION_FLAVOR["safe_room" if _is_prime(number) else "transfer"])
+                    transfer_notes[number] = note_decks[
+                        "safe_room" if _is_prime(number) else "transfer"].draw()
                 note = transfer_notes[number]
             else:
                 note = self.rng.choice(STATION_FLAVOR[kind]) if kind in STATION_FLAVOR else ""
@@ -3133,22 +3138,62 @@ class Generator4:
                        "risen": self.rng.choice(st["risen"])}
                       for st in WITHDRAWAL["stages"]]
         last_day = self.rng.sample(WITHDRAWAL["last_day"], 2)
+        janitor_level = self.rng.randint(*c["janitor_level"])
+        ghoul_stations = self._ghoul_stations(stairs, stair_notes, days, jan, janitor_level,
+                                              withdrawal)
         return Floor4(size=self.size, name=f"The {self.rng.choice(NAMED_PREFIX)} Tangle", days=days,
-                      janitor=jan, janitor_level=self.rng.randint(*c["janitor_level"]),
+                      janitor=jan, janitor_level=janitor_level,
                       lines=lines, named=named, mimic_tell=self.rng.choice(MIMIC_TELL),
                       story=story, seed=self.seed, withdrawal=withdrawal,
-                      last_day=last_day, stair_notes=stair_notes)
+                      last_day=last_day, stair_notes=stair_notes,
+                      ghoul_stations=ghoul_stations)
+
+    def _ghoul_stations(self, stairs, stair_notes, days, jan, janitor_level, withdrawal):
+        """Who gathers at each of the five stairwell stations, and what it means.
+
+        Station 12 is the janitors': they board there already. The other four
+        hold what each stage of withdrawal raises, and one ghoul from the bank, in
+        an order dealt per floor. At one of those four, enough of them together
+        merge into a boss."""
+        gs = GHOUL_STATIONS
+        others = [dict(w["risen"], source=f"what stage {n} of withdrawal raises")
+                  for n, w in enumerate(withdrawal, start=1)]
+        others.append(dict(self.rng.choice(gs["ghouls"]), source="made here, not by withdrawal"))
+        self.rng.shuffle(others)
+        ghouls = [{"name": jan.name, "level": [janitor_level, janitor_level],
+                   "does": "they board here, ride to 435, and clean up whatever the floor "
+                           "leaves lying about",
+                   "source": "the floor's janitors"}] + others
+        early = max(1, round(days * 0.3))
+        mid = max(early, round(days * 0.5))
+        late = max(mid, days - 1)
+        names = self.rng.sample(gs["names"], len(stairs))
+        feeds = self.rng.sample(gs["feeds"], len(stairs))
+        tides = self.rng.sample(gs["tides"], len(stairs))
+        openings = self.rng.sample(gs["openings"], len(stairs))
+        merge_at = self.rng.choice(stairs[1:])
+        merged = self.rng.choice(gs["merged"])
+        stations = []
+        for i, num in enumerate(stairs):
+            stations.append({
+                "number": num, "name": names[i], "stair": stair_notes[num],
+                "ghoul": ghouls[i], "feed": feeds[i],
+                "tide": tides[i].format(early=early, mid=mid, late=late),
+                "opening": openings[i],
+                "merged": merged if num == merge_at else None})
+        return stations
 
 
 def render4(fl: Floor4) -> str:
     c = FLOOR4_CFG
     o = [f"# Floor 4 — {fl.name} ({fl.size})", "", "## Summary", ""]
     o.append(f"- **Countdown:** {fl.days} days (the normal allotment is {c['normal_days']})")
-    o.append(f"- **Lines detailed:** {len(fl.lines)} colored lines, {len(fl.named)} named trains")
+    o.append(f"- **Lines detailed:** {len(fl.lines)} colored lines, {len(fl.named)} named "
+             f"train{'s' if len(fl.named) != 1 else ''}")
     stairs = c["stairwell_numbers"]
     o.append(f"- **Stairwells:** stations {', '.join(map(str, stairs[:-1]))} and {stairs[-1]} "
              f"on every line, sealed until six hours before collapse. "
-             f"See [Stairwell Stations](#stairwell-stations).")
+             f"See [Ghoul Stations](#ghoul-stations).")
     # Where the detailed lines meet, and what each meeting point has. Stations
     # shared by two lines are listed once.
     transfers = {}
@@ -3166,11 +3211,14 @@ def render4(fl: Floor4) -> str:
     o.append(f"- **Train mob levels:** {c['mob_band'][0]}–{c['mob_band'][1]}, rising with withdrawal stage")
     o.append(f"- **Janitor mob:** {fl.janitor.name} (Level {fl.janitor_level}). {fl.janitor.quirk}")
     o.append(f"  - *{fl.janitor.description}*")
-    o.append(f"- **The tail (every line):** {c['mimic_station']} is advertised as a transit hub and is a Station Mimic "
-             f"(city boss, L{c['mimic_level']}); the tell is that {fl.mimic_tell}. "
-             f"{c['employee_portal']} is where the crew portals back to the yard. "
-             f"{c['abyss']} is the Abyss: bare platform, one steep stair, an hour's climb to a catwalk over the pit, "
-             f"portals in the walls that want a conductor's hat.")
+    o.append("- **The tail (every line):**")
+    o.append(f"  - **{c['mimic_station']}, the Station Mimic:** advertised as a transit hub. "
+             f"It is a city boss (L{c['mimic_level']}), and the tell is that {fl.mimic_tell}.")
+    o.append(f"  - **{c['employee_portal']}, End of the Line:** the last stop for passengers on "
+             f"every line. The crew get off here and portal home to the yard; the cars go on to "
+             f"{c['abyss']} to be dumped in the pit, with anyone still aboard.")
+    o.append(f"  - **{c['abyss']}, the Abyss:** bare platform, one steep stair, an hour's climb "
+             f"to a catwalk over the pit, portals in the walls.")
     o.append(f"- **Withdrawal:** three stages on a schedule of each line's own, and a last "
              f"day (day {fl.days}) worse than any of them. See [Withdrawal](#withdrawal).")
     o.append("- **Story notes:**")
@@ -3203,14 +3251,28 @@ def render4(fl: Floor4) -> str:
     for event in fl.last_day:
         o.append(f"- {event}")
     o.append("")
-    o.append("## Stairwell Stations")
+    o.append("## Ghoul Stations")
     o.append("")
-    o.append("The same five stations on every line. Each is sealed until six hours before "
-             "collapse.")
+    o.append("The five stairwell stations, the same five on every line. Each stairwell is "
+             "sealed until six hours before collapse, and each station is where one kind of "
+             "ghoul gathers while the floor dies around it. The stairs open into them.")
     o.append("")
-    for num, note in sorted(fl.stair_notes.items()):
-        o.append(f"- **{num}** — {note}")
-    o.append("")
+    for gs in fl.ghoul_stations:
+        g = gs["ghoul"]
+        lo, hi = g["level"]
+        level = f"L{lo}" if lo == hi else f"L{lo}–{hi}"
+        o.append(f"### {gs['number']} — {gs['name']}")
+        o.append("")
+        o.append(f"- **Stairwell:** {gs['stair']}")
+        o.append(f"- **Who gathers:** **{g['name']}** ({level}), {g['source']}: {g['does']}.")
+        o.append(f"- **What adds to them:** {gs['feed']}")
+        o.append(f"- **Through the countdown:** {gs['tide']}")
+        o.append(f"- **When the stairwell opens:** {gs['opening']}")
+        if gs["merged"]:
+            m = gs["merged"]
+            o.append(f"- **If enough of them gather:** they merge into **{m['name']}** "
+                     f"({m['tier']}, L{m['level'][0]}–{m['level'][1]}): {m['does']}.")
+        o.append("")
     o.append("## Colored Lines")
     o.append("")
     for ln in fl.lines:
@@ -3227,7 +3289,7 @@ def render4(fl: Floor4) -> str:
         o.append(f"- **Crawler spawn:** station {ln.spawn}")
         o.append("- **Stations of note** (all others are routine platforms):")
         o.append(f"  - **{' / '.join(map(str, c['stairwell_numbers']))}** — stairwells. "
-                 f"See [Stairwell Stations](#stairwell-stations).")
+                 f"See [Ghoul Stations](#ghoul-stations).")
         for st in ln.stations:
             if st.kind == "stairwell":
                 continue
@@ -3238,7 +3300,10 @@ def render4(fl: Floor4) -> str:
             has = st.amenities()
             sr = f" ({', '.join(has)})" if has else ""
             o.append(f"  - **{st.number}** — {kind}{extra}{sr}. {st.note}")
-        o.append(f"  - **{c['mimic_station']} / {c['employee_portal']} / {c['abyss']}** — mimic, crew portal, Abyss. See summary.")
+        o.append(f"  - **{c['mimic_station']}** — STATION MIMIC. Not a station. See summary.")
+        o.append(f"  - **{c['employee_portal']}** — END OF THE LINE. Last stop for passengers; "
+                 f"the crew portal home from here, and the cars go on to the pit.")
+        o.append(f"  - **{c['abyss']}** — THE ABYSS. See summary.")
         o.append("")
     o.append("## Named Trains")
     o.append("")
@@ -3270,7 +3335,7 @@ def render4_svg(fl: Floor4) -> str:
     LEFT = 150
     xs = {n: LEFT + i * SPACING for i, n in enumerate(ordered)}
     ROW = 110
-    TOP = 120
+    TOP = 140                 # room above the first line for the ghoul stations' names
     W = LEFT + len(ordered) * SPACING + 60
     n_named = len(fl.named)
     legend_h = 60 + 20 * n_named + 20
@@ -3278,12 +3343,22 @@ def render4_svg(fl: Floor4) -> str:
     o = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" font-family="Helvetica, Arial, sans-serif">',
          f'<rect width="{W}" height="{H}" fill="#f6f2ea"/>',
          _text(30, 36, f"Floor 4 — {fl.name}", size=22, weight="bold"),
-         _text(30, 58, f"{fl.days} days  •  {len(fl.lines)} colored lines, {len(fl.named)} named trains  •  "
+         _text(30, 58, f"{fl.days} days  •  {len(fl.lines)} colored lines, {len(fl.named)} named "
+                       f"train{'s' if len(fl.named) != 1 else ''}  •  "
                        f"janitor: {fl.janitor.name} L{fl.janitor_level}  •  seed {fl.seed}", size=12, fill="#555")]
     # Column labels for the constants
     for n, lab in ((c["yard_ring"], "Trainyard"), (c["mimic_station"], "MIMIC"),
-                   (c["employee_portal"], "crew portal"), (c["abyss"], "ABYSS")):
+                   (c["employee_portal"], "END OF LINE"), (c["abyss"], "ABYSS")):
         o.append(_text(xs[n], TOP - 30, lab, size=11, weight="bold", anchor="middle", fill="#333"))
+    # Each ghoul station's name over its column, split over two lines so that
+    # stairwell stations with nothing between them on the map still fit.
+    for gs in fl.ghoul_stations:
+        words = gs["name"].split()
+        half = (len(words) + 1) // 2
+        for k, part in enumerate((" ".join(words[:half]), " ".join(words[half:]))):
+            if part:
+                o.append(_text(xs[gs["number"]], TOP - 66 + 11 * k, part, size=9,
+                               weight="bold", anchor="middle", fill="#7a2e2e"))
     # Vertical guide lines for the shared tail
     for n in (c["mimic_station"], c["employee_portal"], c["abyss"]):
         o.append(f'<line x1="{xs[n]}" y1="{TOP - 18}" x2="{xs[n]}" y2="{TOP + ROW * (len(fl.lines) - 1) + 30}" '
@@ -3299,9 +3374,15 @@ def render4_svg(fl: Floor4) -> str:
         o.append(_text(x0 - 12, y + 20, f"Yard {ln.yard}", size=10, anchor="end", fill="#555"))
         # yard + tail markers
         o.append(f'<rect x="{x0-7}" y="{y-7}" width="14" height="14" fill="#333"/>')
-        for n in (c["mimic_station"], c["employee_portal"]):
-            o.append(f'<circle cx="{xs[n]}" cy="{y}" r="5" fill="#f6f2ea" stroke="#333" stroke-width="2"/>')
+        o.append(f'<circle cx="{xs[c["mimic_station"]]}" cy="{y}" r="5" fill="#f6f2ea" stroke="#333" stroke-width="2"/>')
+        # 435, the end of the line: the last stop anyone gets off at, so it is a
+        # station of its own on every line rather than a dot on the way to the pit.
+        x435 = xs[c["employee_portal"]]
+        o.append(f'<circle cx="{x435}" cy="{y}" r="9" fill="#fff" stroke="#111" stroke-width="3"/>')
+        o.append(f'<circle cx="{x435}" cy="{y}" r="3.5" fill="#111"/>')
         o.append(f'<circle cx="{x1}" cy="{y}" r="9" fill="#111" stroke="#c0392b" stroke-width="3"/>')
+        for n in (c["mimic_station"], c["employee_portal"], c["abyss"]):
+            o.append(_text(xs[n], y + 24, str(n), size=11, weight="bold", anchor="middle"))
     # Transfer connectors
     drawn = set()
     for ln in fl.lines:
@@ -3364,8 +3445,10 @@ def render4_svg(fl: Floor4) -> str:
         (f'<polygon points="{lx+430},{ly-9} {lx+439},{ly+6} {lx+421},{ly+6}" fill="#fff" stroke="#111" stroke-width="2.5"/>', "Exit-only cavern"),
         (f'<rect x="{lx+560}" y="{ly-7}" width="14" height="14" fill="#333"/>', "Trainyard"),
         (f'<circle cx="{lx+670}" cy="{ly}" r="8" fill="#111" stroke="#c0392b" stroke-width="3"/>', "Abyss 436"),
+        (f'<circle cx="{lx+780}" cy="{ly}" r="8" fill="#fff" stroke="#111" stroke-width="3"/>'
+         f'<circle cx="{lx+780}" cy="{ly}" r="3" fill="#111"/>', "End of the line 435"),
     ]
-    offs = [22, 170, 314, 446, 582, 686]
+    offs = [22, 170, 314, 446, 582, 686, 796]
     for (glyph, label), off in zip(items, offs):
         o.append(glyph)
         o.append(_text(lx + off, ly + 4, label, size=11))
