@@ -4191,5 +4191,154 @@
    "Kill a ranked crawler and the System announces \"A champion has fallen. A bounty has been claimed.\" The killer gets a Gold Player-Killer Skull, an achievement, and a Legendary Bounty Box holding the bounty.",
    "A crawler still ranked when they reach the next floor earns the Quarry Sees Another Spring achievement and a Gold or Platinum Venison Box holding a tenth of their bounty."
   ]
- }
+ },
+ "SYSTEMS": [
+  {
+   "name": "achievements and loot boxes",
+   "from": 1,
+   "text": "achievements as they are earned, and the boxes they pay out; a box opens only in a safe room"
+  },
+  {
+   "name": "safe rooms",
+   "from": 1,
+   "text": "green on the minimap: no fighting or stealing inside, with bathrooms, food and beds"
+  },
+  {
+   "name": "free beds",
+   "from": 1,
+   "until": 2,
+   "text": "a safe room's rental rooms cost nothing on the first two floors",
+   "off": "a safe room's rental rooms cost gold from here on"
+  },
+  {
+   "name": "Game Guides",
+   "from": 1,
+   "until": 3,
+   "text": "each crawler's guide walks them through the tutorial and the HUD",
+   "off": "crawlers lose their Game Guides on reaching the Fourth Floor"
+  },
+  {
+   "name": "the HUD",
+   "from": 1,
+   "text": "health and mana bars, the countdown, a minimap and a ten-slot hotlist, in full once the tutorial is done"
+  },
+  {
+   "name": "gold",
+   "from": 2,
+   "text": "mobs start dropping it"
+  },
+  {
+   "name": "ratings and the shows",
+   "from": 2,
+   "text": "ratings start to count, and a crawler can be pulled out one to three times a floor to guest on a Syndicate show"
+  },
+  {
+   "name": "safe rooms close early",
+   "from": 2,
+   "text": "every safe room closes an hour before the floor collapses"
+  },
+  {
+   "name": "races and classes",
+   "from": 3,
+   "once": true,
+   "text": "chosen back at the tutorial guild hall; the race is permanent"
+  },
+  {
+   "name": "stat points",
+   "from": 3,
+   "text": "spent only once a race and class are chosen, and only inside a safe room"
+  },
+  {
+   "name": "marketplaces",
+   "from": 3,
+   "text": "gold buys goods and services: general stores everywhere, specialist shops in settlements"
+  },
+  {
+   "name": "Desperado Club",
+   "from": 3,
+   "text": "members only, by achievement; its first level opens here, and the main club is not a safe room"
+  },
+  {
+   "name": "Club Vanquisher",
+   "from": 3,
+   "text": "for crawlers sworn to a deity, clerics and paladins mostly; heathens are turned away"
+  },
+  {
+   "name": "sponsor bidding",
+   "from": 3,
+   "once": true,
+   "text": "sponsors start bidding on crawlers, though nobody has one until the Fourth Floor"
+  },
+  {
+   "name": "sponsors",
+   "from": 4,
+   "text": "every crawler gets a first sponsor, a sponsor tab for one-way messages to them, and the sponsor's commercials on their feed; only popular crawlers get Benefactor boxes"
+  },
+  {
+   "name": "the leaderboard",
+   "from": 4,
+   "text": "the Top Ten by ratings, with a bounty on each"
+  },
+  {
+   "name": "personal spaces",
+   "from": 4,
+   "text": "a room of the party's own off a safe room, bought from its proprietor for around 50,000 gold; nobody gets in uninvited"
+  },
+  {
+   "name": "crafting",
+   "from": 4,
+   "text": "at tables and workshops set up in a personal space"
+  },
+  {
+   "name": "a second sponsor",
+   "from": 5,
+   "once": true,
+   "text": "the second round of bidding: each crawler gains another sponsor"
+  },
+  {
+   "name": "a third sponsor",
+   "from": 6,
+   "once": true,
+   "text": "the last round: three sponsors is the most a crawler can have"
+  },
+  {
+   "name": "guilds",
+   "from": 6,
+   "text": "up to five parties or crawlers, each with a personal space, sharing a common room and upgrades"
+  },
+  {
+   "name": "parties capped at thirty",
+   "from": 6,
+   "text": "no party may have more than thirty members"
+  },
+  {
+   "name": "Desperado Club, second level",
+   "from": 6,
+   "once": true,
+   "text": "the club's next level opens to members"
+  },
+  {
+   "name": "class specialization",
+   "from": 6,
+   "once": true,
+   "text": "a crawler may specialize their class, as they may again on the Ninth Floor"
+  },
+  {
+   "name": "sponsors can move on",
+   "from": 7,
+   "text": "a sponsor can transfer their patronage to another party"
+  },
+  {
+   "name": "Desperado Club, third level",
+   "from": 9,
+   "once": true,
+   "text": "the club's last level opens to members"
+  },
+  {
+   "name": "a second specialization",
+   "from": 9,
+   "once": true,
+   "text": "a crawler may specialize their class again"
+  }
+ ]
 }

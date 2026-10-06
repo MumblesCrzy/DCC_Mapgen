@@ -1180,6 +1180,93 @@ class Floor4LayoutTest(unittest.TestCase):
                 self.assertNotIn(phrase, md, f"{size} seed {seed}")
 
 
+class SystemsTest(unittest.TestCase):
+    """What's switched on: the dungeon's systems by the floor they arrive on.
+
+    The floors are the DCC Database's, written out here rather than read back
+    from the bank, so a bank edited to put guilds on Floor 2 fails."""
+
+    ARRIVES = {"gold": 2, "ratings and the shows": 2, "safe rooms close early": 2,
+               "races and classes": 3, "stat points": 3, "marketplaces": 3,
+               "Desperado Club": 3, "Club Vanquisher": 3,
+               "sponsors": 4, "the leaderboard": 4, "personal spaces": 4,
+               "a second sponsor": 5, "a third sponsor": 6, "guilds": 6,
+               "parties capped at thirty": 6, "Desperado Club, second level": 6,
+               "class specialization": 6, "Desperado Club, third level": 9,
+               "a second specialization": 9}
+    LAST = {"free beds": 2, "Game Guides": 3}
+    # Things that happen on their floor rather than staying on.
+    ONCE = {"races and classes", "sponsor bidding", "a second sponsor", "a third sponsor",
+            "Desperado Club, second level", "class specialization",
+            "Desperado Club, third level", "a second specialization"}
+
+    @classmethod
+    def setUpClass(cls):
+        cls.md = {f: mg.generate(f, "small", 4242, images=False).markdown for f in mg.FLOORS}
+
+    def _section(self, f):
+        md = self.md[f]
+        return md[md.index("## What's Switched On"):md.index("## Loot Boxes")]
+
+    @staticmethod
+    def _head(name):
+        return name[0].upper() + name[1:]
+
+    def test_each_system_arrives_on_its_books_floor(self):
+        by_name = {s["name"]: s for s in mg.SYSTEMS}
+        for name, floor in self.ARRIVES.items():
+            self.assertIn(name, by_name)
+            self.assertEqual(by_name[name]["from"], floor, name)
+        for name, floor in self.LAST.items():
+            self.assertEqual(by_name[name].get("until"), floor, name)
+        self.assertEqual({s["name"] for s in mg.SYSTEMS if s.get("once")}, self.ONCE)
+
+    def test_every_floor_says_what_is_new_off_and_still_on(self):
+        for f in mg.FLOORS:
+            sec = self._section(f)
+            new = [s for s in mg.SYSTEMS if s["from"] == f]
+            for s in mg.SYSTEMS:
+                bullet = f"- **{self._head(s['name'])}:** {s['text']}."
+                self.assertEqual(bullet in sec, s in new, f"floor {f}: {s['name']}")
+                off = f"- **{self._head(s['name'])}:** {s.get('off')}."
+                self.assertEqual(off in sec, s.get("until") == f - 1, f"floor {f}: {s['name']}")
+            still = sec[sec.index("**Still on"):] if "**Still on" in sec else ""
+            for s in mg.SYSTEMS:
+                ongoing = (s["from"] < f and f <= self.LAST.get(s["name"], 99)
+                           and s["name"] not in self.ONCE)
+                listed = re.search(rf"- Floor {s['from']}: .*\b{re.escape(s['name'])}[,.]", still)
+                self.assertEqual(bool(listed), ongoing, f"floor {f}: {s['name']}")
+
+    def test_the_next_floor_is_previewed_when_there_is_one(self):
+        for f in mg.FLOORS:
+            sec = self._section(f)
+            coming = [s["name"] for s in mg.SYSTEMS if s["from"] == f + 1]
+            if coming and f + 1 in mg.FLOORS:
+                self.assertIn(f"**Next floor:** {', '.join(coming)}.", sec)
+            else:
+                self.assertNotIn("**Next floor:**", sec, f"floor {f}")
+
+    def test_the_section_is_the_floors_not_the_seeds(self):
+        for f in (1, 4, 9):
+            other = mg.generate(f, "medium", 77, images=False).markdown
+            here = other[other.index("## What's Switched On"):other.index("## Loot Boxes")]
+            self.assertEqual(here, self._section(f))
+
+    def test_it_is_shared_matter_not_the_floors_own(self):
+        """Every floor's Other Crawlers section comes first and would cut the body
+        off before this one anyway, so it is taken out: the systems section has to
+        stop the body on its own."""
+        for f in mg.FLOORS:
+            md = self.md[f].replace("## Other Crawlers", "## Elsewhere")
+            md = md.replace("## Achievements", "## Elsewhere Too")
+            self.assertNotIn("What's Switched On", mg.floor_body(md), f"floor {f}")
+
+    def test_nothing_unverified_is_claimed(self):
+        """A blood bar is in the Floor 6 and 8 rules from an earlier session, but
+        nothing in the DCC Database has one, so the systems do not claim it."""
+        self.assertFalse([s for s in mg.SYSTEMS if "blood" in json.dumps(s).lower()])
+
+
 class LeaderboardTest(unittest.TestCase):
     """The Top Ten by ratings, from Floor 4, each with a bounty on their head.
 

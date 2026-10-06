@@ -1087,8 +1087,8 @@ class ThreatSign:
 
 # Sections every floor carries whatever is on it. Scanning them would find the same
 # threats everywhere -- the loot section lists all twelve by name.
-_SHARED_SECTIONS = ("## Other Crawlers", "## Achievements", "## Loot Boxes",
-                    "## Crawler Stats")
+_SHARED_SECTIONS = ("## Other Crawlers", "## Achievements", "## What's Switched On",
+                    "## Loot Boxes", "## Crawler Stats")
 
 
 def floor_body(markdown: str) -> str:
@@ -1616,6 +1616,47 @@ def _mana_regen_for(score: int) -> str:
         if score >= at:
             best = text
     return best
+
+
+def systems_on(floor: int) -> List[dict]:
+    """Every system on for this floor: switched on here or earlier, not yet
+    switched off, and not something that only happened on an earlier floor."""
+    return [s for s in SYSTEMS if s["from"] <= floor
+            and floor <= s.get("until", 99) and not (s.get("once") and s["from"] < floor)]
+
+
+def systems_section(floor: int) -> List[str]:
+    """What's switched on: the dungeon's systems arrive a floor at a time, and a
+    DM running Floor 6 should not have to remember which floor brought guilds."""
+    new = [s for s in SYSTEMS if s["from"] == floor]
+    off = [s for s in SYSTEMS if s.get("until") == floor - 1]
+    still = [s for s in systems_on(floor) if s["from"] < floor]
+    upcoming = [s for s in SYSTEMS if s["from"] == floor + 1]
+    # Names are kept in sentence case for the lists ("the HUD, gold, Game
+    # Guides"), and capitalized where one starts a bullet.
+    def head(s):
+        return s["name"][0].upper() + s["name"][1:]
+
+    o = ["## What's Switched On", "",
+         "The dungeon's systems arrive a floor at a time, and a few go away again.", ""]
+    if new:
+        o += [f"**New on Floor {floor}:**", ""]
+        o += [f"- **{head(s)}:** {s['text']}." for s in new]
+        o.append("")
+    if off:
+        o += ["**Switched off:**", ""]
+        o += [f"- **{head(s)}:** {s['off']}." for s in off]
+        o.append("")
+    if still:
+        o += ["**Still on from earlier floors:**", ""]
+        for f in sorted({s["from"] for s in still}):
+            names = [s["name"] for s in still if s["from"] == f]
+            o.append(f"- Floor {f}: {', '.join(names)}.")
+        o.append("")
+    if upcoming and floor + 1 in FLOORS:
+        o.append(f"**Next floor:** {', '.join(s['name'] for s in upcoming)}.")
+        o.append("")
+    return o
 
 
 def stat_rules_section() -> List[str]:
@@ -5771,9 +5812,13 @@ def _render_floor(fl, floor: int) -> str:
     renderers = {3: render3, 4: render4, 5: render5, 6: render6, 8: render8,
                  9: render9, 10: render10, 11: render11}
     text = renderers.get(floor, render)(fl)
-    # Loot boxes exist on every floor, so their section is added here for all of
-    # them rather than taught to nine renderers one at a time.
-    text = text.rstrip("\n") + "\n\n" + "\n".join(loot_box_section(fl, floor_body(text)))
+    # What's switched on, and the loot boxes, exist on every floor, so their
+    # sections are added here for all of them rather than taught to nine
+    # renderers one at a time. The box section reads the floor's own body, so
+    # it is worked out before the systems go on.
+    body = floor_body(text)
+    text = text.rstrip("\n") + "\n\n" + "\n".join(systems_section(floor))
+    text = text.rstrip("\n") + "\n\n" + "\n".join(loot_box_section(fl, body))
     # The stat rules go on here rather than inside crawler_section, so that they
     # land at the end of every floor instead of wherever that floor happens to
     # print its roster -- on floors 1 and 2 that is halfway up, ahead of the loot
