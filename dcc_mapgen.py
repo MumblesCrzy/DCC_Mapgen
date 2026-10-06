@@ -2875,6 +2875,17 @@ FLOOR4_CFG = {
     "abyss": 436,
     "yard_ring": 10,
     "mimic_level": 80,
+    # Getting around. The books give the anchors: a stop every 2 to 20 minutes,
+    # about three days to ride from 11 to 435, stations a block or two apart up
+    # to 72, and 40 or 50 miles apart out past 300. The curves between them are
+    # ours: minutes per stop climb evenly from the first figure to the second,
+    # and the spacing holds at block_miles up to 72, then grows by the same
+    # factor each station until it reaches far_miles at far_station.
+    "ride_minutes": (2, 18),
+    "block_miles": 0.15,
+    "far_station": 300,
+    "far_miles": 45,
+    "walk_mph": 3,
 }
 
 SIZE4_CFG = {
@@ -2895,6 +2906,59 @@ F4_RULES = [
 
 def _is_prime(n: int) -> bool:
     return n > 1 and all(n % d for d in range(2, int(n ** 0.5) + 1))
+
+
+# -- getting around the Iron Tangle ------------------------------------------------
+# Station n's "gap" is the stretch from n to n + 1. Trains run one way only, from
+# the yard toward the Abyss, so a ride always goes up the numbers.
+
+def f4_gap_minutes(n: int) -> float:
+    """Minutes a colored-line train takes from station n to n + 1, stop included."""
+    c = FLOOR4_CFG
+    lo, hi = c["ride_minutes"]
+    first, last = c["yard_ring"] + 1, c["employee_portal"] - 1
+    return lo + (hi - lo) * (min(max(n, first), last) - first) / (last - first)
+
+
+def f4_gap_miles(n: int) -> float:
+    """How far apart stations n and n + 1 are."""
+    c = FLOOR4_CFG
+    edge = c["stairwell_numbers"][-1]
+    if n < edge:
+        return c["block_miles"]
+    growth = (c["far_miles"] / c["block_miles"]) ** (1 / (c["far_station"] - edge))
+    # Held at far_miles past far_station: left to grow, the last gap before the
+    # Abyss would be over a thousand miles.
+    return c["block_miles"] * growth ** (min(n, c["far_station"]) - edge)
+
+
+def f4_ride_minutes(a: int, b: int) -> float:
+    """Riding a colored line from station a to station b, a before b."""
+    return sum(f4_gap_minutes(n) for n in range(a, b))
+
+
+def f4_walk_miles(a: int, b: int) -> float:
+    """The tunnel between two stations, either way round."""
+    lo, hi = sorted((a, b))
+    return sum(f4_gap_miles(n) for n in range(lo, hi))
+
+
+def f4_walk_minutes(a: int, b: int) -> float:
+    return f4_walk_miles(a, b) / FLOOR4_CFG["walk_mph"] * 60
+
+
+def duration_text(minutes: float) -> str:
+    """"about 25 minutes", "about 7 hours", "about 2 days and 18 hours"."""
+    m = round(minutes)
+    if m < 60:
+        n = max(5, int(5 * round(m / 5)))
+        return f"about {n} minutes"
+    hours = round(m / 60)
+    if hours < 24:
+        return f"about {hours} hour{'s' if hours != 1 else ''}"
+    days, hours = divmod(hours, 24)
+    text = f"about {days} day{'s' if days != 1 else ''}"
+    return text + (f" and {hours} hour{'s' if hours != 1 else ''}" if hours else "")
 
 
 @dataclass
@@ -3184,6 +3248,41 @@ class Generator4:
         return stations
 
 
+def _miles_text(miles: float) -> str:
+    if miles < 1:
+        return "under a mile"
+    n = round(miles)
+    return f"{n} mile{'s' if n != 1 else ''}"
+
+
+def _getting_around4(fl: Floor4) -> List[str]:
+    """How a colored-line train is made up, and how long anything takes."""
+    c = FLOOR4_CFG
+    first, end, edge = c["yard_ring"] + 1, c["employee_portal"], c["stairwell_numbers"][-1]
+    lo, hi = c["ride_minutes"]
+    o = ["## Getting Around", "",
+         "Every colored-line train is made up the same way. Crawlers start the floor aboard "
+         "one, with their party, in the passenger cars.", "",
+         "| Car | Who rides in it |", "| --- | --- |",
+         "| 1 | The engineer, in the cab. |",
+         "| 5 | The employee break room, and the conductor. No mob ever comes in. |",
+         "| 10 | The porters. Mobs board here. |",
+         f"| 15 | The janitors: {fl.janitor.name}. Mobs board here too. |",
+         "| The rest | Passengers. This is where crawlers ride. |", ""]
+    o.append(f"The trains run one way only, from the yard toward the Abyss. A full run from "
+             f"{first} to {end} takes {duration_text(f4_ride_minutes(first, end))}: near the "
+             f"yard a stop comes every {lo} minutes, and by the far end every {hi} or so.")
+    o.append("")
+    o.append(f"Up to {edge} the stations are a block or two apart, and the whole stretch from "
+             f"{first} to {edge} can be walked in {duration_text(f4_walk_minutes(first, edge))} "
+             f"({_miles_text(f4_walk_miles(first, edge))}) if nothing is in the tunnel. Past "
+             f"{edge} they spread out, until by station {c['far_station']} they are "
+             f"{c['far_miles']} miles apart. Each line below says how long its crawlers have "
+             f"before their train reaches {end}, and how far they are from the stairwells on foot.")
+    o.append("")
+    return o
+
+
 def render4(fl: Floor4) -> str:
     c = FLOOR4_CFG
     o = [f"# Floor 4 — {fl.name} ({fl.size})", "", "## Summary", ""]
@@ -3232,6 +3331,7 @@ def render4(fl: Floor4) -> str:
     for r in F4_RULES:
         o.append(f"- {r}")
     o.append("")
+    o.extend(_getting_around4(fl))
     o.append("## Withdrawal")
     o.append("")
     o.append("Every mob and crew member on the floor rides on a Rev-Up habit. Miss a dose and "
@@ -3286,7 +3386,21 @@ def render4(fl: Floor4) -> str:
         o.append(f"    - *{ln.line_mob.description}*")
         o.append(f"- **Withdrawal:** stage 2 from day {ln.stage2_day}, stage 3 from day "
                  f"{ln.stage3_day}. {ln.withdrawal}")
-        o.append(f"- **Crawler spawn:** station {ln.spawn}")
+        end, edge = c["employee_portal"], c["stairwell_numbers"][-1]
+        cavern = min(st.number for st in ln.stations
+                     if st.kind == "exit_cavern" and st.number > ln.spawn)
+        ahead = cavern - ln.spawn
+        o.append(f"- **Crawlers start:** aboard this line's train with their party, pulling "
+                 f"into station {ln.spawn}.")
+        o.append(f"- **Staying aboard:** the train reaches {end} in "
+                 f"{duration_text(f4_ride_minutes(ln.spawn, end))}, and the cars go on to the pit.")
+        o.append(f"- **Getting back:** the stairwells are behind them. Back to {edge} on foot is "
+                 f"{ln.spawn - edge} station{'s' if ln.spawn - edge != 1 else ''}, "
+                 f"{_miles_text(f4_walk_miles(edge, ln.spawn))}: "
+                 f"{duration_text(f4_walk_minutes(edge, ln.spawn))} if the tunnel is empty. "
+                 f"The exit cavern at {cavern} is {ahead} stop{'s' if ahead != 1 else ''} ahead "
+                 f"({duration_text(f4_ride_minutes(ln.spawn, cavern))}); its coaster track runs "
+                 f"back to the yard.")
         o.append("- **Stations of note** (all others are routine platforms):")
         o.append(f"  - **{' / '.join(map(str, c['stairwell_numbers']))}** — stairwells. "
                  f"See [Ghoul Stations](#ghoul-stations).")

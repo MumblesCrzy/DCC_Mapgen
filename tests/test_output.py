@@ -853,6 +853,69 @@ class Floor4LayoutTest(unittest.TestCase):
                 for word in gs["name"].split():
                     self.assertIn(word, svg, f"{size}: {gs['name']}")
 
+    # -- getting around ---------------------------------------------------------
+
+    def test_travel_times_meet_the_books_anchors(self):
+        """A stop every 2 to 20 minutes; about three days from 11 to 435; a block
+        or two apart up to 72; 40 or 50 miles apart out at 300."""
+        for n in range(11, 435):
+            self.assertTrue(2 <= mg.f4_gap_minutes(n) <= 20, f"gap {n}")
+            self.assertLessEqual(mg.f4_gap_miles(n), 50, f"gap {n}")
+        days = mg.f4_ride_minutes(11, 435) / 60 / 24
+        self.assertTrue(2.5 <= days <= 3.5, f"11 to 435 is {days:.2f} days")
+        for n in range(11, 72):
+            self.assertTrue(0.05 <= mg.f4_gap_miles(n) <= 0.3, f"gap {n}")
+        self.assertTrue(40 <= mg.f4_gap_miles(300) <= 50)
+        hours = mg.f4_walk_minutes(11, 72) / 60
+        self.assertTrue(1 <= hours <= 12, f"11 to 72 on foot is {hours:.1f} hours")
+
+    def test_further_out_is_a_longer_walk_and_a_shorter_ride(self):
+        walks = [mg.f4_walk_minutes(72, s) for s in range(73, 141)]
+        rides = [mg.f4_ride_minutes(s, 435) for s in range(73, 141)]
+        self.assertEqual(walks, sorted(walks))
+        self.assertEqual(rides, sorted(rides, reverse=True))
+        for s in (73, 100, 140):          # a tunnel is as long walked either way
+            self.assertEqual(mg.f4_walk_miles(s, 72), mg.f4_walk_miles(72, s))
+            self.assertGreater(mg.f4_walk_miles(s, 72), 0)
+
+    def test_durations_read_as_a_person_would_say_them(self):
+        cases = [(3, "about 5 minutes"), (25, "about 25 minutes"), (61, "about 1 hour"),
+                 (7 * 60, "about 7 hours"), (24 * 60, "about 1 day"),
+                 (64 * 60, "about 2 days and 16 hours")]
+        for minutes, text in cases:
+            self.assertEqual(mg.duration_text(minutes), text)
+
+    def test_the_cars_are_laid_out(self):
+        for size, seed, res in self._floors(seeds=range(1, 4)):
+            md = res.markdown
+            section = md[md.index("## Getting Around"):md.index("## Withdrawal")]
+            for car in ("| 1 |", "| 5 |", "| 10 |", "| 15 |"):
+                self.assertIn(car, section)
+            self.assertIn(f"| 15 | The janitors: {res.floor.janitor.name}.", section)
+            self.assertIn("No mob ever comes in", section)
+
+    def test_each_line_says_how_long_its_crawlers_have(self):
+        for size, seed, res in self._floors(seeds=range(1, 5)):
+            md = res.markdown
+            self.assertNotIn("**Crawler spawn:**", md)
+            for ln in res.floor.lines:
+                block = md[md.index(f"### {ln.color} Line"):]
+                block = block[:block.index("- **Stations of note")]
+                where = f"{size} seed {seed}: {ln.color}"
+                self.assertIn(f"pulling into station {ln.spawn}.", block, where)
+                ride = mg.duration_text(mg.f4_ride_minutes(ln.spawn, 435))
+                self.assertIn(f"the train reaches 435 in {ride}", block, where)
+                self.assertIn(f"Back to 72 on foot is {ln.spawn - 72} station", block, where)
+                walk = mg.duration_text(mg.f4_walk_minutes(72, ln.spawn))
+                self.assertIn(f"{walk} if the tunnel is empty", block, where)
+                m = re.search(r"The exit cavern at (\d+) is (\d+) stops? ahead", block)
+                self.assertTrue(m, where)
+                cavern, ahead = int(m.group(1)), int(m.group(2))
+                self.assertEqual(cavern - ln.spawn, ahead, where)
+                self.assertTrue(1 <= ahead <= 5, where)
+                self.assertIn(cavern, [st.number for st in ln.stations
+                                       if st.kind == "exit_cavern"], where)
+
     # -- the tail ---------------------------------------------------------------
 
     def test_station_435_is_on_the_map_and_in_the_text(self):
