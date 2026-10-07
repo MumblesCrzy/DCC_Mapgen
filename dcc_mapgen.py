@@ -1101,8 +1101,9 @@ class ThreatSign:
 
 # Sections every floor carries whatever is on it. Scanning them would find the same
 # threats everywhere -- the loot section lists all twelve by name.
-_SHARED_SECTIONS = ("## Other Crawlers", "## Achievements", "## What's Switched On",
-                    "## Shops and Prices", "## Loot Boxes", "## Crawler Stats")
+_SHARED_SECTIONS = ("## Other Crawlers", "## Achievements", "## Bestiary",
+                    "## What's Switched On", "## Shops and Prices", "## Loot Boxes",
+                    "## Crawler Stats")
 
 
 def floor_body(markdown: str) -> str:
@@ -1760,6 +1761,239 @@ def shops_section(floor: int) -> List[str]:
           f"- A bed in a safe room: {bed_price(floor):,} gold a night (free on the first "
           f"two floors)."]
     o += [f"- {sv['what']}: {sv['price']}." for sv in s["services"] if sv["from"] <= floor]
+    o.append("")
+    return o
+
+
+# -- the bestiary: mobs statted from their level ----------------------------------
+
+STAT_ORDER = ("STR", "DEX", "CON", "INT", "CHA")
+
+
+@dataclass
+class MobBuild:
+    """One mob or boss, statted the way a crawler is but on fewer points a level."""
+    name: str
+    where: str
+    level: int
+    band: Tuple[int, int]
+    tier: str                  # "mob", or the boss tier
+    kind: str                  # brute, skirmisher, ...
+    stats: Dict[str, int]
+    poor: str = ""             # how it is badly built, if it is
+
+    @property
+    def hp(self) -> int:
+        return self.stats["CON"] * CRAWLER_STATS["knobs"]["hp_per_con"]
+
+    @property
+    def mp(self) -> int:
+        return self.stats["INT"]                    # mana is INT, as for a crawler
+
+    @property
+    def melee(self) -> int:
+        return self.stats["STR"] // CRAWLER_STATS["knobs"]["attack_per"]
+
+    @property
+    def tricks(self) -> int:
+        """How many times it can use its trick on purpose before it runs dry."""
+        return self.mp // MOB_BUILDS["trick_cost"]
+
+    @property
+    def even_for(self) -> int:
+        """The crawler level with as many stat points: what it matches point for
+        point, before a crawler's gear and class and before its own trick."""
+        spent = sum(self.stats.values()) - MOB_BUILDS["base"] * len(STAT_ORDER)
+        return max(1, round(spent / CRAWLER_STATS["knobs"]["points_per_level"]))
+
+
+def _tokens(text: str) -> List[str]:
+    return re.findall(r"[a-z]+", text.lower())
+
+
+def mob_kind(name: str, default: Optional[str] = None,
+             sentence: bool = False) -> Tuple[str, List[float]]:
+    """A mob's type from its words. In a name the head noun comes last and decides
+    first -- "Goblin Shamankas" are shamans, "Tunnel Trolls" trolls -- then the
+    rest; in a sentence describing a boss, the first word that names a type wins,
+    so "a stone effigy animated by the spite of the librarians" is an effigy. A
+    word matches a type if it starts with one of that type's words, types tried
+    in MOB_BUILDS order. Anything unmatched is the default."""
+    words = _tokens(name)
+    if not sentence and words:
+        words = [words[-1]] + words[:-1]
+    for w in words:
+        for t in MOB_BUILDS["types"]:
+            if any(w.startswith(k) for k in t["words"]):
+                return t["type"], list(t["weights"])
+    kind = default or MOB_BUILDS["default_type"]
+    match = next((t for t in MOB_BUILDS["types"] if t["type"] == kind), None)
+    return kind, list(match["weights"] if match else MOB_BUILDS["default_weights"])
+
+
+def build_mob(name: str, level: int, tier: str = "mob", *, kind_from: str = "",
+              description: str = "", where: str = "", band: Optional[Tuple[int, int]] = None,
+              default_kind: Optional[str] = None, sentence: bool = False) -> MobBuild:
+    """Stat a mob or boss from its level.
+
+    Every stat starts at 4, as an average adult human's does; then the mob gets
+    MOB_BUILDS["tier_points"][tier] points a level -- 1 for an ordinary mob, 2 for
+    a neighborhood boss and so on up, against a crawler's 3 -- spread by its type
+    (from `kind_from`, its noun) and leant by the words of `description`. About
+    one in eight is poorly built instead. Seeded by the mob itself, so the same
+    mob at the same level is always the same build, and statting a floor never
+    moves anything else on it."""
+    mb = MOB_BUILDS
+    rng = random.Random(f"build|{name}|{level}|{tier}")
+    kind, weights = mob_kind(kind_from or name, default_kind, sentence)
+    base = {s: mb["base"] for s in STAT_ORDER}
+    poor = None
+    if rng.randrange(mb["poorly_built_in"]) == 0:
+        poor = rng.choice(mb["poor_builds"])
+        weights = list(poor["weights"])
+        for s in poor["dump"]:
+            moved = base[s] - 1
+            base[s] = 1
+            weights[STAT_ORDER.index(s)] = 0       # a dumped stat stays dumped
+            if poor["main"]:
+                base[poor["main"]] += moved
+    else:
+        words = set(_tokens(description))
+        for key, lean in mb["leanings"].items():
+            if key in words or key + "s" in words:
+                for s, factor in lean.items():
+                    weights[STAT_ORDER.index(s)] *= factor
+    weights = [w * rng.uniform(0.85, 1.15) for w in weights]
+    points = mb["tier_points"].get(tier, mb["tier_points"]["neighborhood"]) * max(1, level)
+    # Largest remainder, so the points add up exactly.
+    total_w = sum(weights)
+    shares = [points * w / total_w for w in weights]
+    whole = [int(s) for s in shares]
+    for i in sorted(range(len(shares)), key=lambda i: shares[i] - whole[i],
+                    reverse=True)[:points - sum(whole)]:
+        whole[i] += 1
+    stats = {s: base[s] + whole[i] for i, s in enumerate(STAT_ORDER)}
+    return MobBuild(name, where, level, band or (level, level), tier, kind, stats,
+                    poor["name"] if poor else "")
+
+
+def _middle(band) -> int:
+    lo, hi = band
+    return (lo + hi) // 2
+
+
+def floor_bestiary(fl) -> List[MobBuild]:
+    """Every mob and boss a floor names with a level, statted, in the order the
+    write-up meets them. A mob with a band is statted at the middle of it."""
+    out = []
+
+    def mob(m, band, where):
+        if m is None:
+            return
+        if isinstance(m, str):
+            out.append(build_mob(m, _middle(band), where=where, band=tuple(band),
+                                 description=m))
+        else:
+            out.append(build_mob(m.name, _middle(band), kind_from=m.noun,
+                                 description=f"{m.adj} {m.quirk} {m.description}",
+                                 where=where, band=tuple(band)))
+
+    def boss(b, where, noun=""):
+        if b is None:
+            return
+        out.append(build_mob(b.name, b.level, b.tier, kind_from=noun or b.form,
+                             description=f"{b.form} {b.mechanic}", where=where,
+                             default_kind="brute", sentence=not noun))
+
+    for nb in getattr(fl, "neighborhoods", None) or []:             # floors 1-2
+        mob(nb.mob, nb.level_range, f"neighborhood {nb.label}")
+        boss(nb.boss, f"neighborhood {nb.label}", nb.mob.noun)
+    for name, b in (getattr(fl, "borough_bosses", None) or {}).items():
+        boss(b, f"borough {name}")
+    for name, b in (getattr(fl, "city_bosses", None) or {}).items():
+        boss(b, f"city {name}")
+    if getattr(fl, "top_boss", None):
+        boss(fl.top_boss, getattr(fl, "top_tier_name", "") or "the top")
+    for c in getattr(fl, "cells", None) or []:                     # floors 3 and 6
+        if getattr(c, "mob", None):
+            mob(c.mob, c.level_range, f"region {c.label}")
+            if getattr(c, "second_mob", None):
+                mob(c.second_mob, c.level_range, f"region {c.label}")
+            boss(getattr(c, "boss", None), f"region {c.label}", c.mob.noun)
+    for q in getattr(fl, "quadrants", None) or []:                 # floor 5
+        mob(q.mob, q.level_range, f"the {q.name} quadrant")
+        castle = getattr(q, "castle", None)
+        boss(castle.boss if castle else None, f"the {q.name} castle", q.mob.noun)
+    for z in getattr(fl, "zones", None) or []:                     # floor 8
+        mob(z.mob, z.level_range, f"zone {z.label}")
+    for name, band in getattr(fl, "forest_mobs", None) or []:      # floor 9
+        mob(name, band, "the forest")
+    if getattr(fl, "lines", None):                                 # floor 4
+        for ln in fl.lines:
+            mob(ln.line_mob, ln.mob_levels, f"the {ln.color} Line")
+        for gs in fl.ghoul_stations[1:]:       # 12 is the janitors', statted below
+            g = gs["ghoul"]
+            out.append(build_mob(g["name"], _middle(g["level"]), where=f"station {gs['number']}",
+                                 band=tuple(g["level"]), description=g["does"]))
+            if gs["merged"]:
+                m = gs["merged"]
+                out.append(build_mob(m["name"], _middle(m["level"]), m["tier"].split()[0],
+                                     where=f"station {gs['number']}", band=tuple(m["level"]),
+                                     description=m["does"], default_kind="brute"))
+        sup, spawn = fl.supplier, fl.mimic_spawn
+        out.append(build_mob(sup["name"], _middle(sup["level"]), where="every exit cavern",
+                             band=tuple(sup["level"]), description=sup["does"]))
+        c4 = FLOOR4_CFG
+        out.append(build_mob("Station Mimic", c4["mimic_level"], "city",
+                             where=f"station {c4['mimic_station']}",
+                             description="a station-sized mouth", default_kind="brute"))
+        out.append(build_mob(spawn["name"].capitalize(), _middle(spawn["level"]),
+                             where=f"station {c4['mimic_station']}", band=tuple(spawn["level"]),
+                             description=spawn["does"]))
+    if getattr(fl, "janitor", None):
+        mob(fl.janitor, (fl.janitor_level, fl.janitor_level), "the janitors")
+    if getattr(fl, "boss", None) and isinstance(fl.boss, Boss):    # floor 11
+        boss(fl.boss, "the arena")
+    return out
+
+
+def bestiary_section(fl) -> List[str]:
+    """The floor's mobs and bosses with stat lines, for a DM who wants numbers."""
+    beasts = floor_bestiary(fl)
+    if not beasts:
+        return []
+    mb, k = MOB_BUILDS, CRAWLER_STATS["knobs"]
+    tp = mb["tier_points"]
+    o = ["## Bestiary", "",
+         f"Every mob and boss on this floor, statted the way a crawler is but on fewer "
+         f"points: each stat starts at {mb['base']}, then a crawler gains "
+         f"{k['points_per_level']} points a level, an ordinary mob {tp['mob']}, a "
+         f"neighborhood boss {tp['neighborhood']}, a borough boss {tp['borough']}, a city "
+         f"boss {tp['city']}, and so on up. A mob with a level band is shown at the middle "
+         f"of it; each level either way moves its points.", "",
+         f"HP is CON x {k['hp_per_con']} and MP is INT, as for a crawler. Melee adds 1 per "
+         f"{k['attack_per']} STR. A mob's MP is fuel for its trick: each use on purpose costs "
+         f"{mb['trick_cost']}, and the MP comes back at a crawler's rate for the same INT. "
+         f"What it simply is — exploding, regenerating, hunting by sound — costs nothing. "
+         f"*Even for* is the crawler level with as many points to spend: a fair fight on "
+         f"paper, before a crawler's gear and class, and before the trick, which is what "
+         f"usually decides it.", "",
+         "| Mob | Where | Level | Build | STR | DEX | CON | INT | CHA | HP | MP | Melee | Even for |",
+         "| --- | --- | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"]
+    for b in beasts:
+        lo, hi = b.band
+        level = f"{b.level}" if lo == hi else f"{b.level} ({lo}–{hi})"
+        kind = b.kind + (", poorly built" if b.poor else "")
+        if b.tier != "mob":
+            kind = f"{b.tier} boss, {kind}"
+        s = b.stats
+        o.append(f"| {b.name} | {b.where} | {level} | {kind} | " +
+                 " | ".join(str(s[x]) for x in STAT_ORDER) +
+                 f" | {b.hp:,} | {b.mp} | +{b.melee} | {b.even_for} |")
+    poor = [b for b in beasts if b.poor]
+    if poor:
+        o += ["", "**Poorly built**, and it shows:", ""]
+        o += [f"- **{b.name}:** {b.poor}." for b in poor]
     o.append("")
     return o
 
@@ -3174,6 +3408,7 @@ class RailLine:
     stations: List[Station]
     stage2_day: int = 0           # the day withdrawal reaches stage 2 on this line
     stage3_day: int = 0
+    mob_levels: Tuple[int, int] = (0, 0)   # the line mob's band, as its roster line gives it
 
 
 @dataclass
@@ -3282,7 +3517,8 @@ class Generator4:
                 engineer=f"{self.rng.choice(BOSS_FIRST)} the {self.rng.choice(['7th', 'Elder', 'Unblinking', 'Punctual', 'Second-Shift', 'Late'])}",
                 engineer_species=self.rng.choice(ENGINEER_SPECIES),
                 line_mob=mob, roster=roster, withdrawal=pace["text"],
-                spawn=spawn, stations=[], stage2_day=stage2, stage3_day=stage3))
+                spawn=spawn, stations=[], stage2_day=stage2, stage3_day=stage3,
+                mob_levels=(lvl_a + 2, lvl_a + 7)))
 
         # The five stairwell stations are the same five numbers on every line, so
         # each gets one note for the floor rather than one per line.
@@ -5921,6 +6157,9 @@ def _render_floor(fl, floor: int) -> str:
     # renderers one at a time. The box section reads the floor's own body, so
     # it is worked out before the systems go on.
     body = floor_body(text)
+    beasts = bestiary_section(fl)
+    if beasts:
+        text = text.rstrip("\n") + "\n\n" + "\n".join(beasts)
     text = text.rstrip("\n") + "\n\n" + "\n".join(systems_section(floor))
     shops = shops_section(floor)
     if shops:

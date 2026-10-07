@@ -1248,7 +1248,7 @@
    "discount_cap": 60,
    "pet_base": 1,
    "pet_per": 10,
-   "points_per_level": 1
+   "points_per_level": 3
   },
   "benchmarks": [
    [
@@ -1386,11 +1386,11 @@
    }
   ],
   "growth": [
-   "**{points_per_level} stat point per level**, spent freely, plus whatever a race, a class or a boon hands over on top.",
+   "**{points_per_level} stat points per level**, banked until the race and class on floor 3 and spent in a safe room after that, plus whatever a race, a class or a boon hands over on top.",
    "The race chosen on floor 3 is permanent and usually moves two or three stats at once. The class upgrade at level 6 tends to move one.",
    "Nothing here caps out. A crawler who lives long enough leaves the human range behind entirely, which is the point."
   ],
-  "npc_note": "To stat a team from Other Crawlers on the spot: give each crawler 4s across the board, then add a total of two points per floor they have survived, weighted toward whatever their class is for. That lands a group met on floor 3 at roughly 5s and a group that has lived to floor 9 somewhere near 10s, which is about where the books put them."
+  "npc_note": "To stat a crawler from Other Crawlers on the spot: 4s across the board, then {points_per_level} points per level, weighted toward whatever their class is for. Put an ordinary group at or a little above the floor's ordinary mob levels; the ones on the leaderboard run at about twice them, which is about where the books put Carl."
  },
  "LOOT_BOXES": {
   "rules": [
@@ -4435,6 +4435,504 @@
     "what": "A personal space upgrade",
     "from": 4,
     "price": "50,000 to 500,000 gold each: a training room, a better crafting studio, a better shower"
+   }
+  ]
+ },
+ "MOB_BUILDS": {
+  "base": 4,
+  "tier_points": {
+   "mob": 1,
+   "neighborhood": 2,
+   "borough": 3,
+   "castle": 3,
+   "city": 4,
+   "county": 5,
+   "province": 5,
+   "state": 6,
+   "country": 7,
+   "continent": 8,
+   "floor": 9
+  },
+  "trick_cost": 3,
+  "poorly_built_in": 8,
+  "types": [
+   {
+    "type": "caster",
+    "weights": [
+     0.5,
+     1.5,
+     1.5,
+     5,
+     1.5
+    ],
+    "words": [
+     "shaman",
+     "mage",
+     "lich",
+     "hag",
+     "witch",
+     "elemental",
+     "demon",
+     "pixie",
+     "familiar",
+     "laminak",
+     "krasue",
+     "atomizer",
+     "naiad",
+     "librarian",
+     "engineer",
+     "wisp",
+     "shadow"
+    ]
+   },
+   {
+    "type": "charmer",
+    "weights": [
+     0.7,
+     2,
+     1,
+     2,
+     4
+    ],
+    "words": [
+     "mime",
+     "clown",
+     "organ",
+     "choir",
+     "nun",
+     "bard",
+     "succub",
+     "incub",
+     "changeling",
+     "clurichaun",
+     "pawnbroker",
+     "costermonger",
+     "fishwife",
+     "lure",
+     "orchid",
+     "bugaboo"
+    ]
+   },
+   {
+    "type": "undead",
+    "weights": [
+     3,
+     1,
+     4,
+     0.5,
+     0.2
+    ],
+    "words": [
+     "ghoul",
+     "skellie",
+     "skeleton",
+     "wraith",
+     "zombie",
+     "jikininki",
+     "flesher",
+     "waxwork",
+     "dumm",
+     "undertaker"
+    ]
+   },
+   {
+    "type": "worker",
+    "weights": [
+     2,
+     2,
+     2,
+     1.5,
+     1.5
+    ],
+    "words": [
+     "porter",
+     "conductor",
+     "inspector",
+     "brakem",
+     "stoker",
+     "signalm",
+     "staff",
+     "handler",
+     "commuter",
+     "yardmaster",
+     "worker",
+     "attendant",
+     "baker",
+     "lamplighter",
+     "driver",
+     "sweep",
+     "ringer",
+     "night",
+     "collector",
+     "ratcatcher",
+     "trackwalker",
+     "butcher",
+     "urchin",
+     "intern"
+    ]
+   },
+   {
+    "type": "swarm",
+    "weights": [
+     1,
+     4,
+     0.7,
+     0.3,
+     0.3
+    ],
+    "words": [
+     "wasp",
+     "ant",
+     "rat",
+     "roach",
+     "centipede",
+     "grub",
+     "beetle",
+     "swarm",
+     "legion",
+     "gerbil",
+     "pigeon",
+     "bat",
+     "piranha",
+     "jellyfish",
+     "termite",
+     "leech",
+     "drek",
+     "chee",
+     "scatterer",
+     "zlurp",
+     "slime",
+     "chick"
+    ]
+   },
+   {
+    "type": "brute",
+    "weights": [
+     4,
+     1,
+     4,
+     0.5,
+     0.5
+    ],
+    "words": [
+     "troll",
+     "ogre",
+     "cyclops",
+     "bugbear",
+     "yak",
+     "boar",
+     "bactrian",
+     "ursine",
+     "berserker",
+     "mantaur",
+     "orc",
+     "hobgoblin",
+     "tuskling",
+     "titan",
+     "golem",
+     "brute",
+     "lion",
+     "gargoyle",
+     "thug",
+     "babababoon",
+     "bonker",
+     "ooze",
+     "effigy",
+     "horror",
+     "giant",
+     "swine"
+    ]
+   },
+   {
+    "type": "skirmisher",
+    "weights": [
+     2,
+     5,
+     2,
+     1,
+     0.5
+    ],
+    "words": [
+     "goblin",
+     "kobold",
+     "ferret",
+     "weasel",
+     "imp",
+     "gremlin",
+     "raccoon",
+     "lemur",
+     "fox",
+     "hyena",
+     "dingo",
+     "raptor",
+     "jaguar",
+     "stalker",
+     "assassin",
+     "raider",
+     "gibbon",
+     "mantis",
+     "mantid",
+     "hawk",
+     "owl",
+     "swordfish",
+     "shark",
+     "wolverine",
+     "badger",
+     "impaler",
+     "pterolykos",
+     "cornet",
+     "gnoll",
+     "lurker",
+     "hound",
+     "dog"
+    ]
+   }
+  ],
+  "default_type": "beast",
+  "default_weights": [
+   3,
+   3,
+   3,
+   0.3,
+   0.3
+  ],
+  "leanings": {
+   "feral": {
+    "STR": 1.4,
+    "INT": 0.6
+   },
+   "rabid": {
+    "STR": 1.4,
+    "INT": 0.6
+   },
+   "frenzied": {
+    "STR": 1.4,
+    "INT": 0.6
+   },
+   "vengeful": {
+    "STR": 1.3
+   },
+   "zealous": {
+    "STR": 1.2,
+    "CHA": 1.3
+   },
+   "sniveling": {
+    "DEX": 1.3,
+    "CHA": 0.5
+   },
+   "cowardly": {
+    "DEX": 1.3,
+    "CHA": 0.5
+   },
+   "gilded": {
+    "CHA": 1.5
+   },
+   "rot": {
+    "CON": 1.3,
+    "CHA": 0.5
+   },
+   "moldy": {
+    "CON": 1.3,
+    "CHA": 0.5
+   },
+   "spore": {
+    "CON": 1.3,
+    "CHA": 0.5
+   },
+   "bureaucratic": {
+    "INT": 1.6,
+    "CHA": 1.3,
+    "STR": 0.7
+   },
+   "litigious": {
+    "INT": 1.6,
+    "CHA": 1.3,
+    "STR": 0.7
+   },
+   "unionized": {
+    "INT": 1.3,
+    "CHA": 1.3
+   },
+   "caffeinated": {
+    "DEX": 1.6,
+    "CON": 0.8
+   },
+   "jittery": {
+    "DEX": 1.5,
+    "CON": 0.8
+   },
+   "shambling": {
+    "DEX": 0.5,
+    "CON": 1.4
+   },
+   "irradiated": {
+    "CON": 1.3,
+    "INT": 0.8
+   },
+   "corpulent": {
+    "CON": 1.6,
+    "DEX": 0.6
+   },
+   "gluttonous": {
+    "CON": 1.5,
+    "DEX": 0.7
+   },
+   "sanctified": {
+    "INT": 1.3,
+    "CHA": 1.3
+   },
+   "ceremonial": {
+    "INT": 1.3,
+    "CHA": 1.3
+   },
+   "clockwork": {
+    "CON": 1.3,
+    "CHA": 0.4
+   },
+   "vampiric": {
+    "CHA": 1.4,
+    "STR": 1.2
+   },
+   "cursed": {
+    "INT": 1.2
+   },
+   "hungover": {
+    "DEX": 0.7
+   },
+   "insomniac": {
+    "DEX": 0.8
+   },
+   "camouflaged": {
+    "DEX": 1.4
+   },
+   "hobnailed": {
+    "STR": 1.2
+   },
+   "packs": {
+    "DEX": 1.2,
+    "CON": 0.8
+   },
+   "explode": {
+    "CON": 0.6
+   },
+   "trade": {
+    "CHA": 1.4,
+    "INT": 1.2
+   },
+   "slow": {
+    "DEX": 0.5,
+    "CON": 1.5,
+    "STR": 1.3
+   },
+   "fear": {
+    "CHA": 1.4,
+    "INT": 1.3
+   },
+   "steal": {
+    "DEX": 1.5
+   },
+   "spit": {
+    "DEX": 1.3
+   },
+   "feign": {
+    "INT": 1.3
+   },
+   "alpha": {
+    "CHA": 1.2
+   },
+   "regenerate": {
+    "CON": 1.5
+   },
+   "barricades": {
+    "INT": 1.4
+   },
+   "traps": {
+    "INT": 1.4
+   },
+   "distracted": {
+    "INT": 0.6
+   },
+   "disease": {
+    "STR": 1.2
+   },
+   "nocturnal": {
+    "DEX": 1.2
+   },
+   "hat": {
+    "INT": 0.5
+   }
+  },
+  "poor_builds": [
+   {
+    "name": "all Strength, no sense",
+    "main": "STR",
+    "dump": [
+     "DEX",
+     "INT"
+    ],
+    "weights": [
+     10,
+     0.2,
+     1,
+     0.1,
+     0.3
+    ]
+   },
+   {
+    "name": "a glass jaw: everything but Constitution",
+    "main": "STR",
+    "dump": [
+     "CON"
+    ],
+    "weights": [
+     4,
+     4,
+     0.1,
+     1,
+     1
+    ]
+   },
+   {
+    "name": "built for a fight that isn't this one: all Charisma",
+    "main": "CHA",
+    "dump": [
+     "STR",
+     "CON"
+    ],
+    "weights": [
+     0.2,
+     1,
+     0.2,
+     1,
+     10
+    ]
+   },
+   {
+    "name": "brilliant and helpless",
+    "main": "INT",
+    "dump": [
+     "STR",
+     "CON"
+    ],
+    "weights": [
+     0.1,
+     1,
+     0.3,
+     10,
+     1
+    ]
+   },
+   {
+    "name": "spread so thin it is good at nothing",
+    "main": null,
+    "dump": [],
+    "weights": [
+     1,
+     1,
+     1,
+     1,
+     1
+    ]
    }
   ]
  }

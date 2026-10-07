@@ -2,235 +2,235 @@
   "floor10_large_seed4242": {
     "map_count": 7,
     "maps": "260ceafc5be27242b861157be0337c882cadb9fa416aa6a7cdb8664304dc9203",
-    "markdown": "79b058084943f48ea9005343ce96ab9cd18f5f40d2175005951bf5aa832623f8",
+    "markdown": "74cb85e2f8770b3e2663dc74e2fb38bd7e72eba5a4c648806b6b1656cfe72d0a",
     "seed": 4242
   },
   "floor10_medium_seed11_party=4_vehicle=biological": {
     "map_count": 7,
     "maps": "7d1701da7a5d036d720fe65bebd09e5192e7dc5ac8d35f0c8abd7216c88370bb",
-    "markdown": "ec073e3102c8844eeea7310531b7d8a01f0502809aacfa641a94a79f2f94fff7",
+    "markdown": "da2589b9aa80f9ed0292f7314851b5ab34a4f3f0f43d7618318e5be840eaeb2c",
     "seed": 11
   },
   "floor10_medium_seed4242": {
     "map_count": 7,
     "maps": "f291af3afc5cf19675c87ff20f105fffc61ada48d29839513ace77486cdb1f9a",
-    "markdown": "c7aa540bb42f2294258193f50b5ef036c63a7450bcfa4416f2c28e79f106c252",
+    "markdown": "ba520b29c71b6fa63f36397cb29da51645847d6d36fd9f25ab1fd9c6e4453b3b",
     "seed": 4242
   },
   "floor10_small_seed4242": {
     "map_count": 7,
     "maps": "e4db46811d7fe2712adeb65b8341539b5c658cd876b5fcdc75c64d480de62daf",
-    "markdown": "32668729f2b15b6d9df893bbd22b352da4d450468b452d0f1ac71c8eb3a2b1cd",
+    "markdown": "ac17218f64a12060f55513e341155379162eb4226046904a0b43a1db92ed9c85",
     "seed": 4242
   },
   "floor11_large_seed4242": {
     "map_count": 1,
     "maps": "92cc1557b86e5a0c4d1065b92f3a8b216128e5f4cd0905346bafe5c7b49bd6d1",
-    "markdown": "af0102edfd0b2428dc7334e59ff3be0b9a893969ac2f1de2d4a3d3ddb3724d5f",
+    "markdown": "24fef3de5d75a8875086095a524669a816cea04d67453c175182292b70bca324",
     "seed": 4242
   },
   "floor11_medium_seed4242": {
     "map_count": 1,
     "maps": "e8ddfb31250cb9a4b2f8e0dc58e26b9917b30cce0ed21bf52589d2bc7634c364",
-    "markdown": "50513f586e95dfff42e6b6bd99bd5b20f320278c968f11da12f7cfeeff059d55",
+    "markdown": "c14bcc7408177b52e867f2d67f4a72f27f0aaeca3b258708c5f1925694d1c390",
     "seed": 4242
   },
   "floor11_small_seed4242": {
     "map_count": 1,
     "maps": "61624a613389687f6aed057461f72896d90b7264f892fa8422c28aa4823b1da7",
-    "markdown": "28e3c507c018e43c6ed61fd2ee341ea736078365ac4c4c46627626f826239ae6",
+    "markdown": "7240d8531fb436b4ad4b689924d1fb172eda0f2f98f6bdceb41236a777defc3b",
     "seed": 4242
   },
   "floor1_huge_seed77": {
     "map_count": 65,
     "maps": "884301b3f0f1fbcea85cfe975369f3ad9c8e5240a14936f53b1dff980174a312",
-    "markdown": "079b827a00d13d66ae044087a20576a6722219268c2fa9793be5a86dbed04d70",
+    "markdown": "8b9a2dfb442dfef30ec9914bce2ce140d8f7b91e277a6b69ee29339e25230579",
     "seed": 77
   },
   "floor1_large_seed11_borough_boss_rate=0.5_boss_stairs=False_stair_chance=0.5": {
     "map_count": 17,
     "maps": "b2e05081224639ed1a53ad06fd755fb9e10d5cc41356fdd6f26a353591251d0e",
-    "markdown": "2b7297d62b0e3e63a508712c715c9ca61c153d369b9d52880f93fa42aec132a5",
+    "markdown": "74add4dee85b89fa1366aa4b34d9947f9e823732aca4b13a20c3acd623b21508",
     "seed": 11
   },
   "floor1_large_seed4242": {
     "map_count": 17,
     "maps": "b7fcd4727b70067ae1994fa62ad9cbad4baaef08a521415f19d35412a770ddf8",
-    "markdown": "28dfb8e831791d7c6d30912e28251cf5e8d389425ea0580a5ece27e4ee751fe1",
+    "markdown": "a9caa2e8aaa8e5b40cbe956f9799c5c5577c7c29c051f5aaab1e73443a681a4c",
     "seed": 4242
   },
   "floor1_medium_seed11_scaling=random": {
     "map_count": 5,
     "maps": "dd29758790e1f6f1049e4ee6acca5c40684ecd8c1380c24a6719ade9332af212",
-    "markdown": "d9fea4b015bf1e490fa679d6509a596548439d7a9dcb645092af7046ff11db66",
+    "markdown": "42a091ea0c7203f8a9b76268ad68fbb2cb83e3b02ae12b72cf6286ec19a6e17d",
     "seed": 11
   },
   "floor1_medium_seed4242": {
     "map_count": 5,
     "maps": "c8976fc85d1f39256422e189b0f6c109f7628d3257bf2097fee1b1bbd8a12fcb",
-    "markdown": "80e02f0c1fde64249f5bf2109f670f8477b326bd59e762889f35a5c41048dda9",
+    "markdown": "b7efecc632f741b6e34c9edf38ea36bfe10159d5b225615c309e344b433450f6",
     "seed": 4242
   },
   "floor1_small_seed4242": {
     "map_count": 2,
     "maps": "249f89d32b0d93a280c9e6b92820a870272fb1da0d5f4c76536be801fb451e82",
-    "markdown": "c2b986c2e2837a251bf9b488358de795c62e60270f4a5d9a8c7cf2321716b4a8",
+    "markdown": "05095304d5a4ff7c7a1a7ed6373418a574c03471db99d2ee0dfe345c1c107833",
     "seed": 4242
   },
   "floor2_huge_seed77": {
     "map_count": 65,
     "maps": "ff6b16fa5ce45cfceef5d9478beda8a9388b38769c9650032b997e02ba51a6a9",
-    "markdown": "74a6cdd32f0c5b181658b226e01dac268b71e9dd80610b303ffd30f7134037cb",
+    "markdown": "b382c3dae81f1a5865a4a560806f0713f98e2430c81a61fb0f954c237c2fb0ce",
     "seed": 77
   },
   "floor2_large_seed4242": {
     "map_count": 17,
     "maps": "c4cb28060c6d0035b078ce1101126e898426201ecc019b18491075e00b830510",
-    "markdown": "d9e146a2f0b9250a06b2e6c20883d46b9b1f54cbcec8c2caadb17b43e0615027",
+    "markdown": "cbe23399646f94f5a7f41a314815f8656290173ee4dcb9cccc8e64fb8f86b25f",
     "seed": 4242
   },
   "floor2_medium_seed4242": {
     "map_count": 5,
     "maps": "68205827c3a1f968ecd8d13e4068884fae8684c574e5cd67c2b08e55a067ca94",
-    "markdown": "545065b0cab35bd7a865f7fbf96c1a31af239b82a3fdea223b1a190baf542e50",
+    "markdown": "dba4f5aa3f73530f4a21950708613a3cf28bc1871c72472d5be06c056a95b56c",
     "seed": 4242
   },
   "floor2_small_seed4242": {
     "map_count": 2,
     "maps": "ff804c8e608d2e795ea6597545a3af5588e87b6730ad6fe32c54ac6efb061c14",
-    "markdown": "ab49f3e5f4b1f735c5da6f8b1f4f0f1eb873a7dd62a572b1a945005ca6df77c6",
+    "markdown": "a1a04755f3fae943a5855ca8b0232bbeeed6c4805fe2bc6d00ef93bd45fcbbce",
     "seed": 4242
   },
   "floor3_large_seed4242": {
     "map_count": 1,
     "maps": "1d4019c29daf22ab0117de317c338178af4fb0fdfcc23aca5b23359d284d7c83",
-    "markdown": "b614aaac1a2a7fa4b9df709ff07d79bbd64f8eaff71ae625525fb036faf37bd4",
+    "markdown": "f039ab811cef7143d47d3c28e9e6c94cfea37775d874ac1ef584255e37e63410",
     "seed": 4242
   },
   "floor3_medium_seed4242": {
     "map_count": 1,
     "maps": "fb17a3b9168d5cf7cfb31ed6a1d854849c90e5e140321a8d9d37609d35545384",
-    "markdown": "68c97cf5bb73bb88c86b28ec14e516108599dcb34d0071d67391a3e58b6e0179",
+    "markdown": "ebc6052b6503414252ee6b79b596e08c664388dcc74a08cfbe17ae962cd85627",
     "seed": 4242
   },
   "floor3_small_seed4242": {
     "map_count": 1,
     "maps": "73407a88fbe9522feb716577ce80af1f6a48eb3803356f6a3f363b01c7555584",
-    "markdown": "f4fda070c913c10089e7ed57523fbccfff407db53b7fd86f71f824add25e37bd",
+    "markdown": "e24bb89269f475d38db4c7165159a28e11ff15170fba08ab11851c52067ef397",
     "seed": 4242
   },
   "floor4_large_seed31": {
     "map_count": 1,
     "maps": "238d2f1698b2e3c83401498b453f8e7f552734ce5e32f62cd11ae4b69629b809",
-    "markdown": "c94edcc46952cf3c05e1aa6812a4d084d9ae3d64c73393868aea0c87009faab9",
+    "markdown": "8f559e333f97c4aef1883f3c7f6b314bb9883abaafe7ff37a8fcf7bdd239351e",
     "seed": 31
   },
   "floor4_large_seed4242": {
     "map_count": 1,
     "maps": "13456249416fb58d933bfcb224fec7ad13b27dbc24cfdd145e9ed8a0a19dd0d7",
-    "markdown": "3c65498ae11aca19f0d591885a708d03d1e3fa34aec9ef0e3a1a094874b5e9dc",
+    "markdown": "83fb401363a3d50cb6854581238ad2031942be5052032cffbe7516927a504eb7",
     "seed": 4242
   },
   "floor4_medium_seed17": {
     "map_count": 1,
     "maps": "595088293dfd0f5bf92921641f6321c9fdb8b5a557077e1a0acb2357cd3d630f",
-    "markdown": "289d6a0c9286263f0e863066299ae1d48e1d55d26aa2663d036098963d97b694",
+    "markdown": "bc0af5ca42c8368961e65a6d6c85dbcbb9f27c7714fe49d2bd0a3828b9765c85",
     "seed": 17
   },
   "floor4_medium_seed4242": {
     "map_count": 1,
     "maps": "bb126fd591b486140c7ce49bb8548b7a4ceaf0234b58e500d796bf72530bf781",
-    "markdown": "81cd3649b5bc3643b2087aac0302c6a629c2643123f3309f822f9207851aae61",
+    "markdown": "8ba6912bec2ab48d48956a1cd19067496546a3404f8a69f1ad118e44ecaf7d64",
     "seed": 4242
   },
   "floor4_small_seed4242": {
     "map_count": 1,
     "maps": "f007320534a675e83a349b0047880def922f14f106628b73d9b45e51e30dbf33",
-    "markdown": "881b206fdf6118e14d03224908be1015c56d72f06e60e44480d011c5114a4d5e",
+    "markdown": "5a8d97e04ddd5341fd3f6aa1467d5f819f0f7eba642b6f79527f8c7004ca2e4d",
     "seed": 4242
   },
   "floor5_large_seed4242": {
     "map_count": 1,
     "maps": "ec64c5999fb2c50e694f00b1aeb7ad91fce5890f9b9401f8a300f6c8adf32c60",
-    "markdown": "1b2ae9ef566b8d59ef61c90f89819bc86888742910e820bce6d8e097f754cc54",
+    "markdown": "3ece31c68b10fa042ca8660c2954c68ae6f5aad604a96fa0932115fa59f3325e",
     "seed": 4242
   },
   "floor5_medium_seed4242": {
     "map_count": 1,
     "maps": "a02c98fb93b4f3669c56f5e7546bd660aade9012001336f899aa6d4e335a7300",
-    "markdown": "972b9f77b31b3b1544daf70f5c296477f5b4b9140fc65fb3f5a5ad8ab3a958ab",
+    "markdown": "2f7ad9a50285f2536910beb7a24f96a987e22ff053f03583f31288d05c516960",
     "seed": 4242
   },
   "floor5_small_seed4242": {
     "map_count": 1,
     "maps": "a5f7ffb58f4cd1db460dbad52290a5dd4c8042e7798c3982077fabdb36a7bdd1",
-    "markdown": "1009f9df98b65cb2094c10c3a48a34d595853d680fb9aa22573f2aa907e9a3ce",
+    "markdown": "f569674d47a7c46278e0d695e7e2249951e68b0cbde019ee662b765f7d095cf8",
     "seed": 4242
   },
   "floor6_large_seed4242": {
     "map_count": 1,
     "maps": "bdce05ca90bf73dfeb6b0cd75912b00c0f4b471b173b946ed4cba9b3bccd472a",
-    "markdown": "219f0bfbde8c32fceacac85f3ec6f4825ab2d2d44c12bd57d0d6c4c19ee4d947",
+    "markdown": "e43e82e146f660e44b580e14ac2ef04dfc4c11d71f21ec3ade0f393d97e00f5a",
     "seed": 4242
   },
   "floor6_medium_seed4242": {
     "map_count": 1,
     "maps": "5e0df78c0afbc20e00a8f6993da22c775088fb9dc9bfb237988d9b8db31a8916",
-    "markdown": "c89b5cddb9c975b48d0189cc4da1d951facd59a642808b05d29e1b4cf4048a68",
+    "markdown": "c2bc34c24ba50595f74137749645e95e2ed444ec3ddb8fbf8de21e6aced64df0",
     "seed": 4242
   },
   "floor6_small_seed4242": {
     "map_count": 1,
     "maps": "7bf6eaa7fb4ba7b6126d5695e0bf7a915cd9aa0b747ffd7204f392be296cda6e",
-    "markdown": "0bb92a53added7a4cccf4266375b4b7bc2de72388a190c0adbc265ae69e5572f",
+    "markdown": "ca13e747f3a9f0a622928ab521b2a3998b689a724a4e2ae35267d077aae407e3",
     "seed": 4242
   },
   "floor8_large_seed4242": {
     "map_count": 1,
     "maps": "ef4a506525d43ef0b76f852056dbdc7d318694ac3f0849683557ded6488e2cca",
-    "markdown": "b18de825ba361ed458f9f341a9e58b94b27eff21463cf1d596d9faced2e03a8f",
+    "markdown": "c37d16df8303be8db6d0f3f333525454acc116c6570e66988ea986b8c20e1f03",
     "seed": 4242
   },
   "floor8_medium_seed11_region=East Asia": {
     "map_count": 1,
     "maps": "4c6a9902a5183ed8b60944616971ddf64f6e6a3e366ff82bac9a1f82969f9280",
-    "markdown": "801605acfc74afb79775c8c6d4c3e9468297565b27c21301472aa815444ebdaa",
+    "markdown": "b1ec49c7445456f8750e7e6e5564c9d2b59a5c29ad5bcfd11b4185f6288bebdf",
     "seed": 11
   },
   "floor8_medium_seed4242": {
     "map_count": 1,
     "maps": "2cb11e90e12c2539982f38ca631918acb8c76b497c24086eb23ae12b50a714e6",
-    "markdown": "29acc0c47d8ff9e4bfbf905b36efda4abddcbb210ceb51317da74a9eac15589a",
+    "markdown": "e447041b9274bf54924a121df55b43e04ffda633ae3122a045418776185e85db",
     "seed": 4242
   },
   "floor8_small_seed4242": {
     "map_count": 1,
     "maps": "fdec6fec98a67543b1c7afe5c680bddcad0962cd3eb7380a2f1228671ae61c08",
-    "markdown": "05039d6db2e32b8c1be810cf965b367fad90c3882638030dca5479a3b1cb3097",
+    "markdown": "6b30d1271a9a8d03bf6a2935230cea5a3f23039802c32bd318f7d0e9e78cd81e",
     "seed": 4242
   },
   "floor9_large_seed11_warlords=generated_wildcard=True": {
     "map_count": 1,
     "maps": "e08557278b5dd0ac1d94980bb59593334281ccc52a0de176d4c7f2b92629fb23",
-    "markdown": "342f8cc3cb27758165ad047f36a96e69bedbb549ca17f4133f034d2251ba2df8",
+    "markdown": "00c8fe93965c62a6f8d9dd5535de277108d03c6eb6776bf80a7c97bdc992fbaf",
     "seed": 11
   },
   "floor9_large_seed4242": {
     "map_count": 1,
     "maps": "d51e6223a64f11dcbb8182fb3f07bcea3ac58803c433e8ee87634acb2d5b5f32",
-    "markdown": "5de648f58070adf7f27367632ca477be0b9cee1068873c3e6331b1ad312c1bd7",
+    "markdown": "33541dbeb03541424a2c38931a5644940033b911856cf6a37876276979f4fbba",
     "seed": 4242
   },
   "floor9_medium_seed4242": {
     "map_count": 1,
     "maps": "951bd66e15884ce9b39b464abd84fd9dd8d229af1b2efd7268c632fe1e22898d",
-    "markdown": "ff3e2fe2cb2ef78974e8ec97293f511f3d37d0a708688c63a07fddcc4b089724",
+    "markdown": "418d896bf23f2a645033b414cf9307c3207189ac50637fe70a050803ab1d203e",
     "seed": 4242
   },
   "floor9_small_seed4242": {
     "map_count": 1,
     "maps": "43ac0d3552f434dd0cae6aeeaa4f6e60f9cece1dcddd23aa5c0442bb804a1c2c",
-    "markdown": "b6add1a58b217415f0d0cf836894b83ff8376440ffb298ca27c129a223c7b865",
+    "markdown": "c63094b41383dc84a2ca7240ff4cbbb5beab3f710a2026e4c38cb238382d04f6",
     "seed": 4242
   }
 }

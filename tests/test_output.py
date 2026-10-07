@@ -1274,6 +1274,150 @@ class SystemsTest(unittest.TestCase):
                 self.assertFalse(bar.search(fh.read()), os.path.basename(path))
 
 
+class BestiaryTest(unittest.TestCase):
+    """Mobs statted from their level. The point budgets are the table's own
+    decisions, written out here: a crawler gains 3 points a level, an ordinary
+    mob 1, a neighborhood boss 2, a borough boss 3, a city boss 4."""
+
+    CRAWLER = 3
+    TIERS = {"mob": 1, "neighborhood": 2, "borough": 3, "city": 4}
+    NAMES = ["Feral Goblins", "Tunnel Trolls", "Goblin Shamankas", "Fire Ants",
+             "Freight Ghouls", "Ticket Inspectors", "Stilt Clowns", "Llamas"]
+
+    @classmethod
+    def setUpClass(cls):
+        cls.res = {f: mg.generate(f, "small", 4242, images=False) for f in mg.FLOORS}
+
+    def test_crawlers_gain_three_points_a_level(self):
+        self.assertEqual(mg.CRAWLER_STATS["knobs"]["points_per_level"], self.CRAWLER)
+        stats = self.res[3].markdown[self.res[3].markdown.index("## Crawler Stats"):]
+        self.assertIn("**3 stat points per level**", stats)
+        self.assertIn("then 3 points per level", stats)
+
+    def test_points_by_tier(self):
+        for tier, per in self.TIERS.items():
+            for level in (1, 7, 20, 55):
+                for name in self.NAMES:
+                    b = mg.build_mob(name, level, tier)
+                    self.assertEqual(sum(b.stats.values()), 5 * 4 + per * level,
+                                     f"{name} {tier} L{level}")
+                    self.assertTrue(all(v >= 1 for v in b.stats.values()))
+                    if not b.poor:
+                        self.assertTrue(all(v >= 4 for v in b.stats.values()), b.stats)
+
+    def test_what_follows_from_the_stats(self):
+        for name in self.NAMES:
+            for tier, per in self.TIERS.items():
+                b = mg.build_mob(name, 30, tier)
+                self.assertEqual(b.hp, b.stats["CON"] * 15)
+                self.assertEqual(b.mp, b.stats["INT"])
+                self.assertEqual(b.melee, b.stats["STR"] // 3)
+                self.assertEqual(b.tricks, b.stats["INT"] // mg.MOB_BUILDS["trick_cost"])
+                self.assertEqual(b.even_for, max(1, round(per * 30 / self.CRAWLER)))
+
+    def _average(self, name, stat, description="", n=60):
+        """A stat's average share of the build over n levels, leaving out the
+        poorly built: they ignore type and description by design."""
+        shares = []
+        for level in range(20, 20 + n):
+            b = mg.build_mob(name, level, description=description)
+            if not b.poor:
+                shares.append(b.stats[stat] / sum(b.stats.values()))
+        return sum(shares) / len(shares)
+
+    def test_the_type_weights_the_build(self):
+        """On average, over sixty levels: a brute leads with Strength and
+        Constitution, a caster with Intelligence, a swarm and a skirmisher with
+        Dexterity, a charmer with Charisma."""
+        leads = {"Tunnel Trolls": ("STR", "CON"), "Goblin Shamankas": ("INT",),
+                 "Fire Ants": ("DEX",), "Feral Goblins": ("DEX",), "Stilt Clowns": ("CHA",)}
+        for name, top in leads.items():
+            shares = {s: self._average(name, s) for s in mg.STAT_ORDER}
+            best = sorted(shares, key=shares.get, reverse=True)[:len(top)]
+            self.assertEqual(set(best), set(top), f"{name}: {shares}")
+
+    def test_the_description_leans_it(self):
+        plain = self._average("Llamas", "CON")
+        fat = self._average("Llamas", "CON", "Corpulent")
+        self.assertGreater(fat, plain * 1.2, "a corpulent mob is no sturdier")
+        plain = self._average("Llamas", "INT")
+        sly = self._average("Llamas", "INT", "Bureaucratic. Set crude tripwire traps.")
+        self.assertGreater(sly, plain * 1.2, "a trap-setting bureaucrat is no cleverer")
+
+    def test_some_mobs_are_poorly_built(self):
+        poor = 0
+        builds = [mg.build_mob(f"Probe {i}", 25) for i in range(2000)]
+        for b in builds:
+            if not b.poor:
+                continue
+            poor += 1
+            pattern = next(p for p in mg.MOB_BUILDS["poor_builds"] if p["name"] == b.poor)
+            for s in pattern["dump"]:
+                self.assertEqual(b.stats[s], 1, f"{b.poor}: {b.stats}")
+        self.assertTrue(0.07 <= poor / len(builds) <= 0.19, poor)
+
+    def test_the_head_noun_decides_the_type(self):
+        cases = {"Goblin Shamankas": "caster", "Tunnel Trolls": "brute", "Mole Rats": "swarm",
+                 "Ratcatchers": "worker", "Sleeper-Car Wraiths": "undead",
+                 "Goblin Bomb Bards": "charmer", "Llamas": "beast"}
+        for name, kind in cases.items():
+            self.assertEqual(mg.mob_kind(name)[0], kind, name)
+        effigy = "an 18-foot stone effigy animated by the collective spite of the librarians"
+        self.assertEqual(mg.mob_kind(effigy, "brute", sentence=True)[0], "brute")
+
+    def test_a_build_is_the_mobs_own(self):
+        a = mg.build_mob("Feral Goblins", 12)
+        self.assertEqual(a, mg.build_mob("Feral Goblins", 12))
+        roller = random.getstate()
+        mg.build_mob("Feral Goblins", 13)
+        self.assertEqual(random.getstate(), roller, "statting touched the global random")
+
+    def test_every_floor_with_mobs_has_a_bestiary(self):
+        for f, res in self.res.items():
+            beasts = mg.floor_bestiary(res.floor)
+            md = res.markdown
+            self.assertEqual("## Bestiary" in md, bool(beasts), f"floor {f}")
+            if not beasts:
+                continue
+            sec = md[md.index("## Bestiary"):md.index("## What's Switched On")]
+            rows = [ln for ln in sec.splitlines() if ln.startswith("| ") and "---" not in ln][1:]
+            self.assertEqual(len(rows), len(beasts), f"floor {f}")
+            for row, b in zip(rows, beasts):
+                cells = [c.strip() for c in row.strip("|").split("|")]
+                self.assertEqual(cells[0], b.name)
+                self.assertEqual([int(c) for c in cells[4:9]], [b.stats[s] for s in mg.STAT_ORDER])
+                self.assertEqual(int(cells[9].replace(",", "")), b.hp)
+                self.assertEqual(int(cells[12]), b.even_for)
+            for b in beasts:
+                if b.poor:
+                    self.assertIn(f"- **{b.name}:** {b.poor}.", sec)
+        self.assertNotIn("## Bestiary", self.res[10].markdown, "the race has no mobs")
+
+    def test_the_bestiary_has_every_mob_the_floor_names(self):
+        fl = self.res[1].floor
+        names = {b.name for b in mg.floor_bestiary(fl)}
+        for nb in fl.neighborhoods:
+            self.assertIn(nb.mob.name, names)
+            self.assertIn(nb.boss.name, names)
+        self.assertIn(fl.janitor.name, names)
+        fl4 = self.res[4].floor
+        beasts4 = {b.name: b for b in mg.floor_bestiary(fl4)}
+        for ln in fl4.lines:
+            self.assertIn(ln.line_mob.name, beasts4)
+        self.assertEqual((beasts4["Station Mimic"].tier, beasts4["Station Mimic"].level), ("city", 80))
+        self.assertIn(fl4.supplier["name"], beasts4)
+        for c in self.res[3].floor.cells:
+            if getattr(c, "mob", None):
+                self.assertIn(c.mob.name, {b.name for b in mg.floor_bestiary(self.res[3].floor)})
+
+    def test_it_is_shared_matter_not_the_floors_own(self):
+        for f, res in self.res.items():
+            md = res.markdown
+            for head in ("## Other Crawlers", "## Achievements"):
+                md = md.replace(head, "## Elsewhere")
+            self.assertNotIn("## Bestiary", mg.floor_body(md), f"floor {f}")
+
+
 class ShopsTest(unittest.TestCase):
     """Shops and prices. The books' rules are written out here: marketplaces
     from the Third Floor; a general store charges three times a specialist's

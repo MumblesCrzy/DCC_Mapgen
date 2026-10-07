@@ -452,10 +452,56 @@ at-a-glance table is computed from it — so changing `lift_comfortable` from 60
 moves the rules and the table together, and [a test](#tests) fails if it ever moves
 only one of them.
 
+Crawlers gain **3 stat points per level**, as in the official RPG and the books,
+banked until the race and class on Floor 3 and spent in a safe room after that.
+
 The section also closes with a line on statting up the teams from Other Crawlers,
 which is the point of putting it in the campaign material rather than in a separate
-reference file: 4s across the board, plus two points per floor survived, weighted
-toward whatever the crawler's class is for.
+reference file: 4s across the board, plus 3 points per level, weighted toward
+whatever the crawler's class is for. Put an ordinary group a little above the
+floor's ordinary mobs; the leaderboard runs at about twice them, which is about
+where the books put Carl.
+
+### Bestiary
+
+Every floor with mobs ends its own material with a **Bestiary**: each mob and boss
+the floor names, statted from its level on the crawler rules, so a DM has numbers
+as well as a level. Every stat starts at 4, then the points per level depend on what
+the thing is:
+
+| | points per level |
+|---|---|
+| a crawler | 3 |
+| an ordinary mob | 1 |
+| a neighborhood boss | 2 |
+| a borough boss (and a Floor 5 castle ruler) | 3 |
+| a city boss | 4 |
+| a county, state, country or continent boss | 5, 6, 7, 8 |
+| Floor 11's floor boss | 9 |
+
+So an ordinary mob at a crawler's level has a third of the crawler's points, and
+it takes a city boss to out-point a crawler of its own level. What makes a mob
+dangerous is its trick, which the generator already writes. The numbers are
+there so the trick is what decides the fight, not the DM's guesswork.
+
+- **The spread** follows the mob's type, worked out from its noun: brute,
+  skirmisher, swarm, caster, undead, charmer, worker or beast. In a name the head
+  noun decides, so Goblin Shamankas are casters and Tunnel Trolls brutes. Its
+  adjective and gimmick lean the spread further: Bureaucratic and trap-setting
+  mobs run to Intelligence, Corpulent ones to Constitution, ones that steal and
+  flee to Dexterity.
+- **About one mob in eight is poorly built**, as some in the books are: all
+  Strength and no sense, a glass jaw, all Charisma for a fight that isn't this one,
+  brilliant and helpless, or spread so thin it is good at nothing.
+- **HP is CON × 15 and MP is INT**, as for a crawler. Few mobs cast spells, so MP is
+  fuel for the mob's trick: 3 a use, coming back at a crawler's rate for the same
+  Intelligence. What a mob simply is, such as exploding or regenerating, costs
+  nothing.
+- ***Even for*** is the crawler level with as many points to spend.
+
+Each build is seeded by the mob itself, so the same mob at the same level always
+has the same stats, and adding the Bestiary moved nothing else on any floor. The
+numbers live in `MOB_BUILDS` in `data/common.json`.
 
 Standing is the part the party changes in play. Befriend the group that attacked
 them on Floor 2, or fall out with an ally:
@@ -729,6 +775,17 @@ checked:
 - someone who fell off is never dealt back on under a new name;
 - each refused edit leaves the campaign exactly as it was;
 - the whole leaderboard survives a save and load.
+
+The bestiary has its own group, with the points per level written into the test:
+3 for a crawler, 1 for an ordinary mob, 2, 3 and 4 for neighborhood, borough and
+city bosses. It checks:
+- every build adds up exactly, and HP, MP, melee and *even for* follow from it;
+- each type leads with the stats it should;
+- a description leans the build;
+- about one in eight is poorly built, with its dumped stats at 1;
+- the head noun decides the type;
+- a build never touches anything else's random;
+- every floor with mobs lists every one of them, with the table matching the builds.
 
 What's switched on and shops have their own groups, with the books' facts written into the tests rather than read back from the banks:
 - each system arrives on the DCC Database's floor, and each floor's list of new, gone and still-on systems is checked against those floors;
