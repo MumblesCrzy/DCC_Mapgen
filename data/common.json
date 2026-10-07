@@ -4340,5 +4340,102 @@
    "once": true,
    "text": "a crawler may specialize their class again"
   }
- ]
+ ],
+ "SHOP_RULES": {
+  "from_floor": 3,
+  "base": 5,
+  "general_markup": 3,
+  "general_pays": 0.25,
+  "purse": {
+   "per": 25,
+   "power": 4
+  },
+  "bed": {
+   "per": 5,
+   "power": 2
+  },
+  "shopkeeper_level": {
+   "per_floor": 3,
+   "spread": 10
+  },
+  "kinds": [
+   {
+    "pool": "weapons",
+    "name": "Weapons",
+    "mult": 1.2,
+    "shop": "armorers"
+   },
+   {
+    "pool": "apparel",
+    "name": "Armor and clothing",
+    "mult": 1.0,
+    "shop": "armorers"
+   },
+   {
+    "pool": "footwear",
+    "name": "Footwear",
+    "mult": 0.8,
+    "shop": "armorers"
+   },
+   {
+    "pool": "consumables",
+    "name": "Potions and consumables",
+    "mult": 0.5,
+    "shop": "potion shops"
+   },
+   {
+    "pool": "magic",
+    "name": "Scrolls and magic items",
+    "mult": 1.5,
+    "shop": "magic shops"
+   },
+   {
+    "pool": "tools",
+    "name": "Tools",
+    "mult": 0.6,
+    "shop": "outfitters"
+   },
+   {
+    "pool": "explosives",
+    "name": "Explosives",
+    "mult": 0.8,
+    "shop": "outfitters"
+   },
+   {
+    "pool": "oddities",
+    "name": "Oddities",
+    "mult": 0.7,
+    "shop": "curio dealers"
+   },
+   {
+    "pool": "offworld",
+    "name": "Offworld goods",
+    "mult": 2.0,
+    "shop": "curio dealers"
+   },
+   {
+    "pool": "pet",
+    "name": "Pet gear",
+    "mult": 1.0,
+    "shop": "pet shops"
+   }
+  ],
+  "services": [
+   {
+    "what": "Private security in the Desperado Club",
+    "from": 3,
+    "price": "300 gold a crawler per visit, or 400 for a pair"
+   },
+   {
+    "what": "A personal space",
+    "from": 4,
+    "price": "50,000 gold, with about a quarter's room to haggle: 37,500 at best"
+   },
+   {
+    "what": "A personal space upgrade",
+    "from": 4,
+    "price": "50,000 to 500,000 gold each: a training room, a better crafting studio, a better shower"
+   }
+  ]
+ }
 }

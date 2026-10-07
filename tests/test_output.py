@@ -1267,6 +1267,119 @@ class SystemsTest(unittest.TestCase):
         self.assertFalse([s for s in mg.SYSTEMS if "blood" in json.dumps(s).lower()])
 
 
+class ShopsTest(unittest.TestCase):
+    """Shops and prices. The books' rules are written out here: marketplaces
+    from the Third Floor; a general store charges three times a specialist's
+    price; a personal space is 50,000 gold; Desperado Club security is 300 a
+    crawler. The prices themselves are ours, and are checked for their shape:
+    a box's worth of gold for an item of its tier, rising with the floor."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.md = {f: mg.generate(f, "small", 4242, images=False).markdown for f in mg.FLOORS}
+
+    def _section(self, f):
+        md = self.md[f]
+        return md[md.index("## Shops and Prices"):md.index("## Loot Boxes")]
+
+    def test_shops_open_on_the_third_floor(self):
+        for f in mg.FLOORS:
+            self.assertEqual("## Shops and Prices" in self.md[f], f >= 3, f"floor {f}")
+
+    def test_the_books_rules_are_stated(self):
+        for f in (3, 6, 11):
+            sec = self._section(f)
+            self.assertIn("sell at three times a specialist's price", sec)
+            self.assertIn("will buy anything", sec)
+            self.assertIn("do not buy from crawlers", sec)
+            self.assertIn("higher than the shopkeeper's level hears it straight", sec)
+            self.assertIn("300 gold a crawler per visit, or 400 for a pair", sec)
+        self.assertNotIn("A personal space", self._section(3), "not on sale until Floor 4")
+        for f in (4, 9):
+            self.assertIn("A personal space: 50,000 gold", self._section(f))
+
+    def test_an_item_is_worth_about_a_box_of_its_tier(self):
+        """List price is within a factor of the kind's multiplier of the average
+        gold in a box of the same tier on the same floor."""
+        lb = mg.LOOT_BOXES["gold"]
+        lo, hi = lb["roll"]
+        for f in (3, 4, 6, 9, 11):
+            for tier, power in lb["tier_power"].items():
+                box = (lo + hi) / 2 * f ** power
+                for k in mg.SHOP_RULES["kinds"]:
+                    price = mg.list_price(tier, k["pool"], f)
+                    self.assertTrue(0.25 * box <= price <= 2.5 * box,
+                                    f"floor {f} {tier} {k['pool']}: {price} vs a box's {box}")
+
+    def test_prices_rise_with_tier_and_floor(self):
+        tiers = mg.LOOT_BOX_TIERS
+        for k in mg.SHOP_RULES["kinds"]:
+            for f in (3, 6, 11):
+                row = [mg.list_price(t, k["pool"], f) for t in tiers]
+                self.assertEqual(row, sorted(row), f"{k['pool']} floor {f}")
+                self.assertLess(row[0], row[-1])
+            for t in tiers:
+                col = [mg.list_price(t, k["pool"], f) for f in range(3, 12)]
+                self.assertEqual(col, sorted(col), f"{k['pool']} {t}")
+
+    def test_every_kind_of_loot_has_a_price_and_a_shop(self):
+        self.assertEqual({k["pool"] for k in mg.SHOP_RULES["kinds"]},
+                         set(mg.LOOT_BOXES["items"]))
+        sec = self._section(4)
+        for k in mg.SHOP_RULES["kinds"]:
+            row = next(ln for ln in sec.splitlines() if ln.startswith(f"| {k['name']} |"))
+            cells = [c.strip() for c in row.strip("|").split("|")]
+            self.assertEqual(cells[1], k["shop"])
+            self.assertEqual([int(c.replace(",", "")) for c in cells[2:]],
+                             [mg.list_price(t, k["pool"], 4) for t in mg.LOOT_BOX_TIERS])
+
+    def test_charisma_matches_the_stat_rules(self):
+        knobs = mg.CRAWLER_STATS["knobs"]
+        sec = self._section(5)
+        self.assertIn(f"each point takes {knobs['discount_per']}% off", sec)
+        self.assertIn(f"up to {knobs['discount_cap']}%", sec)
+
+    def test_a_box_says_what_a_general_store_would_pay(self):
+        roller = mg.LootRoller(seed=11)
+        for text in ("Gold Weapon Box", "Silver Boss Box", "Platinum Benefactor Box",
+                     "Legendary Adventurer Box"):
+            for floor in (1, 2, 3, 6):
+                box = roller.open_text(text, floor)
+                self.assertEqual(len(box.item_pools), len(box.items))
+                worth = box.sale_value()
+                if floor < 3:
+                    self.assertEqual(worth, 0)
+                    self.assertNotIn("general store", box.markdown())
+                    continue
+                parts = sum(mg.store_pays(t, p, floor)
+                            for t, p in zip(box.item_tiers, box.item_pools) if p)
+                self.assertTrue(0.9 * parts <= worth <= 1.1 * parts, (worth, parts))
+                self.assertIn(f"A general store would pay about {worth:,} gold for the lot.",
+                              box.markdown())
+                if box.sponsor_note:
+                    self.assertTrue(box.markdown().endswith(box.sponsor_note))
+        bounty = roller.open_text("Legendary Bounty Box", 6)
+        self.assertEqual(bounty.sale_value(), 0)
+
+    def test_a_fan_boxs_joke_is_worth_nothing(self):
+        roller = mg.LootRoller(seed=11)
+        for _ in range(40):
+            box = roller.open_text("Gold Fan Box", 5, liked=50)
+            if box.outcome == "good":
+                self.assertGreater(box.sale_value(), 0)
+            else:
+                self.assertEqual(box.sale_value(), 0, box.outcome)
+
+    def test_it_is_shared_matter_not_the_floors_own(self):
+        for f in range(3, 12):
+            if f not in mg.FLOORS:
+                continue
+            md = self.md[f]
+            for head in ("## Other Crawlers", "## Achievements", "## What's Switched On"):
+                md = md.replace(head, "## Elsewhere")
+            self.assertNotIn("Shops and Prices", mg.floor_body(md), f"floor {f}")
+
+
 class LeaderboardTest(unittest.TestCase):
     """The Top Ten by ratings, from Floor 4, each with a bounty on their head.
 

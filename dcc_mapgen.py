@@ -1044,10 +1044,22 @@ class OpenedBox:
     outcome: str = ""          # a Fan box's vote: good, neutral or bad
     threat: str = ""           # what a Benefactor box was prepared for
     sponsor_note: str = ""     # who sent a Benefactor box, and what they said
+    # The kind of each item, for pricing; "" for something no shop would buy.
+    item_pools: List[str] = field(default_factory=list)
 
     @property
     def label(self) -> str:
         return f"{self.tier} {self.box_type} Box"
+
+    def sale_value(self) -> int:
+        """What a general store would pay for everything in the box, before
+        Charisma. Nothing before the Third Floor, where shops open."""
+        if self.floor < SHOP_RULES["from_floor"]:
+            return 0
+        total = sum(store_pays(t, p, self.floor)
+                    for t, p in zip(self.item_tiers, self.item_pools) if p)
+        # Rounded like the prices it adds up: "about 14,342" is false precision.
+        return _two_figures(total) if total else 0
 
     def markdown(self) -> str:
         """The box on one line, its items grouped under the tier each rolled at:
@@ -1067,9 +1079,11 @@ class OpenedBox:
         else:
             body = "; ".join(self.items)           # a bounty, not a set of items
         gold = f". **{self.gold:,} gold**" if self.gold else ""
+        worth = self.sale_value()
+        sale = f" A general store would pay about {worth:,} gold for the lot." if worth else ""
         # The sponsor's note goes last: it ends in a quote with its own stop.
         sponsor = f" {self.sponsor_note}" if self.sponsor_note else ""
-        return f"- **{self.label}**{note} — {body}{gold}.{sponsor}"
+        return f"- **{self.label}**{note} — {body}{gold}.{sale}{sponsor}"
 
 
 def benefactor_threats() -> List[str]:
@@ -1088,7 +1102,7 @@ class ThreatSign:
 # Sections every floor carries whatever is on it. Scanning them would find the same
 # threats everywhere -- the loot section lists all twelve by name.
 _SHARED_SECTIONS = ("## Other Crawlers", "## Achievements", "## What's Switched On",
-                    "## Loot Boxes", "## Crawler Stats")
+                    "## Shops and Prices", "## Loot Boxes", "## Crawler Stats")
 
 
 def floor_body(markdown: str) -> str:
@@ -1374,6 +1388,7 @@ class LootRoller:
                                  counters["effects"][band]).draw()
         items = [self._make(main_pool, top, headline=True, counter=counter)]
         tiers = [top]
+        kinds = [main_pool]
         # Each lesser item rolls its own tier, evenly, from the box's list, and
         # its own kind: mostly support for the main item rather than more of it.
         # A prepared Benefactor box spends every lesser item on the threat: the
@@ -1385,14 +1400,19 @@ class LootRoller:
                 band = LOOT_BANDS[t]
                 item = self._deck(f"counter:{prepared}:{band}",
                                   counters["items"][band]).draw()
+                # A counter is bought for one threat, so a shop prices it as an
+                # oddity rather than as whatever it happens to look like.
+                pool = "oddities"
             else:
-                item = self._make(self._lesser_pool(main_pool), t, headline=False)
-            lesser.append((t, item))
+                pool = self._lesser_pool(main_pool)
+                item = self._make(pool, t, headline=False)
+            lesser.append((t, item, pool))
         # Best first, so the line reads down the tiers; sorting after the rolls
         # changes nothing about what was rolled.
-        lesser.sort(key=lambda pair: -LOOT_BOX_TIERS.index(pair[0]))
-        tiers += [t for t, _ in lesser]
-        items += [item for _, item in lesser]
+        lesser.sort(key=lambda entry: -LOOT_BOX_TIERS.index(entry[0]))
+        tiers += [t for t, _, _ in lesser]
+        items += [item for _, item, _ in lesser]
+        kinds += [pool for _, _, pool in lesser]
 
         sponsor_note = ""
         if benefactor:
@@ -1407,7 +1427,8 @@ class LootRoller:
         if prepared:
             note = (f"opened at {top}; prepared for {counters['label']}")
         return OpenedBox(tier, box_type["name"], top, items, note, gold=gold, floor=floor,
-                         item_tiers=tiers, threat=prepared or "", sponsor_note=sponsor_note)
+                         item_tiers=tiers, threat=prepared or "", sponsor_note=sponsor_note,
+                         item_pools=kinds)
 
     def _open_fan(self, tier: str, box_type: dict, floor: int, liked: float) -> OpenedBox:
         """A Fan box is whatever the audience decided. Good is one useful thing at
@@ -1417,8 +1438,10 @@ class LootRoller:
         fan = LOOT_BOXES["fan"]
         odds = fan_odds(liked)
         outcome = self.rng.choices(list(odds), weights=list(odds.values()))[0]
+        pool = ""                 # a joke or a punishment: nothing a shop would buy
         if outcome == "good":
-            item = self._make(self._weighted_pool(fan["good_pools"]), tier, headline=True)
+            pool = self._weighted_pool(fan["good_pools"])
+            item = self._make(pool, tier, headline=True)
         elif outcome == "neutral":
             item = self._deck("fan:neutral", fan["neutral"]).draw()
         else:
@@ -1428,7 +1451,7 @@ class LootRoller:
         note = (f"{liked:g}% liked it: {odds['good']:.0%} good, {odds['neutral']:.0%} "
                 f"neutral, {odds['bad']:.0%} bad")
         return OpenedBox(tier, box_type["name"], tier, [item], note, gold=gold, floor=floor,
-                         item_tiers=[tier], outcome=outcome)
+                         item_tiers=[tier], outcome=outcome, item_pools=[pool])
 
     def open_text(self, text: str, floor: int = 1, *, threat: Optional[str] = None,
                   liked: Optional[float] = None) -> OpenedBox:
@@ -1656,6 +1679,88 @@ def systems_section(floor: int) -> List[str]:
     if upcoming and floor + 1 in FLOORS:
         o.append(f"**Next floor:** {', '.join(s['name'] for s in upcoming)}.")
         o.append("")
+    return o
+
+
+# -- shops and prices -------------------------------------------------------------
+
+def _two_figures(x: float) -> int:
+    """A price as a shop would mark it: two significant figures, never under 1."""
+    return max(1, int(round(float(f"{x:.2g}"))))
+
+
+def _kind(pool: str) -> dict:
+    return next(k for k in SHOP_RULES["kinds"] if k["pool"] == pool)
+
+
+def list_price(tier: str, pool: str, floor: int) -> int:
+    """What a specialist charges for an item of this tier and kind on this floor:
+    about the gold in a box of the same tier, so an item found is worth about the
+    gold it could have been."""
+    power = LOOT_BOXES["gold"]["tier_power"][tier]
+    return _two_figures(SHOP_RULES["base"] * _kind(pool)["mult"] * floor ** power)
+
+
+def store_pays(tier: str, pool: str, floor: int) -> int:
+    """What a general store pays a crawler for one, before Charisma."""
+    return _two_figures(list_price(tier, pool, floor) * SHOP_RULES["general_pays"])
+
+
+def shop_purse(floor: int) -> int:
+    p = SHOP_RULES["purse"]
+    return _two_figures(p["per"] * floor ** p["power"])
+
+
+def bed_price(floor: int) -> int:
+    b = SHOP_RULES["bed"]
+    return _two_figures(b["per"] * floor ** b["power"])
+
+
+def shopkeeper_levels(floor: int) -> Tuple[int, int]:
+    k = SHOP_RULES["shopkeeper_level"]
+    return k["per_floor"] * floor, k["per_floor"] * floor + k["spread"]
+
+
+def shops_section(floor: int) -> List[str]:
+    """Where to buy, where to sell, and what things cost on this floor. Nothing
+    before the Third Floor, where marketplaces open."""
+    s = SHOP_RULES
+    if floor < s["from_floor"]:
+        return []
+    knobs = CRAWLER_STATS["knobs"]
+    lo, hi = shopkeeper_levels(floor)
+    specialists = list(dict.fromkeys(k["shop"] for k in s["kinds"]))
+    tiers = LOOT_BOX_TIERS
+    o = ["## Shops and Prices", "",
+         f"Marketplaces open on the Third Floor. These are Floor {floor}'s prices; "
+         f"everything costs more a floor down, the same way the gold in a loot box "
+         f"grows.", "",
+         f"- **General stores** are everywhere and will buy anything, but they sell at "
+         f"{_COUNT_WORD.get(s['general_markup'], s['general_markup'])} times a "
+         f"specialist's price. Sell to them; buy elsewhere.",
+         f"- **Specialists** ({', '.join(specialists)}) are only in settlements. They "
+         f"sell at list price and do not buy from crawlers.",
+         f"- **Selling:** a general store pays {s['general_pays']:.0%} of list, out of a "
+         f"purse of {shop_purse(floor):,} gold on this floor that refills overnight. An "
+         f"empty purse buys nothing.",
+         f"- **Charisma:** each point takes {knobs['discount_per']}% off what a crawler "
+         f"pays and adds {knobs['discount_per']}% to what a store pays them, up to "
+         f"{knobs['discount_cap']}%.",
+         f"- **Shopkeepers** here are level {lo}–{hi}. They cannot lie about an item, "
+         f"but they exaggerate; a crawler whose Charisma is higher than the shopkeeper's "
+         f"level hears it straight.", "",
+         f"**List prices on Floor {floor}**, in gold, as a specialist charges them. An "
+         f"item's tier is the one it rolled in its box.", "",
+         "| Kind | Sold by | " + " | ".join(tiers) + " |",
+         "| --- | --- | " + " | ".join("---:" for _ in tiers) + " |"]
+    for k in s["kinds"]:
+        o.append(f"| {k['name']} | {k['shop']} | "
+                 + " | ".join(f"{list_price(t, k['pool'], floor):,}" for t in tiers) + " |")
+    o += ["", "**Services:**", "",
+          f"- A bed in a safe room: {bed_price(floor):,} gold a night (free on the first "
+          f"two floors)."]
+    o += [f"- {sv['what']}: {sv['price']}." for sv in s["services"] if sv["from"] <= floor]
+    o.append("")
     return o
 
 
@@ -5818,6 +5923,9 @@ def _render_floor(fl, floor: int) -> str:
     # it is worked out before the systems go on.
     body = floor_body(text)
     text = text.rstrip("\n") + "\n\n" + "\n".join(systems_section(floor))
+    shops = shops_section(floor)
+    if shops:
+        text = text.rstrip("\n") + "\n\n" + "\n".join(shops)
     text = text.rstrip("\n") + "\n\n" + "\n".join(loot_box_section(fl, body))
     # The stat rules go on here rather than inside crawler_section, so that they
     # land at the end of every floor instead of wherever that floor happens to

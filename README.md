@@ -25,6 +25,14 @@ A procedural floor/map generator in the style of the *Dungeon Crawler Carl* book
 - **Floor 10** (Don't Come In Last) — seven-heat race season, garage/vehicle/upgrades.
 - **Floor 11** (A Parade of Horribles) — parade route, judges, arena boss.
 - **What's switched on** — every floor's write-up says which of the dungeon's systems are new on that floor, which have gone, which are still on from earlier floors, and what the next floor brings: sponsors from Floor 4 (a second on 5, a third on 6), the leaderboard and personal spaces from 4, races and classes on 3, guilds and the thirty-member party cap on 6, the Desperado Club's levels on 3, 6 and 9, and so on. The floors come from the DCC Database's Crawler, Safe Rooms, Sponsors, Guilds, Marketplace and Game Guide pages. Where two pages disagree, the System's own announcement wins: personal spaces go on sale on the Fourth Floor. The blood bar in the Floor 6 and Floor 8 rules is not among them, since nothing in the Database has one.
+- **Shops and prices** — from Floor 3, where marketplaces open, every write-up has a price list and the rules for buying and selling. From the books:
+  - general stores are everywhere and buy anything, but sell at three times a specialist's price;
+  - specialists are only in settlements;
+  - merchants have only so much gold to buy with;
+  - a shopkeeper exaggerates unless the crawler's Charisma beats the shopkeeper's level;
+  - a personal space costs 50,000 gold.
+
+  The books name no item prices, so those are this project's own. An item's list price is about the gold in a loot box of its tier on that floor (5 × the kind's factor × Floor ^ tier), so finding an item is worth about as much as finding the gold. Kind factors run from potions at ×0.5 to offworld goods at ×2. A general store pays a quarter of list. Charisma moves both buying and selling by the stat rules' 2% a point. An opened box says what a general store would pay for everything in it. The numbers live in `SHOP_RULES` in `data/common.json`.
 - **Campaigns** — other crawler teams carry from floor to floor, keeping who they are and where they stand with the party, until their luck runs out. From Floor 3 they carry a party of named races and classes too, and from Floor 4 a Top Ten leaderboard with bounties tracks who is ranked, who fell off and who came back. See [Campaigns](#campaigns).
 - A **desktop app** (`dcc_mapgen_gui.py`) wrapping all of the above: pick a floor and size, generate, and read the write-up and browse every map without leaving the window. See [Desktop app](#desktop-app).
 - Every floor supports `--seed` for reproducible maps — byte-for-byte, and [tested](#tests) as such — and `--image`/`--save` for SVG or PNG output (PNG needs the optional `resvg-py` package). The seed is per floor: one seed carried across a whole campaign gives a different dungeon on each floor.
@@ -721,6 +729,15 @@ checked:
 - someone who fell off is never dealt back on under a new name;
 - each refused edit leaves the campaign exactly as it was;
 - the whole leaderboard survives a save and load.
+
+What's switched on and shops have their own groups, with the books' facts written into the tests rather than read back from the banks:
+- each system arrives on the DCC Database's floor, and each floor's list of new, gone and still-on systems is checked against those floors;
+- shops open on Floor 3, and a general store charges three times a specialist's price;
+- a personal space costs 50,000 gold, and is not on sale until Floor 4;
+- every list price is within reach of the gold in a box of its tier, and rises with tier and floor;
+- every kind of loot has a price and a shop;
+- Charisma reads the same as the stat rules;
+- an opened box's sale value adds up its items, is nothing before Floor 3, and is nothing for a Fan box's joke.
 
 A seventh group covers the stat rules, where the risk is drift rather than variety:
 the section renders identically on every floor and seed, it is the last section of
