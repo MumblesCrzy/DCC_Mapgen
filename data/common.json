@@ -4454,6 +4454,7 @@
    "floor": 9
   },
   "trick_cost": 3,
+  "hit_per_point": 5,
   "poorly_built_in": 8,
   "types": [
    {

@@ -506,11 +506,31 @@ boss's stat points are worth at three levels:
 - a leaderboard crawler, from `MOB_BUILDS.party_levels`;
 - a crawler of the boss's own level.
 
-Floor 11's level-134 floor boss comes out at 3.7 crawlers of level 105, 3.2 of level
-120, and 2.9 of its own level. Stat points don't care how a crawler fights: a
-caster's Intelligence counts the same as a brawler's Strength. The table leaves out
-gear, class and the boss's mechanic, and says so: deeper down, gear and abilities
-mean a party needs fewer people, and the mechanic can mean it needs more.
+Stat points don't care how a crawler fights: a caster's Intelligence counts the
+same as a brawler's Strength. The table leaves out gear, class and the boss's
+mechanic, and says so: deeper down, gear and abilities mean a party needs fewer
+people, and the mechanic can mean it needs more. Where the boss kills a crawler of
+that level in one hit, the cell says **one-shot** instead of a number. Then no
+number of crawlers is enough: each one goes down before doing anything.
+
+Last comes **You're going to die**, listing every mob and boss, hardest hit first,
+with the level a crawler needs to live through one hit:
+- **A full-strength hit** is the mob's STR × 5, or INT × 5 for a trick if that is
+  bigger and it has the MP. That is a third of the 15 HP a point of Constitution
+  gives, so a hit kills outright when the stat behind it is at least three times
+  the crawler's CON. The multiplier is `MOB_BUILDS.hit_per_point`.
+- **Two crawlers are measured:** one with their points spread evenly, and a
+  veteran with half of them in Constitution.
+- **The floor's cutoff** is the level its hardest-hitting ordinary mob stops
+  one-shotting the evenly spread crawler. Below that, a crawler shouldn't be on the
+  floor at all.
+
+Ordinary mobs gain a point a level to a crawler's three, so an ordinary crawler
+always clears their own floor's mobs. The cutoff is about being underleveled: 17 on
+Floor 4 at medium seed 4242. Bosses are a different matter. That same Floor 4's
+Station Mimic one-shots both an ordinary crawler and a leaderboard one. Floor 11's
+level-134 floor boss hits for 2,710: it one-shots an evenly spread crawler below
+level 295, and a veteran with half their points in Constitution below level 118.
 
 Each build is seeded by the mob itself, so the same mob at the same level always
 has the same stats, and adding the Bestiary moved nothing else on any floor. The
@@ -800,7 +820,15 @@ city bosses. It checks:
 - a build never touches anything else's random;
 - every floor with mobs lists every one of them, with the table matching the builds;
 - every boss's party equivalents are its points over a crawler's (20 plus 3 a level),
-  with the ordinary level set by the median band top, not one outlier.
+  with the ordinary level set by the median band top, not one outlier, and
+  "one-shot" exactly where its hit is at least that crawler's HP;
+- a hit is the bigger of STR × 5 and a trick's INT × 5, and kills when it is at
+  least the crawler's HP, a hit equal to their HP included;
+- every floor lists every mob and boss hardest hit first, with the right level to
+  live through each, and the floor's cutoff comes from its ordinary mobs, not its
+  bosses;
+- an ordinary crawler lives through every ordinary mob on their floor, and the
+  Floor 11 boss kills an ordinary crawler there in one hit.
 
 What's switched on and shops have their own groups, with the books' facts written into the tests rather than read back from the banks:
 - each system arrives on the DCC Database's floor, and each floor's list of new, gone and still-on systems is checked against those floors;

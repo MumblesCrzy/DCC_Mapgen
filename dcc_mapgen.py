@@ -1800,12 +1800,26 @@ class MobBuild:
         return self.mp // MOB_BUILDS["trick_cost"]
 
     @property
+    def hit(self) -> Tuple[int, str]:
+        """Its biggest single hit, and what is behind it: a full-strength blow off
+        its STR, or its trick off its INT if that is the bigger and it has the MP
+        for one use. Ties go to the blow."""
+        per = MOB_BUILDS["hit_per_point"]
+        blow = self.stats["STR"]
+        trick = self.stats["INT"] if self.tricks else 0
+        return (trick * per, "trick") if trick > blow else (blow * per, "STR")
+
+    @property
     def points(self) -> int:
         return sum(self.stats.values())
 
     def crawlers_at(self, level: int) -> float:
         """How many crawlers of this level its stat points are worth."""
         return self.points / crawler_points(level)
+
+    def one_shots(self, level: int, half: bool = False) -> bool:
+        """Whether its hit kills a crawler of this level outright."""
+        return self.hit[0] >= crawler_hp(level, half)
 
     @property
     def even_for(self) -> int:
@@ -1819,6 +1833,24 @@ def crawler_points(level: int) -> int:
     """A crawler's stat points at a level: 4 in each stat, plus their points a level."""
     return (MOB_BUILDS["base"] * len(STAT_ORDER)
             + CRAWLER_STATS["knobs"]["points_per_level"] * level)
+
+
+def crawler_hp(level: int, half: bool = False) -> int:
+    """A crawler's health at a level: CON x hp_per_con, with CON at 4 plus a fifth
+    of their points (spread evenly) or, with half, half of them -- the build of a
+    veteran who has learned where the points go."""
+    k = CRAWLER_STATS["knobs"]
+    spent = k["points_per_level"] * level
+    con = MOB_BUILDS["base"] + (spent // 2 if half else spent // len(STAT_ORDER))
+    return con * k["hp_per_con"]
+
+
+def lives_through(hit: int, half: bool = False) -> int:
+    """The lowest crawler level that lives through a hit, with HP to spare."""
+    level = 1
+    while crawler_hp(level, half) <= hit:
+        level += 1
+    return level
 
 
 def party_levels(floor: int, beasts: List["MobBuild"]) -> Tuple[int, int, bool]:
@@ -2041,14 +2073,66 @@ def bestiary_section(fl) -> List[str]:
               "worth more than their own points, so a well-equipped party needs fewer "
               "people than this says. It leaves out the boss's own mechanic too, and that "
               "can need more.", "",
+              "*One-shot* means the boss's hit kills a crawler of that level outright, with "
+              "their points spread evenly, and then no number of them is enough. **You're "
+              "going to die**, below, gives the level each boss stops doing it.", "",
               f"| Boss | Level | Points | Crawlers at L{ordinary} | Crawlers at L{leader} "
               f"| Crawlers of its level |",
               "| --- | ---: | ---: | ---: | ---: | ---: |"]
+
+        def against(b, level):
+            return "one-shot" if b.one_shots(level) else f"{b.crawlers_at(level):.1f}"
         for b in bosses:
-            o.append(f"| {b.name} | {b.level} | {b.points:,} | "
-                     f"{b.crawlers_at(ordinary):.1f} | {b.crawlers_at(leader):.1f} | "
-                     f"{b.crawlers_at(b.level):.1f} |")
+            o.append(f"| {b.name} | {b.level} | {b.points:,} | {against(b, ordinary)} | "
+                     f"{against(b, leader)} | {against(b, b.level)} |")
+    o += _going_to_die(beasts)
     o.append("")
+    return o
+
+
+def _going_to_die(beasts: List[MobBuild]) -> List[str]:
+    """The level below which each mob and boss kills a crawler in one hit, and the
+    floor's own cutoff: the level its hardest-hitting ordinary mob stops doing it.
+    A party of any size loses to a one-hit kill, one crawler at a time."""
+    per, k = MOB_BUILDS["hit_per_point"], CRAWLER_STATS["knobs"]
+    o = ["", "### You're going to die", "",
+         "Numbers don't help against something that kills in one hit: each crawler who "
+         "steps up goes down before they can do anything, and the next goes the same way. "
+         f"A mob's full-strength hit is its STR x {per}, or its INT x {per} if its trick "
+         f"hits harder and it has the MP for one use. That kills a crawler outright when it "
+         f"is at least their HP, so when the stat behind it is at least "
+         f"{k['hp_per_con'] / per:g} times their CON.", "",
+         "Below, the level a crawler needs to live through it: with their points spread "
+         "evenly, and with half of them in Constitution, as veterans learn to do. A trick "
+         "is counted as a hit; if this one's trick is something else, a charm or a theft, "
+         f"use its STR x {per} instead.", ""]
+    mobs = [b for b in beasts if b.tier == "mob"]
+    if mobs:
+        worst = max(mobs, key=lambda b: b.hit[0])
+        hit, behind = worst.hit
+        cutoff = lives_through(hit)
+        how = "off STR" if behind == "STR" else "with a trick"
+        if cutoff == 1:
+            o += [f"**Nothing ordinary on this floor kills a crawler in one hit**, not even "
+                  f"at level 1: the hardest hit among its ordinary mobs is {hit:,}, "
+                  f"{how}, from {worst.name}.", ""]
+        else:
+            o += [f"**This floor's cutoff is level {cutoff}.** Below it, a crawler with their "
+                  f"points spread evenly dies in one hit to the floor's hardest-hitting "
+                  f"ordinary mob: {worst.name}, at {hit:,} {how}. With half their points in "
+                  f"Constitution, a crawler lives through it from level "
+                  f"{lives_through(hit, half=True)}.", ""]
+
+    def below(hit, half=False):
+        level = lives_through(hit, half)
+        return "—" if level == 1 else f"below L{level}"
+    o += ["| Mob or boss | Level | Hit | With | One-shots, spread evenly "
+          "| One-shots, half in CON |",
+          "| --- | ---: | ---: | --- | ---: | ---: |"]
+    for b in sorted(beasts, key=lambda b: -b.hit[0]):
+        hit, behind = b.hit
+        o.append(f"| {b.name} | {b.level} | {hit:,} | {behind} | {below(hit)} "
+                 f"| {below(hit, half=True)} |")
     return o
 
 

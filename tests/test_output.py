@@ -1380,7 +1380,7 @@ class BestiaryTest(unittest.TestCase):
             if not beasts:
                 continue
             sec = md[md.index("## Bestiary"):md.index("## What's Switched On")]
-            main = sec.split("### Bosses against a party")[0]
+            main = sec.split("\n### ")[0]
             rows = [ln for ln in main.splitlines() if ln.startswith("| ") and "---" not in ln][1:]
             self.assertEqual(len(rows), len(beasts), f"floor {f}")
             for row, b in zip(rows, beasts):
@@ -1422,7 +1422,7 @@ class BestiaryTest(unittest.TestCase):
 
     def _boss_rows(self, md):
         start = md.index("### Bosses against a party")
-        sec = md[start:md.index("## What's Switched On")]
+        sec = md[start:md.index("### You're going to die")]
         head = next(ln for ln in sec.splitlines() if ln.startswith("| Boss |"))
         levels = [int(x) for x in re.findall(r"Crawlers at L(\d+)", head)]
         rows = [ln for ln in sec.splitlines()
@@ -1431,7 +1431,8 @@ class BestiaryTest(unittest.TestCase):
 
     def test_every_boss_is_measured_against_a_party(self):
         """Points over a crawler's points -- 20, plus 3 a level -- at an ordinary
-        crawler's level, a leaderboard crawler's, and the boss's own."""
+        crawler's level, a leaderboard crawler's, and the boss's own; or one-shot,
+        where its hit kills that crawler outright and no number of them will do."""
         for f, res in self.res.items():
             beasts = mg.floor_bestiary(res.floor)
             bosses = [b for b in beasts if b.tier != "mob"]
@@ -1447,7 +1448,11 @@ class BestiaryTest(unittest.TestCase):
                 self.assertEqual(int(cells[2].replace(",", "")), sum(b.stats.values()))
                 for cell, level in zip(cells[3:6], levels + [b.level]):
                     want = sum(b.stats.values()) / (20 + self.CRAWLER * level)
-                    self.assertEqual(cell, f"{want:.1f}", f"floor {f} {b.name} at L{level}")
+                    if self._hit(b)[0] >= self._hp(level):
+                        want = "one-shot"
+                    else:
+                        want = f"{want:.1f}"
+                    self.assertEqual(cell, want, f"floor {f} {b.name} at L{level}")
             self.assertIn("leaves out is gear and class", sec)
             self.assertIn("a caster's Intelligence counts the same as a brawler's Strength", sec)
 
@@ -1472,6 +1477,100 @@ class BestiaryTest(unittest.TestCase):
         spawn_top = max(b.band[1] for b in four if b.tier == "mob")
         self.assertLess(mg.party_levels(4, four)[0], spawn_top,
                         "the mimic's spawn set Floor 4's ordinary crawler")
+
+    # -- you're going to die --------------------------------------------------
+    # A full-strength hit is 5 a point of the stat behind it, a third of the 15 HP
+    # a point of CON gives: STR, or INT for a trick if that is bigger and the mob
+    # has 3 MP for one use. A crawler's CON is 4 plus a fifth of their points
+    # (spread evenly) or half of them (a veteran's build).
+
+    def _hit(self, b):
+        trick = b.stats["INT"] if b.stats["INT"] >= 3 else 0
+        if trick > b.stats["STR"]:
+            return trick * 5, "trick"
+        return b.stats["STR"] * 5, "STR"
+
+    @staticmethod
+    def _hp(level, half=False):
+        spent = 3 * level
+        return (4 + (spent // 2 if half else spent // 5)) * 15
+
+    def _lives_from(self, hit, half=False):
+        return next(lv for lv in range(1, 100000) if self._hp(lv, half) > hit)
+
+    def test_a_hit_is_three_times_a_crawlers_con_to_kill(self):
+        for name in self.NAMES:
+            for tier in self.TIERS:
+                for level in (1, 9, 40, 130):
+                    b = mg.build_mob(name, level, tier)
+                    self.assertEqual(b.hit, self._hit(b), f"{name} {tier} L{level}")
+        for level in (1, 4, 5, 25, 105, 300):
+            for half in (False, True):
+                self.assertEqual(mg.crawler_hp(level, half), self._hp(level, half))
+                con = self._hp(level, half) // 15
+                # one-shot exactly when the stat behind the hit is 3x their CON
+                for stat in (3 * con - 1, 3 * con):
+                    self.assertEqual(stat * 5 >= mg.crawler_hp(level, half), stat >= 3 * con)
+        for hit in (0, 59, 60, 61, 200, 2710):
+            for half in (False, True):
+                self.assertEqual(mg.lives_through(hit, half), self._lives_from(hit, half))
+        # STR 12 hits for 60, exactly a level-1 crawler's HP: that is a kill
+        exact = mg.MobBuild("Probe", "here", 8, (8, 8), "mob", "brute",
+                            {"STR": 12, "DEX": 4, "CON": 4, "INT": 4, "CHA": 4})
+        self.assertEqual(exact.hit, (self._hp(1), "STR"))
+        self.assertTrue(exact.one_shots(1), "a hit equal to their HP left them alive")
+        self.assertFalse(exact.one_shots(2))
+
+    def test_every_floor_says_where_youre_going_to_die(self):
+        """Every mob and boss, hardest hit first, with the level a crawler needs to
+        live through it; and the floor's own cutoff, from its ordinary mobs."""
+        for f, res in self.res.items():
+            beasts = mg.floor_bestiary(res.floor)
+            md = res.markdown
+            self.assertEqual("### You're going to die" in md, bool(beasts), f"floor {f}")
+            if not beasts:
+                continue
+            sec = md[md.index("### You're going to die"):md.index("## What's Switched On")]
+            rows = [ln for ln in sec.splitlines()
+                    if ln.startswith("| ") and "---" not in ln][1:]
+            self.assertEqual(len(rows), len(beasts), f"floor {f}")
+            # hardest hit first; a tie keeps the Bestiary's order (Floor 8 has the
+            # same mob in two regions, at two levels)
+            hardest = sorted(beasts, key=lambda b: -self._hit(b)[0])
+            for row, b in zip(rows, hardest):
+                cells = [c.strip() for c in row.strip("|").split("|")]
+                hit, behind = self._hit(b)
+                self.assertEqual(cells[:4], [b.name, str(b.level), f"{hit:,}", behind])
+                for cell, half in ((cells[4], False), (cells[5], True)):
+                    lv = self._lives_from(hit, half)
+                    self.assertEqual(cell, "—" if lv == 1 else f"below L{lv}", cells[0])
+            mobs = [b for b in beasts if b.tier == "mob"]
+            if not mobs:
+                self.assertNotIn("This floor's cutoff", sec)
+                continue
+            top = max(self._hit(b)[0] for b in mobs)
+            cutoff = self._lives_from(top)
+            if cutoff == 1:
+                self.assertIn("**Nothing ordinary on this floor kills a crawler in one hit**", sec)
+            else:
+                self.assertIn(f"**This floor's cutoff is level {cutoff}.**", sec, f"floor {f}")
+                self.assertIn(f"from level {self._lives_from(top, True)}.", sec)
+
+    def test_the_shape_of_it(self):
+        """An ordinary crawler lives through every ordinary mob on their floor --
+        mobs gain a point a level to their three -- and the Floor 11 boss, meant to
+        be deadly, kills an ordinary crawler there in one hit."""
+        for f, res in self.res.items():
+            beasts = mg.floor_bestiary(res.floor)
+            mobs = [b for b in beasts if b.tier == "mob"]
+            if not mobs:
+                continue
+            ordinary = mg.party_levels(f, beasts)[0]
+            for b in mobs:
+                self.assertLess(self._hit(b)[0], self._hp(ordinary), f"floor {f}: {b.name}")
+        eleven = mg.floor_bestiary(self.res[11].floor)
+        boss = next(b for b in eleven if b.tier != "mob")
+        self.assertGreaterEqual(self._hit(boss)[0], self._hp(mg.party_levels(11, eleven)[0]))
 
 
 class ShopsTest(unittest.TestCase):
