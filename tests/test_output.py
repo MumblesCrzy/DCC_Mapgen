@@ -1380,7 +1380,8 @@ class BestiaryTest(unittest.TestCase):
             if not beasts:
                 continue
             sec = md[md.index("## Bestiary"):md.index("## What's Switched On")]
-            rows = [ln for ln in sec.splitlines() if ln.startswith("| ") and "---" not in ln][1:]
+            main = sec.split("### Bosses against a party")[0]
+            rows = [ln for ln in main.splitlines() if ln.startswith("| ") and "---" not in ln][1:]
             self.assertEqual(len(rows), len(beasts), f"floor {f}")
             for row, b in zip(rows, beasts):
                 cells = [c.strip() for c in row.strip("|").split("|")]
@@ -1416,6 +1417,61 @@ class BestiaryTest(unittest.TestCase):
             for head in ("## Other Crawlers", "## Achievements"):
                 md = md.replace(head, "## Elsewhere")
             self.assertNotIn("## Bestiary", mg.floor_body(md), f"floor {f}")
+
+    # -- bosses against a party -----------------------------------------------
+
+    def _boss_rows(self, md):
+        start = md.index("### Bosses against a party")
+        sec = md[start:md.index("## What's Switched On")]
+        head = next(ln for ln in sec.splitlines() if ln.startswith("| Boss |"))
+        levels = [int(x) for x in re.findall(r"Crawlers at L(\d+)", head)]
+        rows = [ln for ln in sec.splitlines()
+                if ln.startswith("| ") and "---" not in ln and not ln.startswith("| Boss |")]
+        return sec, levels, rows
+
+    def test_every_boss_is_measured_against_a_party(self):
+        """Points over a crawler's points -- 20, plus 3 a level -- at an ordinary
+        crawler's level, a leaderboard crawler's, and the boss's own."""
+        for f, res in self.res.items():
+            beasts = mg.floor_bestiary(res.floor)
+            bosses = [b for b in beasts if b.tier != "mob"]
+            md = res.markdown
+            self.assertEqual("### Bosses against a party" in md, bool(bosses), f"floor {f}")
+            if not bosses:
+                continue
+            sec, levels, rows = self._boss_rows(md)
+            self.assertEqual(len(rows), len(bosses), f"floor {f}")
+            for row, b in zip(rows, bosses):
+                cells = [c.strip() for c in row.strip("|").split("|")]
+                self.assertEqual(cells[0], b.name)
+                self.assertEqual(int(cells[2].replace(",", "")), sum(b.stats.values()))
+                for cell, level in zip(cells[3:6], levels + [b.level]):
+                    want = sum(b.stats.values()) / (20 + self.CRAWLER * level)
+                    self.assertEqual(cell, f"{want:.1f}", f"floor {f} {b.name} at L{level}")
+            self.assertIn("leaves out is gear and class", sec)
+            self.assertIn("a caster's Intelligence counts the same as a brawler's Strength", sec)
+
+    def test_the_ordinary_crawler_is_where_the_floors_mobs_top_out(self):
+        """The median band top, so one outlier -- Floor 4's mimic spawn at the end
+        of the line -- does not set the level for the whole floor."""
+        for f, res in self.res.items():
+            beasts = mg.floor_bestiary(res.floor)
+            if not any(b.tier != "mob" for b in beasts):
+                continue
+            ordinary, leader, read = mg.party_levels(f, beasts)
+            tops = sorted(b.band[1] for b in beasts if b.tier == "mob")
+            if tops:
+                self.assertTrue(read)
+                self.assertEqual(ordinary, tops[len(tops) // 2], f"floor {f}")
+                self.assertLess(ordinary, max(tops) + 1)
+            else:
+                self.assertFalse(read)
+                self.assertIn("a typical crawler this deep", res.markdown)
+            self.assertGreater(leader, ordinary, f"floor {f}")
+        four = mg.floor_bestiary(self.res[4].floor)
+        spawn_top = max(b.band[1] for b in four if b.tier == "mob")
+        self.assertLess(mg.party_levels(4, four)[0], spawn_top,
+                        "the mimic's spawn set Floor 4's ordinary crawler")
 
 
 class ShopsTest(unittest.TestCase):

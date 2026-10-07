@@ -499,6 +499,19 @@ there so the trick is what decides the fight, not the DM's guesswork.
   nothing.
 - ***Even for*** is the crawler level with as many points to spend.
 
+The Bestiary ends with **Bosses against a party**, a table of how many crawlers each
+boss's stat points are worth at three levels:
+- an ordinary crawler on that floor, at the median of the floor's ordinary mob band
+  tops, so one late outlier like Floor 4's mimic spawn doesn't set it;
+- a leaderboard crawler, from `MOB_BUILDS.party_levels`;
+- a crawler of the boss's own level.
+
+Floor 11's level-134 floor boss comes out at 3.7 crawlers of level 105, 3.2 of level
+120, and 2.9 of its own level. Stat points don't care how a crawler fights: a
+caster's Intelligence counts the same as a brawler's Strength. The table leaves out
+gear, class and the boss's mechanic, and says so: deeper down, gear and abilities
+mean a party needs fewer people, and the mechanic can mean it needs more.
+
 Each build is seeded by the mob itself, so the same mob at the same level always
 has the same stats, and adding the Bestiary moved nothing else on any floor. The
 numbers live in `MOB_BUILDS` in `data/common.json`.
@@ -785,7 +798,9 @@ city bosses. It checks:
 - about one in eight is poorly built, with its dumped stats at 1;
 - the head noun decides the type;
 - a build never touches anything else's random;
-- every floor with mobs lists every one of them, with the table matching the builds.
+- every floor with mobs lists every one of them, with the table matching the builds;
+- every boss's party equivalents are its points over a crawler's (20 plus 3 a level),
+  with the ordinary level set by the median band top, not one outlier.
 
 What's switched on and shops have their own groups, with the books' facts written into the tests rather than read back from the banks:
 - each system arrives on the DCC Database's floor, and each floor's list of new, gone and still-on systems is checked against those floors;

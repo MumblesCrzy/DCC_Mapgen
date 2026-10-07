@@ -1800,11 +1800,40 @@ class MobBuild:
         return self.mp // MOB_BUILDS["trick_cost"]
 
     @property
+    def points(self) -> int:
+        return sum(self.stats.values())
+
+    def crawlers_at(self, level: int) -> float:
+        """How many crawlers of this level its stat points are worth."""
+        return self.points / crawler_points(level)
+
+    @property
     def even_for(self) -> int:
         """The crawler level with as many stat points: what it matches point for
         point, before a crawler's gear and class and before its own trick."""
         spent = sum(self.stats.values()) - MOB_BUILDS["base"] * len(STAT_ORDER)
         return max(1, round(spent / CRAWLER_STATS["knobs"]["points_per_level"]))
+
+
+def crawler_points(level: int) -> int:
+    """A crawler's stat points at a level: 4 in each stat, plus their points a level."""
+    return (MOB_BUILDS["base"] * len(STAT_ORDER)
+            + CRAWLER_STATS["knobs"]["points_per_level"] * level)
+
+
+def party_levels(floor: int, beasts: List["MobBuild"]) -> Tuple[int, int, bool]:
+    """The two crawler levels a boss is measured against on a floor, and whether
+    the first was read from the floor: an ordinary crawler, where the floor's
+    ordinary mobs top out, and one on the leaderboard.
+
+    "Top out" is the median of the mobs' band tops, not the highest: Floor 4's
+    mimic spawn at the very end of the line would otherwise set the level for
+    every boss on the floor. A floor with no ordinary mobs takes it from the bank."""
+    ordinary, leader = MOB_BUILDS["party_levels"][str(floor)]
+    tops = sorted(b.band[1] for b in beasts if b.tier == "mob")
+    if tops:
+        ordinary = tops[len(tops) // 2]
+    return ordinary, max(leader, ordinary + 1), bool(tops)
 
 
 def _tokens(text: str) -> List[str]:
@@ -1994,6 +2023,31 @@ def bestiary_section(fl) -> List[str]:
     if poor:
         o += ["", "**Poorly built**, and it shows:", ""]
         o += [f"- **{b.name}:** {b.poor}." for b in poor]
+    bosses = [b for b in beasts if b.tier != "mob"]
+    if bosses:
+        ordinary, leader, read = party_levels(fl.number, beasts)
+        why = ("about where its ordinary mobs top out" if read
+               else "a typical crawler this deep")
+        o += ["", "### Bosses against a party", "",
+              f"How many crawlers each boss's stat points are worth, at three levels: an "
+              f"ordinary crawler on this floor (level {ordinary}, {why}), one on the "
+              f"leaderboard (level {leader}), and one of the boss's own level. A crawler "
+              f"has {crawler_points(1) - k['points_per_level']} points plus "
+              f"{k['points_per_level']} a level.", "",
+              "Stat points only, and stat points do not care how a crawler fights: a "
+              "caster's Intelligence counts the same as a brawler's Strength. What the "
+              "table leaves out is gear and class, and both count for more the deeper the "
+              "floor: by the middle floors a crawler's enchanted kit and abilities can be "
+              "worth more than their own points, so a well-equipped party needs fewer "
+              "people than this says. It leaves out the boss's own mechanic too, and that "
+              "can need more.", "",
+              f"| Boss | Level | Points | Crawlers at L{ordinary} | Crawlers at L{leader} "
+              f"| Crawlers of its level |",
+              "| --- | ---: | ---: | ---: | ---: | ---: |"]
+        for b in bosses:
+            o.append(f"| {b.name} | {b.level} | {b.points:,} | "
+                     f"{b.crawlers_at(ordinary):.1f} | {b.crawlers_at(leader):.1f} | "
+                     f"{b.crawlers_at(b.level):.1f} |")
     o.append("")
     return o
 
