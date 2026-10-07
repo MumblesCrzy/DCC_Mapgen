@@ -3734,6 +3734,32 @@ class Generator4:
             num = self.rng.choice(choices)
             add(a, num, "transfer", transfer_to=[b.color])
             add(b, num, "transfer", transfer_to=[a.color])
+
+        # Most stations on the Iron Tangle are transfers, to far more lines than a
+        # floor details, and a prime one is a safe room. So each line also meets
+        # lines the floor does not detail: at a prime in each stretch a party uses
+        # -- the yard to the stairwells, the stairwells to its spawn, and ahead of
+        # that -- unless it already has a safe room there. At a number no other
+        # line here uses, where there is one: two lines at the same number read as
+        # one station. Where there is not, it meets the line that has it.
+        undetailed = Deck(self.rng, [col for col in LINE_COLORS if col not in colors])
+        edge = stairs[-1]
+        for ln in lines:
+            mine = stmap[ln.color]
+            top = min(ln.spawn + 40, 420)
+            for first, last in ((11, edge - 1), (edge + 1, ln.spawn - 1), (ln.spawn + 1, top)):
+                primes = [n for n in range(first, last + 1) if _is_prime(n)]
+                if not primes or any(n in mine for n in primes):
+                    continue
+                taken = {n for d in stmap.values() for n in d}
+                free = [n for n in primes if n not in taken]
+                if free:
+                    add(ln, self.rng.choice(free), "transfer", transfer_to=[undetailed.draw()])
+                    continue
+                num = self.rng.choice(primes)
+                other = next(o for o in lines if num in stmap[o.color])
+                add(ln, num, "transfer", transfer_to=[other.color])
+                add(other, num, "transfer", transfer_to=[ln.color])
         for ln in lines:
             ln.stations = sorted(stmap[ln.color].values(), key=lambda s_: s_.number)
 
@@ -3814,11 +3840,7 @@ class Generator4:
         # Each safe room's proprietor has a quest, and so does each hub's
         # noticeboard. Built last, since a quest can send the party to a ghoul
         # station.
-        decks = {"objective": Deck(self.rng, STATION_QUESTS4["objectives"]),
-                 "item": Deck(self.rng, STATION_QUESTS4["items"]),
-                 "title": Deck(self.rng, STATION_QUESTS4["titles"]),
-                 "reward": Deck(self.rng, STATION_QUESTS4["rewards"]),
-                 "flavor": Deck(self.rng, STATION_QUESTS4["flavor"])}
+        decks = self._quest_decks()
         owners = Deck(self.rng, SAFE_ROOMS4["proprietors"])
         safe_rooms, quests = [], []
         for num in sorted(businesses):
@@ -3826,8 +3848,10 @@ class Generator4:
             q = self._station_quest(num, owner.split(",")[0], lines, ghoul_stations, decks)
             through = [ln.color for ln in lines
                        if any(st.number == num and st.transfer_to for st in ln.stations)]
-            safe_rooms.append({"number": num, "lines": through, "business": businesses[num],
-                               "proprietor": owner, "quest": q})
+            others = sorted({col for ln in lines for st in ln.stations if st.number == num
+                             for col in st.transfer_to} - set(colors))
+            safe_rooms.append({"number": num, "lines": through, "others": others,
+                               "business": businesses[num], "proprietor": owner, "quest": q})
             quests.append(q)
         for hub in hubs:
             hub["quest"] = self._station_quest(hub["number"], "the station noticeboard", lines,
@@ -3859,6 +3883,14 @@ class Generator4:
                       depot=depot, mimic_spawn=dict(self.rng.choice(MIMIC_MINIONS4)),
                       yards=yards, special_lines=special)
 
+    def _quest_decks(self) -> dict:
+        """What every station quest on a floor is dealt from, and the titles the
+        floor has used."""
+        sq = STATION_QUESTS4
+        return {"objective": Deck(self.rng, sq["objectives"]), "item": Deck(self.rng, sq["items"]),
+                "title": Deck(self.rng, sq["titles"]), "reward": Deck(self.rng, sq["rewards"]),
+                "flavor": Deck(self.rng, sq["flavor"]), "titled": set()}
+
     def _station_quest(self, number, giver, lines, ghoul_stations, decks) -> Quest:
         """A quest given at a station: by a safe room's proprietor, or posted on a
         hub's noticeboard. It sends the party along a line that stops there."""
@@ -3876,16 +3908,22 @@ class Generator4:
                                 mob=ln.line_mob.name, cavern=self.rng.choice(caverns),
                                 ghoul_station=gs["name"], ghoul_number=gs["number"])
         # A title names the item only if the objective has one, and a noticeboard
-        # is not somebody a favor can be for.
-        for _ in range(12):
+        # is not somebody a favor can be for. No two quests on a floor share one: a
+        # title skipped for one quest is still in the deck when it reshuffles,
+        # behind titles already used. Two decks' worth of draws always takes in
+        # one whole pass, so a title is reused only when every one that fits is.
+        bare = re.sub(r"^(?:a|an|the)\s+", "", item)
+        title = None
+        for _ in range(2 * len(decks["title"].items)):
             title_form = decks["title"].draw()
             if "{Item}" in title_form and "{item}" not in form:
                 continue
             if "{giver}" in title_form and giver.startswith("the "):
                 continue
-            break
-        bare = re.sub(r"^(?:a|an|the)\s+", "", item)
-        title = title_form.format(giver=giver, line=ln.color, Item=cap_words(bare))
+            title = title_form.format(giver=giver, line=ln.color, Item=cap_words(bare))
+            if title not in decks["titled"]:
+                break
+        decks["titled"].add(title)
         return Quest(title, giver, objective, decks["flavor"].draw(), decks["reward"].draw())
 
     def _ghoul_stations(self, stairs, stair_notes, days, jan, janitor_level, withdrawal):
@@ -3949,15 +3987,18 @@ def _safe_rooms_and_hubs4(fl: Floor4) -> List[str]:
     hubs where far more lines meet than the floor details."""
     o = ["## Safe Rooms and Hubs", "",
          "A safe room on the Iron Tangle is somebody's business, and its proprietor always "
-         "has something that needs doing. Only a prime-numbered transfer has one. A hub is "
-         "where far more lines meet than this floor details: a concourse with shops and "
-         "guilds, and a noticeboard.", ""]
+         "has something that needs doing. Only a prime-numbered transfer has one, and most "
+         "stations are transfers, so every line here has at least one between the yard and "
+         "the stairwells, one between the stairwells and where its crawlers start, and one "
+         "ahead of that. A hub is where far more lines meet than this floor details: a "
+         "concourse with shops and guilds, and a noticeboard.", ""]
     for sr in fl.safe_rooms:
         b = sr["business"]
         st = next(s for ln in fl.lines for s in ln.stations
                   if s.number == sr["number"] and s.transfer_to)
         also = [a for a in st.amenities() if a != "safe room"]
-        o.append(f"### {sr['number']} — {b['name']} ({_lines_text(sr['lines'])})")
+        change = f"; change for the {_lines_text(sr['others'])}" if sr["others"] else ""
+        o.append(f"### {sr['number']} — {b['name']} ({_lines_text(sr['lines'])}{change})")
         o.append("")
         o.append(f"- **What it is:** {b['what']}."
                  + (f" Also here: {', '.join(also)}." if also else ""))
@@ -4225,13 +4266,19 @@ def render4(fl: Floor4) -> str:
                  f"See [Ghoul Stations](#ghoul-stations).")
         o.append(f"  - **{c['depot']}** — INTERDICTION DEPOT. See "
                  f"[Station {c['depot']}](#station-{c['depot']}-the-interdiction-depot).")
+        detailed = {ln_.color for ln_ in fl.lines}
         for st in ln.stations:
             if st.kind == "stairwell":
                 continue
             kind = {"spawn": "SPAWN", "transfer": "TRANSFER", "exit_cavern": "EXIT CAVERN"}[st.kind]
             extra = ""
             if st.transfer_to:
-                extra = f" ↔ {', '.join(sorted(set(st.transfer_to)))} Line" + ("s" if len(set(st.transfer_to)) > 1 else "")
+                here = sorted(set(st.transfer_to) & detailed)
+                away = sorted(set(st.transfer_to) - detailed)
+                parts = ([f"{', '.join(here)} Line" + ("s" if len(here) > 1 else "")] if here else [])
+                parts += ([f"{', '.join(away)} Line" + ("s" if len(away) > 1 else "")
+                           + ", not detailed here"] if away else [])
+                extra = " ↔ " + "; ".join(parts)
             has = st.amenities()
             sr = f" ({', '.join(has)})" if has else ""
             o.append(f"  - **{st.number}** — {kind}{extra}{sr}. {st.note}")
@@ -4343,7 +4390,19 @@ def render4_svg(fl: Floor4) -> str:
         for st in ln.stations:
             # sorted(), not set(): a set of colour names iterates in per-process hash
             # order, which reordered these connectors in the SVG from run to run.
-            for other in sorted(set(st.transfer_to)):
+            away = sorted(c_ for c_ in set(st.transfer_to) if c_ not in ys)
+            # A line the floor does not detail has no row: a stub in its color
+            # above the station, outlined so a pale one still shows, and its name
+            # in ink, since some line colors are too pale to read as text.
+            for k, other in enumerate(away):
+                x, y = xs[st.number], ys[ln.color]
+                o.append(f'<line x1="{x}" y1="{y - 9}" x2="{x}" y2="{y - 25}" '
+                         f'stroke="#111" stroke-width="8"/>')
+                o.append(f'<line x1="{x}" y1="{y - 10}" x2="{x}" y2="{y - 24}" '
+                         f'stroke="{LINE_COLORS[other]}" stroke-width="5"/>')
+                o.append(_text(x, y - 29 - 10 * k, other, size=9, weight="bold",
+                               anchor="middle", fill="#333"))
+            for other in sorted(set(st.transfer_to) - set(away)):
                 key = (min(ln.color, other), max(ln.color, other), st.number)
                 if key in drawn:
                     continue
@@ -4403,8 +4462,11 @@ def render4_svg(fl: Floor4) -> str:
          f'<circle cx="{lx+780}" cy="{ly}" r="3" fill="#111"/>', "End of the line 435"),
         (f'<rect x="{lx+914}" y="{ly-6}" width="12" height="12" fill="#888" stroke="#111" '
          f'stroke-width="2"/>', "Interdiction depot 75"),
+        (f'<line x1="{lx+1090}" y1="{ly+8}" x2="{lx+1090}" y2="{ly-8}" stroke="#111" '
+         f'stroke-width="8"/><line x1="{lx+1090}" y1="{ly+7}" x2="{lx+1090}" y2="{ly-7}" '
+         f'stroke="#bbb" stroke-width="5"/>', "Transfer to a line not detailed here"),
     ]
-    offs = [22, 170, 314, 446, 582, 686, 796, 932]
+    offs = [22, 170, 314, 446, 582, 686, 796, 932, 1102]
     for (glyph, label), off in zip(items, offs):
         o.append(glyph)
         o.append(_text(lx + off, ly + 4, label, size=11))

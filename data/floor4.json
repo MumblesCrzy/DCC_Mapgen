@@ -667,6 +667,106 @@
     "name": "The Lamp Room",
     "what": "the station lamp room, all brass and paraffin",
     "offers": "lanterns refilled, and any light source recharged"
+   },
+   {
+    "name": "The Buffet Car",
+    "what": "a dining car bolted to the platform, still swaying slightly",
+    "offers": "a hot meal at a table that never quite stops rocking"
+   },
+   {
+    "name": "Lost Property",
+    "what": "the lost property office, run as a pawnshop",
+    "offers": "a fair price for loot, and the chance to buy back what somebody else lost"
+   },
+   {
+    "name": "The Timetable",
+    "what": "a tearoom papered floor to ceiling with out-of-date timetables",
+    "offers": "a pot of tea and an honest guess at when the next train really comes"
+   },
+   {
+    "name": "Brakeman's Rest",
+    "what": "a bunkhouse for railway crews, the bunks stacked three high",
+    "offers": "a bunk each, and earplugs, which you will want"
+   },
+   {
+    "name": "The Booking Hall",
+    "what": "the old booking hall, now a dance hall with a bar",
+    "offers": "a dance, a drink, and nobody asking about your kill count"
+   },
+   {
+    "name": "Coal and Kettle",
+    "what": "a café in a disused coal bunker, warm all the way through",
+    "offers": "a seat by the stove that dries anything out by morning"
+   },
+   {
+    "name": "The Turnstile",
+    "what": "a betting shop where the bets are on which line breaks down next",
+    "offers": "odds on anything that happens on the floor, paid in gold"
+   },
+   {
+    "name": "Mind the Gap",
+    "what": "a chemist's behind a ticket window",
+    "offers": "bandages, tonics, and a cough syrup that is mostly brandy"
+   },
+   {
+    "name": "The Stationmaster's House",
+    "what": "the stationmaster's house, kept exactly as they left it",
+    "offers": "a real bed with real sheets, and a clock that keeps real time"
+   },
+   {
+    "name": "Points and Crossings",
+    "what": "a pie shop run out of an old signal cabin",
+    "offers": "a pie the size of a hubcap, enough for a party"
+   },
+   {
+    "name": "The Bath House",
+    "what": "a tiled bathhouse in the old boiler room",
+    "offers": "a hot bath that takes off the grime, the smell and most of the blood"
+   },
+   {
+    "name": "Night Shift",
+    "what": "a canteen that only opens when the trains do not",
+    "offers": "a hot dinner and the night crew's gossip"
+   },
+   {
+    "name": "The Parcel Office",
+    "what": "a parcels office that will post anything to anywhere on the line",
+    "offers": "a package sent ahead to any station on this line, for a fee"
+   },
+   {
+    "name": "Penny Arcade",
+    "what": "an arcade of seaside machines, half of them haunted",
+    "offers": "a fortune from the machine that is never wrong and never clear"
+   },
+   {
+    "name": "The Guard's Van",
+    "what": "a guard's van up on blocks, stove lit, door bolted",
+    "offers": "a watch kept through the night by a guard who has not slept since the floor opened"
+   },
+   {
+    "name": "Tunnel Vision",
+    "what": "an optician's with a waiting room full of mismatched sofas",
+    "offers": "spectacles mended, and a lens that sees in the dark tunnels for an hour"
+   },
+   {
+    "name": "The Snug",
+    "what": "a tiny pub with one table and a fire",
+    "offers": "a fire to sleep beside, and the landlord's stories of the line"
+   },
+   {
+    "name": "Siding Six",
+    "what": "a garden grown in an abandoned siding under grow lamps",
+    "offers": "fresh vegetables, the only ones on the floor"
+   },
+   {
+    "name": "The Clock Tower",
+    "what": "a watchmaker's under the station clock",
+    "offers": "anything with gears repaired, and the real time, which is not what the station clocks say"
+   },
+   {
+    "name": "The Railway Arms",
+    "what": "a railway hotel with twelve rooms and one working lift",
+    "offers": "a room each, and room service until the kitchen gives up"
    }
   ],
   "proprietors": [
@@ -685,7 +785,25 @@
    "Barnaby",
    "Queenie",
    "Tobiah",
-   "Dot"
+   "Dot",
+   "Winifred",
+   "Old Sully",
+   "Clem",
+   "Marisol",
+   "Bertram",
+   "Auntie Rook",
+   "Horace",
+   "Nell",
+   "Ezekiel Frond",
+   "Mother Tansy",
+   "Rudy",
+   "Perpetua",
+   "Wilf",
+   "Gideon Marsh",
+   "Ivy",
+   "Cobb",
+   "Lorna",
+   "Septimus"
   ],
   "species": [
    "a Bopca",
@@ -741,7 +859,21 @@
    "Bring back a sealed dose of Rev-Up from an exit cavern, without being seen taking it.",
    "Get a conductor on the {line} Line to sign a complaint form. They will not want to.",
    "Fetch {item} from the left-luggage office at {station}. The ticket says it is there.",
-   "Mind the counter here for one shift. Nobody can know."
+   "Mind the counter here for one shift. Nobody can know.",
+   "Put a stop to whatever keeps pulling the emergency cord on {line} Line trains near {station}.",
+   "Find out who is selling forged tickets at {station}, and bring back their ticket punch.",
+   "Escort a nervous passenger from here to {station} on the {line} Line. They are carrying {item} and will not say why.",
+   "Take {item} to the dispensary queue at the exit cavern at {cavern} and trade it for gossip.",
+   "Thin out the {mob} riding the {line} Line before they reach the next exit cavern.",
+   "Get a photograph of the {line} Line's engineer without the engineer noticing.",
+   "Bring back the platform sign from {station}. All of it.",
+   "Find {item}. Its owner last saw it on a {line} Line train heading for the Abyss.",
+   "Leave a wreath at {ghoul_station} ({ghoul_number}) and come back with both hands.",
+   "Search the tunnel between here and {station} for a regular's dropped spectacles. Mind the third rail.",
+   "Talk a porter on the {line} Line into taking a day off. Porters do not take days off.",
+   "Count the {mob} that board the {line} Line at the next stop and report back. Exactly.",
+   "Collect a spare key from the lost-property shelf at {station}. The tag says it opens something here.",
+   "Ride the {line} Line to {station} and back, and write down every station whose name has changed."
   ],
   "items": [
    "the good coffee",
@@ -751,7 +883,15 @@
    "a case of tinned peaches",
    "a barrel of the house ale",
    "a mop bucket of great sentimental value",
-   "the station cat"
+   "the station cat",
+   "a signal lamp that was never meant to go out",
+   "a tin of the good biscuits",
+   "a conductor's whistle",
+   "a jar of pickled eggs",
+   "the night ledger",
+   "a birdcage with something still in it",
+   "a sack of undelivered post",
+   "a brass ticket punch"
   ],
   "titles": [
    "A Favor for {giver}",
@@ -759,14 +899,44 @@
    "Trouble on the {line} Line",
    "The {Item} Job",
    "One More Stop",
-   "Counter Business"
+   "Counter Business",
+   "Last Train Home",
+   "Mind the Doors",
+   "The Wrong Platform",
+   "Delays on the {line} Line",
+   "Signal Failure",
+   "{giver}'s Little Problem",
+   "Off the Timetable",
+   "Return Ticket",
+   "Leaves on the Line",
+   "Change Here",
+   "A Word with the Engineer",
+   "Rush Hour",
+   "The {Item} Affair",
+   "Fare Dodgers",
+   "Engineering Works",
+   "Platform Alteration",
+   "Next Stop",
+   "Missed Connection",
+   "Through Train",
+   "Excess Fare",
+   "Wrong Side of the Tracks",
+   "End of Service",
+   "Request Stop",
+   "All Change",
+   "Points Failure",
+   "The Late Running"
   ],
   "rewards": [
    "a Bronze Quest Box",
    "a Silver Quest Box",
    "a Gold Quest Box",
    "a Silver Quest Box and free meals here for the rest of the floor",
-   "a Bronze Quest Box and a favor owed"
+   "a Bronze Quest Box and a favor owed",
+   "a Gold Quest Box and a round on the house",
+   "a Bronze Quest Box and a map of the line, mostly accurate",
+   "a Silver Quest Box and first refusal on whatever comes in next",
+   "a Bronze Quest Box and a night's sleep nothing can interrupt"
   ],
   "flavor": [
    "The proprietor has asked four other parties. Two came back.",
@@ -778,7 +948,21 @@
    "The proprietor would do it themselves, but the trains frighten them.",
    "Accepting this makes an enemy somewhere on the line. The System declines to say which line.",
    "A previous crawler accepted this and is still, technically, on it.",
-   "The advice from the counter is free, and worth exactly that."
+   "The advice from the counter is free, and worth exactly that.",
+   "Nobody else would take it, which is offered as a selling point.",
+   "The last party to try this left a review on the wall. It is one word long.",
+   "It pays on completion, and completion is defined generously.",
+   "The regulars stop talking when you pick this one up.",
+   "There is an older version of this quest pinned underneath it, in the same handwriting.",
+   "The paperwork for this runs to three pages. The quest is one line.",
+   "It sounds simple. The face of whoever posted it does not.",
+   "Somebody has written DON'T on the notice in pencil, then rubbed it out.",
+   "This has been offered every day since the floor opened.",
+   "It is a small thing, the proprietor insists, twice.",
+   "The reward was bigger yesterday.",
+   "A crawler at the next table says they did this on another floor. They did not.",
+   "The trains run on time for this one, which is the worrying part.",
+   "Whatever happens, they would like their bucket back."
   ]
  },
  "TRAIN_QUESTS4": {

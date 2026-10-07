@@ -26,6 +26,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -747,6 +748,57 @@ class Floor4LayoutTest(unittest.TestCase):
             self.assertTrue(any(st.safe_room for ln in res.floor.lines for st in ln.stations),
                             f"seed {seed}")
 
+    def test_every_line_has_a_safe_room_in_each_stretch(self):
+        """Most stations on the Iron Tangle are transfers, so a line meets lines the
+        floor does not detail too, and has a safe room in each stretch a party
+        uses: 11 to 71, 73 to the station before its spawn, and the forty
+        stations after it -- wherever the stretch has a prime at all."""
+        for size, seed, res in self._floors():
+            for ln in res.floor.lines:
+                where = f"{size} seed {seed}: {ln.color} (spawn {ln.spawn})"
+                safe = {st.number for st in ln.stations if st.safe_room}
+                for first, last in ((11, 71), (73, ln.spawn - 1), (ln.spawn + 1, ln.spawn + 40)):
+                    stretch = set(range(first, last + 1))
+                    if stretch & self.PRIMES:
+                        self.assertTrue(safe & stretch, f"{where}: nothing in {first}–{last}")
+        counts = {size: [len(res.floor.safe_rooms) for _, _, res in self._floors(sizes=(size,))]
+                  for size in ("small", "medium", "large")}
+        self.assertGreaterEqual(min(counts["large"]), 10, counts)
+        self.assertGreaterEqual(min(counts["small"]), 4, counts)
+
+    def test_a_line_not_detailed_here_says_so(self):
+        """A transfer to a line the floor doesn't detail names a real line color,
+        says it is not detailed on the line's list and the safe room's heading,
+        and is drawn as a stub on the map. Its number is no other detailed line's
+        own platform: two lines at one number read as one station."""
+        seen = 0
+        for seed in range(1, 7):
+            res = mg.generate(4, "medium", seed)
+            fl, md, svg = res.floor, res.markdown, res.svgs[0][1]
+            detailed = {ln.color for ln in fl.lines}
+            for ln in fl.lines:
+                for st in ln.stations:
+                    away = sorted(set(st.transfer_to) - detailed)
+                    if not away:
+                        continue
+                    seen += 1
+                    where = f"seed {seed}: {ln.color} {st.number}"
+                    for col in away:
+                        self.assertIn(col, mg.LINE_COLORS, where)
+                        self.assertIn(f">{col}</text>", svg, where)
+                    self.assertIn(f"  - **{st.number}** — ", md)
+                    self.assertIn(f"{', '.join(away)} Line, not detailed here", md, where)
+                    for other in fl.lines:
+                        if other is not ln:
+                            for s in other.stations:
+                                if s.number == st.number:
+                                    self.assertTrue(s.transfer_to, where)
+            for sr in fl.safe_rooms:
+                if sr["others"]:
+                    self.assertIn(f"; change for the {mg._lines_text(sr['others'])})", md)
+                    self.assertFalse(set(sr["others"]) & detailed)
+        self.assertGreater(seen, 30)
+
     def test_the_write_up_marks_what_each_transfer_has(self):
         row = re.compile(r"^  - \*\*(\d+)\*\* — (\w[\w ]*?)(?: ↔ [^(.]+)?(?: \(([^)]*)\))?\. ")
         checked = 0
@@ -1015,6 +1067,8 @@ class Floor4LayoutTest(unittest.TestCase):
             fl, where = res.floor, f"{size} seed {seed}"
             posted = [sr["quest"] for sr in fl.safe_rooms] + [h["quest"] for h in fl.hubs]
             self.assertEqual(fl.quests, posted, where)
+            titles = [q.title for q in posted]
+            self.assertEqual(len(set(titles)), len(titles), f"{where}: {titles}")
             suggested = {s.source for s in mg.floor_box_suggestions(fl) if s.kind == "quest"}
             for q in posted:
                 text = f"{q.title} {q.objective} {q.reward}"
@@ -1031,6 +1085,24 @@ class Floor4LayoutTest(unittest.TestCase):
                                   f"{where}: {q.title!r} names something the quest doesn't")
             for h in fl.hubs:
                 self.assertNotIn("noticeboard", h["quest"].title, where)
+
+    def test_quest_titles_never_repeat_even_past_the_deck(self):
+        """A title skipped for one quest -- it names an item the quest has none
+        of -- is still in the deck when it reshuffles, behind titles already used.
+        On a bank of two plain titles and one that names the item, with every
+        quest fetching a different item, eight quests have eight titles to give:
+        the deck alone would deal Alpha or Beta again on its second pass."""
+        gen = mg.Generator4("medium", 5, None)
+        fl = gen.build()
+        hub = fl.hubs[0]["number"]
+        bank = {"titles": ["Alpha", "Beta", "The {Item} Affair"],
+                "objectives": ["Fetch {item} from {station}."]}
+        with mock.patch.dict(mg.STATION_QUESTS4, bank):
+            decks = gen._quest_decks()
+            titles = [gen._station_quest(hub, "the station noticeboard", fl.lines,
+                                         fl.ghoul_stations, decks).title for _ in range(8)]
+        self.assertEqual(len(set(titles)), len(titles), titles)
+        self.assertEqual(sum(t in ("Alpha", "Beta") for t in titles), 2, titles)
 
     def test_every_named_train_starts_a_quest_when_boarded(self):
         self.assertFalse([g for g in mg.NAMED_GIMMICK if "quest" in g.lower()],

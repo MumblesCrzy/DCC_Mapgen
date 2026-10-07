@@ -10,6 +10,7 @@ A procedural floor/map generator in the style of the *Dungeon Crawler Carl* book
 - **Floor 3** (The Over City) — settlements on a wilderness grid, roaming bosses, locked stairwells, a quest board per town, one Elite.
 - **Floor 4** (The Iron Tangle) — schematic rail/transit map, laid out the way the books lay it out, with its content from this project's own word banks rather than the books' plot:
   - **Stations:** every line has stairwells at 12, 24, 36, 48 and 72. A transfer has a safe room only if its number is prime, a Desperado Club if it ends in 1, and a Club Vanquisher if it ends in 9.
+  - **Transfers and safe rooms:** most stations on the Iron Tangle are transfers, to far more lines than a floor details. So besides meeting each other, each line meets lines that aren't detailed, at a prime in each stretch a party uses: the yard to the stairwells, the stairwells to its spawn, and the forty stations past it. That gives every line a safe room in each stretch, and a floor 4–6 safe rooms on small, 8–12 on medium and 14–21 on large. A transfer to a line that isn't detailed is marked "not detailed here" on the line's list, says "change for the X Line" in its safe room's heading, and appears as a short stub in that line's color on the map.
   - **Withdrawal:** the drug is named, the Rev-Up Amazing Cure-All Vitamin Immunity Shot, and a supplier hands out the shots at every exit-only cavern. Three stages, each with its symptoms, its toll and what its dead come back as; a schedule for each line, fitted to the countdown; and two things that go wrong on the last day.
   - **Ghoul stations:** the five stairwell stations, each named, on the map too, with one kind of ghoul gathering there. Station 12 belongs to the janitors, three hold what each withdrawal stage raises, and one holds a ghoul of its own. Each says what adds to the crowd, how it grows over the countdown, what it does when the stairwell opens and what its control sigil does; at one of them, enough ghouls merge into a boss.
   - **Getting around:** which car carries whom, and how long the floor takes to cross. Each line says how long its crawlers have before their train reaches 435, how far it is to walk back to the stairwells, and how many stops ahead the nearest exit cavern is. The books give the anchors: a stop every 2 to 20 minutes, about three days from 11 to 435, stations a block or two apart up to 72 and 40 or 50 miles apart out past 300. The curves between them are ours, tunable in `FLOOR4_CFG`. Two special lines run outside the colored ones, one back from the stairwell stations and one for staff only.
@@ -770,6 +771,11 @@ Floor 4's station layout has its own group, with the rules written into the test
 - a station has a safe room, Desperado Club or Club Vanquisher exactly when its
   number says so, both in the floor data and in the write-up;
 - every floor has at least one safe room;
+- every line has a safe room in each stretch a party uses, wherever that stretch
+  has a prime, and a large floor has at least ten;
+- a transfer to a line that isn't detailed names a real line color, says so in the
+  write-up and is drawn on the map, and never shares its number with another
+  line's own platform;
 - a station two lines share reads the same from either;
 - each line's withdrawal stages fall inside the countdown, down to a three-day floor;
 - each ghoul station has a different ghoul, with 12 the janitors' and every
