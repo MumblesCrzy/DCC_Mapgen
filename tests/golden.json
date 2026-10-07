@@ -170,43 +170,43 @@
   "floor6_large_seed4242": {
     "map_count": 1,
     "maps": "bdce05ca90bf73dfeb6b0cd75912b00c0f4b471b173b946ed4cba9b3bccd472a",
-    "markdown": "fa8f81aaa0cc670b78943c86a9abd766cc6050e110be26c87f5bab3e1dbe4b76",
+    "markdown": "219f0bfbde8c32fceacac85f3ec6f4825ab2d2d44c12bd57d0d6c4c19ee4d947",
     "seed": 4242
   },
   "floor6_medium_seed4242": {
     "map_count": 1,
     "maps": "5e0df78c0afbc20e00a8f6993da22c775088fb9dc9bfb237988d9b8db31a8916",
-    "markdown": "3350eef9ebf27dc2625fbe558e6526a1f342c043afa46cc89d2ca435b82c2c08",
+    "markdown": "c89b5cddb9c975b48d0189cc4da1d951facd59a642808b05d29e1b4cf4048a68",
     "seed": 4242
   },
   "floor6_small_seed4242": {
     "map_count": 1,
     "maps": "7bf6eaa7fb4ba7b6126d5695e0bf7a915cd9aa0b747ffd7204f392be296cda6e",
-    "markdown": "6dbd9ff6e8717d696b99affbac15427ebac8d159288dafd0bd9797d0567befdd",
+    "markdown": "0bb92a53added7a4cccf4266375b4b7bc2de72388a190c0adbc265ae69e5572f",
     "seed": 4242
   },
   "floor8_large_seed4242": {
     "map_count": 1,
     "maps": "ef4a506525d43ef0b76f852056dbdc7d318694ac3f0849683557ded6488e2cca",
-    "markdown": "b3eafaf02c4291fdaced8bf4dee722277d32fec664ca23a1f95dbb02892bd575",
+    "markdown": "b18de825ba361ed458f9f341a9e58b94b27eff21463cf1d596d9faced2e03a8f",
     "seed": 4242
   },
   "floor8_medium_seed11_region=East Asia": {
     "map_count": 1,
     "maps": "4c6a9902a5183ed8b60944616971ddf64f6e6a3e366ff82bac9a1f82969f9280",
-    "markdown": "29850e517a5ba1c4d91cf9c0652d86012d2f4fc7674d68649ab1b423b32582d5",
+    "markdown": "801605acfc74afb79775c8c6d4c3e9468297565b27c21301472aa815444ebdaa",
     "seed": 11
   },
   "floor8_medium_seed4242": {
     "map_count": 1,
     "maps": "2cb11e90e12c2539982f38ca631918acb8c76b497c24086eb23ae12b50a714e6",
-    "markdown": "3462454ab93e4dbca88e0b02793ba5792b812da218177178f1b8e691a98c46e6",
+    "markdown": "29acc0c47d8ff9e4bfbf905b36efda4abddcbb210ceb51317da74a9eac15589a",
     "seed": 4242
   },
   "floor8_small_seed4242": {
     "map_count": 1,
     "maps": "fdec6fec98a67543b1c7afe5c680bddcad0962cd3eb7380a2f1228671ae61c08",
-    "markdown": "50c072823d511d97eaf8acfeebaa79d45c3fd1e8b3c3ce347b101920b5537f00",
+    "markdown": "05039d6db2e32b8c1be810cf965b367fad90c3882638030dca5479a3b1cb3097",
     "seed": 4242
   },
   "floor9_large_seed11_warlords=generated_wildcard=True": {

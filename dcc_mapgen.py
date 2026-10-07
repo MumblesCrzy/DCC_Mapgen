@@ -4334,7 +4334,6 @@ SIZE6_CFG = {"small": {"hunters": 3, "hidden": 1}, "medium": {"hunters": 6, "hid
 F6_RULES = [
     "Subclass selection on entry. Permanent.",
     "Grace period: hunters are locked in Zockau for the first 30 hours, then released.",
-    "Blood bar: safe-room time drains it; only kills refill it. Empty bar means you are teleported outside.",
     "Parties cap at 30. Larger groups are split automatically. Guilds are available.",
     "Stairwells have no timing restriction. One is unguarded in Zockau's park; others are hidden in the valley or sit near city-tier mobs.",
     "Hunters start at Level 50, can die for real, and drop a Hunter Hand trophy. They earn a scalp for every crawler they kill.",
@@ -4571,7 +4570,7 @@ def render6(fl: Floor6) -> str:
         o.append(f"### {st.label}. {st.name} ({st.size} {st.race.lower()} settlement{', on the river' if st.on_river else ''})")
         o.append("")
         o.append(f"- **Location:** {compass(st.row, st.col, fl.grid)}. Guards: Level {st.guard_level} Funeral Bells. "
-                 f"Safe-room inn present (blood bar applies){'; tutorial guild hall' if st.tutorial_guild else ''}"
+                 f"Safe-room inn present{'; tutorial guild hall' if st.tutorial_guild else ''}"
                  f"{'; nightclub access' if st.club else ''}.")
         o.append(f"- **Shops:** {', '.join(st.shops)}")
         o.append(f"- **Race guildhalls:** {', '.join(st.race_guilds) if st.race_guilds else 'none'}")
@@ -4740,7 +4739,7 @@ F8_RULES = [
     "Phase 1 (14 days): explore, capture, build. Difficulty rises with distance from the starting structure.",
     "Phase 2: ten numbered deckmasters seed the region, Level 40 to 80. From #4 on they have bodyguards. The first nine drop tokens; feed all nine to the vending machine to open the keymaster fight. The key opens only the stairwell next to your starting area and only for your squad.",
     "Phase 3 starts at midnight on December 26th. Key-holders are dropped at a random point in their region and race home. Everyone else is placed at a key-holder's stairwell door to block it.",
-    "Every surviving squad keeps one T'Ghee card when the floor collapses. Blood bar applies to safe rooms.",
+    "Every surviving squad keeps one T'Ghee card when the floor collapses.",
 ]
 
 

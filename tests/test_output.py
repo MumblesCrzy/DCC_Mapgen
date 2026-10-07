@@ -1261,10 +1261,17 @@ class SystemsTest(unittest.TestCase):
             md = md.replace("## Achievements", "## Elsewhere Too")
             self.assertNotIn("What's Switched On", mg.floor_body(md), f"floor {f}")
 
-    def test_nothing_unverified_is_claimed(self):
-        """A blood bar is in the Floor 6 and 8 rules from an earlier session, but
-        nothing in the DCC Database has one, so the systems do not claim it."""
-        self.assertFalse([s for s in mg.SYSTEMS if "blood" in json.dumps(s).lower()])
+    def test_there_is_no_blood_bar(self):
+        """An earlier session gave Floors 6 and 8 a blood bar that drained in safe
+        rooms. Nothing in the DCC Database has one and the Floor 6 story does not
+        mention it, so it is gone: from every write-up and every word bank."""
+        bar = re.compile(r"blood[- ]?bar", re.IGNORECASE)
+        for f, md in self.md.items():
+            self.assertFalse(bar.search(md), f"floor {f}")
+        data = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
+        for path in glob.glob(os.path.join(data, "*.json")):
+            with open(path, encoding="utf-8") as fh:
+                self.assertFalse(bar.search(fh.read()), os.path.basename(path))
 
 
 class ShopsTest(unittest.TestCase):
