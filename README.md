@@ -19,7 +19,7 @@ A procedural floor/map generator in the style of the *Dungeon Crawler Carl* book
   - **Station 75:** an interdiction depot, its repair carts at five times train speed, their times worked out from the same model as the trains. Derailments and boiler blowouts are possible, and bring its crews out.
   - **The tail and the yards:** how to fight the Station Mimic, 435's non-combatant staff, the Abyss's pull, and every yard the floor's lines run from. Station 435 has its own marker on the map.
   - **Achievements:** the ones most often earned on the Iron Tangle. Every quest and achievement box shows up in the floor's box suggestions. Nothing says what opens the portals at the Abyss.
-- **Floor 5** (The Bubbles) — four quadrants, castles, factions.
+- **Floor 5** (The Bubbles) — four quadrants, castles, factions. Each castle's ruler is its quadrant's boss: a borough boss, or a city boss in the castle meant to fall last, as the books field borough bosses at L52–55 and a city boss at L82. Harder castles keep borough-boss guardians as well, and killing one doesn't take the castle. A popped bubble lets its crawlers out, but they can't enter another until it has popped too.
 - **Floor 6** (The Hunting Grounds) — Floor 3's grid reskinned as jungle, with hunter parties and a bounty board.
 - **Floor 8** (Ghosts of Earth) — polar folklore map with totem cards and a deckmaster ladder.
 - **Floor 9** (Faction Wars) — the nine-slice pie around Larracos, warlords, stance paths.
@@ -460,8 +460,8 @@ The section also closes with a line on statting up the teams from Other Crawlers
 which is the point of putting it in the campaign material rather than in a separate
 reference file: 4s across the board, plus 3 points per level, weighted toward
 whatever the crawler's class is for. Put an ordinary group a little above the
-floor's ordinary mobs; the leaderboard runs at about twice them, which is about
-where the books put Carl.
+floor's ordinary mobs, and the leaderboard ahead of that, where the books put
+Carl: level 27 to 41 across the Fourth Floor, 41 to 47 across the Fifth.
 
 ### Bestiary
 
@@ -475,7 +475,7 @@ the thing is:
 | a crawler | 3 |
 | an ordinary mob | 1 |
 | a neighborhood boss | 2 |
-| a borough boss (and a Floor 5 castle ruler) | 3 |
+| a borough boss | 3 |
 | a city boss | 4 |
 | a county, state, country or continent boss | 5, 6, 7, 8 |
 | Floor 11's floor boss | 9 |
@@ -504,7 +504,10 @@ The Bestiary ends with **Bosses against a party**, a table of how many crawlers 
 boss's stat points are worth at three levels:
 - an ordinary crawler on that floor, at the median of the floor's ordinary mob band
   tops, so one late outlier like Floor 4's mimic spawn doesn't set it;
-- a leaderboard crawler, from `MOB_BUILDS.party_levels`;
+- a leaderboard crawler, from `MOB_BUILDS.party_levels`: Carl's level at the end of
+  the floor's book, where Book 1 is Floors 1 and 2 and Book N is Floor N+1 after
+  that (47 on Floor 5, 63 on Floor 6, 81 on Floor 8). Floors 9–11 have no book yet,
+  so they carry on at his pace of about nine levels a floor;
 - a crawler of the boss's own level.
 
 Stat points don't care how a crawler fights: a caster's Intelligence counts the
@@ -799,6 +802,16 @@ Floor 4's station layout has its own group, with the rules written into the test
 - none of the books' own Floor 4 creatures or events turns up in the write-up, and
   nothing says what opens the portals at the Abyss.
 
+Floor 5's bosses have their own group, with the books' tiers written into the test:
+- every castle ruler is a borough boss above its quadrant's mobs, except the one in
+  the castle meant to fall last, a city boss at L78–84, so one to a bubble; no boss
+  is on a tier of our own any more;
+- guardians come none at the easiest castle and up to two at the hardest, each a
+  borough boss between its quadrant's mobs and its ruler, written up as not taking
+  the castle, in the Bestiary, dropping a box, and never sharing a ruler's first name;
+- the rules say a popped bubble lets crawlers out but not into another bubble, and
+  that its stairwells have no time limit.
+
 The leaderboard has its own group. The canon bounties are written into the test
 rather than read from the bank, and checked against the table every floor prints:
 nothing before Floor 4, a full Top Ten at x1 on Floor 4, and every bounty its rank's
@@ -828,6 +841,8 @@ city bosses. It checks:
 - every boss's party equivalents are its points over a crawler's (20 plus 3 a level),
   with the ordinary level set by the median band top, not one outlier, and
   "one-shot" exactly where its hit is at least that crawler's HP;
+- the leaderboard crawler is Carl at the end of the floor's book, with the books'
+  levels written into the test;
 - a hit is the bigger of STR × 5 and a trick's INT × 5, and kills when it is at
   least the crawler's HP, a hit equal to their HP included;
 - every floor lists every mob and boss hardest hit first, with the right level to

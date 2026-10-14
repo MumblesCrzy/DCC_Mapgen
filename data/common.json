@@ -1390,7 +1390,7 @@
    "The race chosen on floor 3 is permanent and usually moves two or three stats at once. The class upgrade at level 6 tends to move one.",
    "Nothing here caps out. A crawler who lives long enough leaves the human range behind entirely, which is the point."
   ],
-  "npc_note": "To stat a crawler from Other Crawlers on the spot: 4s across the board, then {points_per_level} points per level, weighted toward whatever their class is for. Put an ordinary group at or a little above the floor's ordinary mob levels; the ones on the leaderboard run at about twice them, which is about where the books put Carl."
+  "npc_note": "To stat a crawler from Other Crawlers on the spot: 4s across the board, then {points_per_level} points per level, weighted toward whatever their class is for. Put an ordinary group at or a little above the floor's ordinary mob levels, and the ones on the leaderboard ahead of that, where the books put Carl: level 27 to 41 across the Fourth Floor, 41 to 47 across the Fifth, 54 to 63 across the Sixth."
  },
  "LOOT_BOXES": {
   "rules": [
@@ -1444,7 +1444,6 @@
     "borough": 1,
     "city": 2,
     "top": 3,
-    "castle": 2,
     "floor": 3
    },
    "depth": {
@@ -4444,7 +4443,6 @@
    "mob": 1,
    "neighborhood": 2,
    "borough": 3,
-   "castle": 3,
    "city": 4,
    "county": 5,
    "province": 5,
@@ -4943,39 +4941,39 @@
    ],
    "2": [
     8,
-    25
+    13
    ],
    "3": [
     20,
-    40
+    27
    ],
    "4": [
     30,
-    47
+    41
    ],
    "5": [
     45,
-    63
+    47
    ],
    "6": [
     60,
-    73
+    63
    ],
    "8": [
     70,
-    90
+    81
    ],
    "9": [
     85,
-    100
+    90
    ],
    "10": [
     95,
-    110
+    100
    ],
    "11": [
-    105,
-    120
+    100,
+    110
    ]
   }
  }

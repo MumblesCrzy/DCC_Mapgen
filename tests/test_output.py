@@ -1252,6 +1252,77 @@ class Floor4LayoutTest(unittest.TestCase):
                 self.assertNotIn(phrase, md, f"{size} seed {seed}")
 
 
+class Floor5BossTest(unittest.TestCase):
+    """Floor 5's bosses on the books' tiers. A quadrant's boss is its castle's
+    ruler: a borough boss (the books field them at L52-55), or a city boss (L82) in
+    the castle meant to fall last, so one to a bubble. Harder castles keep borough
+    bosses besides, and killing one of those takes nothing. The rules say what a
+    popped bubble opens: the way out, not the way into another."""
+
+    GUARDIANS = {"Easy": (0, 0), "Moderate": (0, 1), "Hard": (1, 1), "Brutal": (1, 2)}
+
+    @classmethod
+    def setUpClass(cls):
+        cls.floors = [mg.generate(5, size, seed, images=False)
+                      for size in ("small", "medium", "large") for seed in range(1, 13)]
+
+    def test_each_ruler_is_a_borough_or_a_city_boss(self):
+        for res in self.floors:
+            fl = res.floor
+            tiers = []
+            for q in fl.quadrants:
+                c, where = q.castle, f"{fl.size} seed {fl.seed}: {q.name}"
+                tiers.append(c.boss.tier)
+                if c.difficulty == "Brutal":
+                    self.assertEqual(c.boss.tier, "city", where)
+                    self.assertTrue(78 <= c.boss.level <= 84, where)
+                else:
+                    self.assertEqual(c.boss.tier, "borough", where)
+                    self.assertGreater(c.boss.level, q.level_range[1], where)
+                self.assertIn(f"({c.boss.tier} boss, Level {c.boss.level})", res.markdown)
+            self.assertEqual(tiers.count("city"), 1, f"{fl.size} seed {fl.seed}")
+            self.assertNotIn("castle", {b.tier for b in mg.floor_bosses(fl)})
+        self.assertNotIn("castle", mg.MOB_BUILDS["tier_points"])
+
+    def test_harder_castles_keep_guardians(self):
+        counts = collections.Counter()
+        for res in self.floors:
+            fl, md = res.floor, res.markdown
+            where = f"{fl.size} seed {fl.seed}"
+            rulers = {q.castle.ruler.split()[0] for q in fl.quadrants}
+            names = []
+            beasts = {b.name for b in mg.floor_bestiary(fl)}
+            bosses = mg.floor_bosses(fl)
+            for q in fl.quadrants:
+                c = q.castle
+                lo, hi = self.GUARDIANS[c.difficulty]
+                self.assertTrue(lo <= len(c.guardians) <= hi, f"{where}: {c.difficulty}")
+                counts[c.difficulty] += len(c.guardians)
+                for g in c.guardians:
+                    self.assertEqual(g.tier, "borough", where)
+                    self.assertTrue(q.level_range[1] < g.level < c.boss.level, where)
+                    self.assertIn(g.chamber, mg.GUARDIAN_POSTS)
+                    self.assertIn(f"- **Guardian:** {g.name} (borough boss, Level {g.level}). "
+                                  f"{g.chamber} Killing it doesn't take the castle.", md)
+                    self.assertFalse(rulers & set(g.name.replace(",", "").split()),
+                                     f"{where}: {g.name} shares a ruler's first name")
+                    self.assertIn(g.name, beasts, where)
+                    self.assertIn(g, bosses, where)
+                names += [c.boss.name] + [g.name for g in c.guardians]
+            self.assertEqual(len(set(names)), len(names), where)
+        self.assertEqual(counts["Easy"], 0)
+        self.assertTrue(counts["Moderate"] and counts["Hard"] and counts["Brutal"], counts)
+
+    def test_a_popped_bubble_lets_crawlers_out_not_in(self):
+        for res in self.floors[:3]:
+            md = res.markdown
+            rules = md[md.index("## Floor Rules"):md.index("## Quadrants")]
+            self.assertIn("may not enter another until it has popped too", rules)
+            self.assertIn("no time limit on them", rules)
+            self.assertIn("killing them takes nothing", rules)
+            self.assertNotIn("lacuna", md)
+
+
 class SystemsTest(unittest.TestCase):
     """What's switched on: the dungeon's systems by the floor they arrive on.
 
@@ -1549,6 +1620,17 @@ class BestiaryTest(unittest.TestCase):
         spawn_top = max(b.band[1] for b in four if b.tier == "mob")
         self.assertLess(mg.party_levels(4, four)[0], spawn_top,
                         "the mimic's spawn set Floor 4's ordinary crawler")
+
+    def test_the_leaderboard_crawler_is_carl_at_the_end_of_the_floors_book(self):
+        """Book 1 is Floors 1 and 2, and Book N is Floor N+1 from there. Carl, on
+        the leaderboard, ends Book 1 at level 13, Book 2 at 27, Book 3 at 41, Book 4
+        at 47, Book 5 at 63 and Book 7 at 81 (the DCC Database's Carl page)."""
+        carl = {2: 13, 3: 27, 4: 41, 5: 47, 6: 63, 8: 81}
+        for floor, level in carl.items():
+            self.assertEqual(mg.MOB_BUILDS["party_levels"][str(floor)][1], level,
+                             f"floor {floor}")
+        self.assertIn("41 to 47 across the Fifth", mg.CRAWLER_STATS["npc_note"])
+        self.assertNotIn("twice", mg.CRAWLER_STATS["npc_note"])
 
     # -- you're going to die --------------------------------------------------
     # A full-strength hit is 5 a point of the stat behind it, a third of the 15 HP
@@ -2701,10 +2783,11 @@ class LootBoxTest(unittest.TestCase):
             res = mg.generate(floor, "medium", 4242, images=False)
             md, fl = res.markdown, res.floor
             # Counted independently of mg.floor_bosses, which the suggestions use:
-            # floor 5's bosses are the castle rulers, one per quadrant.
-            bosses = BossNameTest._bosses(fl) + [
-                q.castle.boss for q in getattr(fl, "quadrants", []) or []
-                if getattr(q, "castle", None)]
+            # floor 5's bosses are the castle rulers, one per quadrant, and the
+            # guardians some castles keep besides.
+            bosses = BossNameTest._bosses(fl)
+            for q in getattr(fl, "quadrants", []) or []:
+                bosses += [q.castle.boss] + q.castle.guardians
             self.assertTrue(bosses, f"floor {floor} has no bosses to check")
             drops = [ln for ln in md.splitlines() if "  - Drops: a " in ln]
             self.assertEqual(len(drops), len(bosses),

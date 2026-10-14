@@ -1480,8 +1480,9 @@ def floor_bosses(fl) -> List[Boss]:
         out += [c.boss for c in getattr(fl, attr, None) or [] if getattr(c, "boss", None)]
     for group in ("borough_bosses", "city_bosses"):
         out += list((getattr(fl, group, None) or {}).values())
-    out += [q.castle.boss for q in getattr(fl, "quadrants", None) or []
-            if getattr(q, "castle", None)]
+    for q in getattr(fl, "quadrants", None) or []:
+        if getattr(q, "castle", None):
+            out += [q.castle.boss] + q.castle.guardians
     for attr in ("top_boss", "boss"):
         if getattr(fl, attr, None):
             out.append(getattr(fl, attr))
@@ -1985,6 +1986,8 @@ def floor_bestiary(fl) -> List[MobBuild]:
         mob(q.mob, q.level_range, f"the {q.name} quadrant")
         castle = getattr(q, "castle", None)
         boss(castle.boss if castle else None, f"the {q.name} castle", q.mob.noun)
+        for g in castle.guardians if castle else []:
+            boss(g, f"the {q.name} quadrant", q.mob.noun)
     for z in getattr(fl, "zones", None) or []:                     # floor 8
         mob(z.mob, z.level_range, f"zone {z.label}")
     for name, band in getattr(fl, "forest_mobs", None) or []:      # floor 9
@@ -4488,18 +4491,26 @@ def render4_svg(fl: Floor4) -> str:
 FLOOR5_CFG = {
     "days": 15,
     "mob_band": (25, 45),
-    "boss_offset": (15, 25),       # castle boss above the quadrant's top level
     "crawlers": (130, 170),
     "bubbles": 1172,
+    # The quadrant's boss is the castle's ruler: a borough boss this far above the
+    # quadrant's top mob level, or a city boss in the castle meant to fall last,
+    # as the books field borough bosses at L52-55 and a city boss at L82.
+    "ruler_bump": {"Easy": 10, "Moderate": 15, "Hard": 20},
+    "city_boss_level": (78, 84),
+    # A quadrant can hold more bosses than its ruler: borough bosses on the way in,
+    # more of them the harder the castle. Killing one does not take the castle.
+    "guardians": {"Easy": (0, 0), "Moderate": (0, 1), "Hard": (1, 1), "Brutal": (1, 2)},
+    "guardian_bump": (8, 12),
 }
 
 QUADRANT_ORDER = ["Air", "Land", "Sea", "Subterranean"]
 F5_RULES = [
     "Every crawler is locked inside their starting quadrant until that quadrant's castle is conquered.",
-    "A castle is conquered when the throne room is occupied or the quadrant boss is killed. Either counts.",
+    "A castle is conquered when the throne room is occupied or the quadrant's boss, its ruler, is killed. Either counts. A quadrant can hold other bosses; killing them takes nothing.",
     "The stairwell is in the throne room. It will not open until all four castles in the bubble have fallen.",
     "Once your castle falls, you may cross into the other quadrants to help take theirs.",
-    "When the fourth castle falls the top of the dome pops. The four stairwells open and the lacuna between bubbles becomes passable.",
+    "When the fourth castle falls the bubble pops and its four stairwells open, with no time limit on them from then on. Crawlers may leave a popped bubble, but may not enter another until it has popped too.",
     "Fifteen days. If the bubble hasn't popped, the floor collapses around everyone in it.",
 ]
 
@@ -4523,6 +4534,8 @@ class Castle:
     approach: Optional[str] = None
     obstacle: Optional[str] = None
     chambers: List[Tuple[str, str]] = field(default_factory=list)
+    # Borough bosses elsewhere in the quadrant; each one's chamber says where.
+    guardians: List[Boss] = field(default_factory=list)
 
 
 @dataclass
@@ -4567,6 +4580,7 @@ class Generator5:
         self.days_override = days
         self.used = set()
         self.mech_decks = make_mechanic_decks(self.rng)
+        self.namer = BossNamer(self.rng, CASTLE_ADJ)
 
     def _unique(self, fn):
         for _ in range(100):
@@ -4580,22 +4594,39 @@ class Generator5:
         adj, _ = mob_words(self.rng, 5)       # the quadrant supplies the noun
         return describe_mob(self.rng, adj, noun)
 
+    def _form(self, mob: Mob) -> str:
+        return self.rng.choice(BOSS_FORMS).format(
+            size=self.rng.randint(20, 60), a_size="a", noun_l=mob.noun.lower(),
+            noun_sing=singular(mob.noun).lower())
+
     def make_castle(self, q: str, mob: Mob, top: int, diff) -> Castle:
-        qd = QUADRANT_DATA[q]
-        first = self.rng.choice(BOSS_FIRST)
+        qd, c5 = QUADRANT_DATA[q], self.cfg
+        # A ruler's first name is claimed with the namer, so no guardian on the
+        # floor is "Vexnia the Auditor" beside "Vexnia the Mad".
+        first = self.rng.choice([f for f in BOSS_FIRST if f not in self.namer.firsts]
+                                or BOSS_FIRST)
+        self.namer.firsts.add(first)
         name = self._unique(lambda: self.rng.choice(CASTLE_NAME).format(
             adj=self.rng.choice(CASTLE_ADJ), thing=self.rng.choice(CASTLE_THING),
             noun=self.rng.choice(CASTLE_NOUN), name=self.rng.choice(BOSS_FIRST)))
         ruler = f"{first} {self.rng.choice(RULER_TITLE)}"
-        sz = self.rng.randint(20, 60)
-        form = self.rng.choice(BOSS_FORMS).format(
-            size=sz, a_size="a", noun_l=mob.noun.lower(), noun_sing=singular(mob.noun).lower())
-        bump = {"Easy": 10, "Moderate": 15, "Hard": 20, "Brutal": 25}[diff[0]]
-        lvl = top + bump + self.rng.randint(-2, 2)
-        boss = Boss(f"{ruler}, ruler of {name}", "castle", lvl, form,
-                    boss_mechanics(self.mech_decks, "castle"), "the throne room", True)
+        # The quadrant's boss: a borough boss, or a city boss in the castle meant to
+        # fall last.
+        if diff[0] in c5["ruler_bump"]:
+            tier, lvl = "borough", top + c5["ruler_bump"][diff[0]] + self.rng.randint(-2, 2)
+        else:
+            tier, lvl = "city", self.rng.randint(*c5["city_boss_level"])
+        boss = Boss(f"{ruler}, ruler of {name}", tier, lvl, self._form(mob),
+                    boss_mechanics(self.mech_decks, tier), "the throne room", True)
         c = Castle(name=name, form=self.rng.choice(qd["castle_forms"]), ruler=ruler, boss=boss,
                    throne=self.rng.choice(THRONE_NOTE), difficulty=diff[0], difficulty_note=diff[1])
+        # Borough bosses elsewhere in the quadrant, below the ruler, none of them
+        # the quadrant's boss.
+        posts = self.rng.sample(GUARDIAN_POSTS, len(GUARDIAN_POSTS))
+        for post in posts[:self.rng.randint(*c5["guardians"][diff[0]])]:
+            g_lvl = min(top + self.rng.randint(*c5["guardian_bump"]), lvl - 1)
+            c.guardians.append(Boss(self.namer.name(mob.noun), "borough", g_lvl, self._form(mob),
+                                    boss_mechanics(self.mech_decks, "borough"), post, False))
         if self.size in ("medium", "large"):
             c.approach = self.rng.choice(APPROACH)
             c.obstacle = self.rng.choice(OBSTACLE)
@@ -4649,7 +4680,9 @@ def render5(fl: Floor5) -> str:
     o.append(f"- **Countdown:** {fl.days} days")
     o.append(f"- **Crawlers in the bubble:** about {fl.crawlers}. {fl.bubble_state} Of note: {fl.rival}.")
     o.append("- **Quadrants:** Air, Land, Sea, Subterranean — one castle each, stairwell in every throne room.")
-    o.append(f"- **Quadrant mob levels:** {lo}–{hi}; castle bosses well above their quadrant.")
+    o.append(f"- **Quadrant mob levels:** {lo}–{hi}. Each castle's ruler is the quadrant's "
+             f"boss: a borough boss, or a city boss in the castle meant to fall last. Harder "
+             f"castles have borough-boss guardians too.")
     o.append("- **Factions:**")
     for f in fl.factions:
         o.append(f"  - {f.name} ({f.home} quadrant) — want {f.want}.")
@@ -4684,10 +4717,16 @@ def render5(fl: Floor5) -> str:
         for room, desc in c.chambers:
             o.append(f"  - {room}: {desc}.")
         o.append(f"  - Throne room: {c.throne}")
-        o.append(f"- **Quadrant Boss:** {c.boss.name} (Level {c.boss.level})")
+        o.append(f"- **Quadrant Boss:** {c.boss.name} ({c.boss.tier} boss, Level {c.boss.level})")
         o.append(f"  - Form: {c.boss.form}.")
         o.append(f"  - Mechanic: {c.boss.mechanic}")
         o.append(f"  - Drops: a {boss_box(c.boss.tier, fl.number)}")
+        for g in c.guardians:
+            o.append(f"- **Guardian:** {g.name} ({g.tier} boss, Level {g.level}). {g.chamber} "
+                     f"Killing it doesn't take the castle.")
+            o.append(f"  - Form: {g.form}.")
+            o.append(f"  - Mechanic: {g.mechanic}")
+            o.append(f"  - Drops: a {boss_box(g.tier, fl.number)}")
         o.append("")
     o.append("## DM Material")
     o.append("")
@@ -4724,7 +4763,9 @@ def render5_svg(fl: Floor5) -> str:
             (_fit(q.faction.name if q.faction else "no faction", 30), 11, "normal", "#222"),
             (f"{q.mob.name} L{q.level_range[0]}–{q.level_range[1]}", 11, "normal", "#222"),
             (_fit(q.castle.name, 30), 12, "bold", "#111"),
-            (f"Boss L{q.castle.boss.level}", 11, "normal", "#222"),
+            (f"{q.castle.boss.tier.capitalize()} boss L{q.castle.boss.level}"
+             + (f" + {len(q.castle.guardians)} guardian{'s' if len(q.castle.guardians) != 1 else ''}"
+                if q.castle.guardians else ""), 11, "normal", "#222"),
         ]
         for i, (t, sz, wt, col) in enumerate(lines):
             o.append(_text(tx, ty - 34 + i * 16, t, size=sz, weight=wt, anchor="middle", fill=col))
