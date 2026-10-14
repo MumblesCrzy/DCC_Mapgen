@@ -46,6 +46,24 @@
     "Tomb Village",
     "Dry Wells",
     "Ash Fields"
+   ],
+   "white": [
+    [
+     "Salt Tortoises",
+     "Tortoises the size of houses, wandering the flats. They do not attack. They do not stop for you either."
+    ],
+    [
+     "Dune Grazers",
+     "Long-necked herd beasts. Spook one and the whole herd stampedes."
+    ],
+    [
+     "Glass Snails",
+     "Slow, shining and harmless, but their trail cuts like broken glass."
+    ],
+    [
+     "Tomb Cats",
+     "Sacred cats who own the place. Kick one and everything in the quadrant hears about it."
+    ]
    ]
   },
   "Sea": {
@@ -94,6 +112,24 @@
     "Pearl Beds",
     "Tide Caves",
     "Sandbar"
+   ],
+   "white": [
+    [
+     "Big Boy Blues",
+     "Giant blue jellyfish, fifteen feet across, that drift and bump into each other. They mean no harm, but they wrap their tentacles around anyone who gets too close."
+    ],
+    [
+     "Ring-Blower Whales",
+     "Curious whales that blow bubble rings. They follow swimmers, and do not notice who is underneath when they surface."
+    ],
+    [
+     "Lantern Rays",
+     "Rays that glow in the dark water. Harmless themselves, but everything that hunts follows the light."
+    ],
+    [
+     "Drift Turtles",
+     "Turtles as big as boats, asleep on the current. Something always lives on their backs."
+    ]
    ]
   },
   "Air": {
@@ -141,6 +177,24 @@
     "Storm Shelf",
     "Mooring Mast",
     "Wind Caves"
+   ],
+   "white": [
+    [
+     "Sky Jellies",
+     "Gasbag jellyfish that ride the updrafts. Brush one and it stings; pop one and it takes everything nearby with it."
+    ],
+    [
+     "Cloud Grazers",
+     "Whale-sized gasbags that graze on mist. They never fight, but they drift into the castle's line of fire and take whoever is under them along."
+    ],
+    [
+     "Kite Moths",
+     "Moths the size of hang-gliders. Harmless, until the dust off their wings gets into your lungs."
+    ],
+    [
+     "Wind Shepherds",
+     "Tall, quiet herders of anything that flies. Hurt one of the flock and the whole sky turns on you."
+    ]
    ]
   },
   "Subterranean": {
@@ -189,6 +243,24 @@
     "Root Hall",
     "Echo Galleries",
     "Deep Wells"
+   ],
+   "white": [
+    [
+     "Cave Lumens",
+     "Glowing grubs that light the tunnels. Kill enough of them and the dark comes back, and so does what the light kept away."
+    ],
+    [
+     "Fungus Walkers",
+     "Slow mushroom-folk tending their gardens. Startle one and it puffs out a cloud of spores."
+    ],
+    [
+     "Blind Grazers",
+     "Pale cave-cattle that graze on lichen. Shine a light on them and they stampede down the narrowest tunnel."
+    ],
+    [
+     "Echo Bats",
+     "A colony of thousands, harmless one at a time. Make a loud noise and find out about the rest."
+    ]
    ]
   }
  },

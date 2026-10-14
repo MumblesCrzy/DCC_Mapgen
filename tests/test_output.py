@@ -1516,8 +1516,9 @@ class Floor5SiteTest(unittest.TestCase):
                     self.assertIn("ruin", kinds, f"{where}: a factionless quadrant with no safe room")
                 for s in q.sites:
                     if s.kind == "mob":
-                        self.assertTrue(s.name.endswith(f" of the {q.mob.noun}"), s.name)
-                        self.assertIn(q.mob.name, s.note.replace("'", ""), where)
+                        holder = next(m for m, _ in q.hostile if m.name == s.mob)
+                        self.assertTrue(s.name.endswith(f" of the {holder.noun}"), s.name)
+                        self.assertIn(holder.name, s.note.replace("'", ""), where)
                     if s.kind == "ruin":
                         self.assertIn("safe room", s.note, where)
                     self.assertIn(f"  - **{s.name[:1].upper() + s.name[1:]}** (about "
@@ -1547,6 +1548,76 @@ class Floor5SiteTest(unittest.TestCase):
                 self.assertEqual(len(set(used)), len(used),
                                  f"{fl.size} seed {fl.seed}: two groups at one site")
         self.assertGreater(placed, 30)
+
+
+class Floor5MobTest(unittest.TestCase):
+    """A quadrant holds several kinds of mob -- the books field three to five, at
+    L34-41 -- and one white-tagged mob that won't attack unless provoked, like the
+    books' Big Boy Blues: a hazard, not an enemy. The castle's garrison stays the
+    quadrant's first mob, and each mob ground belongs to somebody different while
+    there are mobs to go round."""
+
+    MOBS = {"small": 2, "medium": 3, "large": 4}
+
+    @classmethod
+    def setUpClass(cls):
+        cls.floors = [mg.generate(5, size, seed, images=False)
+                      for size in ("small", "medium", "large") for seed in range(1, 13)]
+
+    def test_each_quadrant_has_several_mobs(self):
+        lo, hi = mg.FLOOR5_CFG["mob_band"]
+        for res in self.floors:
+            fl, md = res.floor, res.markdown
+            where = f"{fl.size} seed {fl.seed}"
+            beasts = {(b.name, b.band) for b in mg.floor_bestiary(fl)}
+            for q in fl.quadrants:
+                mobs = q.hostile
+                self.assertEqual(len(mobs), self.MOBS[fl.size], f"{where}: {q.name}")
+                self.assertIs(mobs[0][0], q.mob, "the garrison is no longer the first mob")
+                bank = mg.QUADRANT_DATA[q.name]["mobs"]
+                for attr in ("noun", "adj", "quirk"):
+                    values = [getattr(m, attr) for m, _ in mobs]
+                    self.assertEqual(len(set(values)), len(values), f"{where}: {attr}s {values}")
+                for m, (a, b) in mobs:
+                    self.assertIn(m.noun, bank, where)
+                    self.assertTrue(lo <= a < b <= hi, f"{where}: {m.name} {a}-{b}")
+                    self.assertIn((m.name, (a, b)), beasts, where)
+                for om in q.other_mobs:
+                    a, b = om.level_range
+                    self.assertIn(f"  - **{om.mob.name}**, Level {a}–{b}. {om.mob.quirk}", md)
+
+    def test_each_quadrant_has_a_white_tagged_mob(self):
+        lo, hi = mg.FLOOR5_CFG["mob_band"]
+        seen = set()
+        for res in self.floors:
+            fl, md = res.floor, res.markdown
+            where = f"{fl.size} seed {fl.seed}"
+            beasts = {(b.name, b.where) for b in mg.floor_bestiary(fl)}
+            for q in fl.quadrants:
+                w = q.white
+                self.assertIn([w.name, w.hazard], mg.QUADRANT_DATA[q.name]["white"], where)
+                a, b = w.level_range
+                self.assertTrue(lo <= a < b <= hi, where)
+                self.assertIn(f"- **White-tagged:** {w.name}, Level {a}–{b}. They won't attack "
+                              f"unless provoked. {w.hazard}", md)
+                self.assertIn((w.name, f"the {q.name} quadrant, white-tagged"), beasts, where)
+                self.assertNotIn(w.name, [m.name for m, _ in q.hostile], where)
+                seen.add(w.name)
+        self.assertGreater(len(seen), 8, "the white-tagged banks hardly come up")
+
+    def test_mob_grounds_belong_to_different_mobs(self):
+        shared = 0
+        for res in self.floors:
+            fl = res.floor
+            for q in fl.quadrants:
+                holders = [s.mob for s in q.sites if s.kind == "mob"]
+                names = {m.name for m, _ in q.hostile}
+                self.assertTrue(set(holders) <= names, f"{fl.size} seed {fl.seed}: {holders}")
+                if len(holders) <= len(names):
+                    self.assertEqual(len(set(holders)), len(holders),
+                                     f"{fl.size} seed {fl.seed}: one mob holds two grounds")
+                shared += len(set(holders) - {q.mob.name})
+        self.assertGreater(shared, 10, "mob grounds never go to the quadrant's other mobs")
 
 
 class SystemsTest(unittest.TestCase):

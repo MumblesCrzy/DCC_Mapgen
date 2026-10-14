@@ -21,6 +21,7 @@ A procedural floor/map generator in the style of the *Dungeon Crawler Carl* book
   - **Achievements:** the ones most often earned on the Iron Tangle. Every quest and achievement box shows up in the floor's box suggestions. Nothing says what opens the portals at the Abyss.
 - **Floor 5** (The Bubbles) — four quadrants, castles, factions. Each castle's ruler is its quadrant's boss: a borough boss, or a city boss in the castle meant to fall last, as the books field borough bosses at L52–55 and a city boss at L82. Harder castles keep borough-boss guardians as well, and killing one doesn't take the castle. A popped bubble lets its crawlers out, but they can't enter another until it has popped too.
   - **Crawlers and where they start:** the bubble's 130–170 crawlers are shared out unevenly between the quadrants, at least 15 to each, and each quadrant says how many it holds, since none can leave until its castle falls. Each quadrant has two to four starting sites by size (the books' Air quadrant had four), each with its share of crawlers: a faction's own settlement with its safe-room inn, the quadrant mob's ground ("the Kite City of the Razorfoxes", where a crawler starts in a fight), or a ruin with an abandoned safe room. Other Crawlers names the quadrant and the site each group is at.
+  - **Mobs:** each quadrant fields two to four kinds of hostile mob by size (the books field three to five), the castle's garrison first, none sharing a name or a habit; each mob ground belongs to a different one while they go round. Each quadrant also has one white-tagged mob that won't attack unless provoked, a hazard rather than an enemy: the books' Big Boy Blues in the Sea, and our own elsewhere. All of them are in the Bestiary.
   - **Quests:** each faction posts quests (one each on a small bubble, three on a large, the books' nine), shaped like the books' Fifth Floor ones — free a prisoner, find out who killed my son, kill someone, stay out of a building, get a loose creature back — and filled in with the bubble's own castles, rulers, rival factions, settlements and mobs.
   - **Achievements:** nine the books hand out on the Fifth Floor, leaving out the ones tied to its plot, then eight built on how a bubble works. Their boxes reach the floor's box suggestions and open in the roller.
   - Both sections say they are suggested ideas, not a definitive list.
@@ -822,6 +823,11 @@ Floor 5's bosses have their own group, with the books' tiers written into the te
   and a quadrant with no faction always has a ruin;
 - every group in Other Crawlers is at a real quadrant and site, no two at one site
   while there are sites to spare;
+- each quadrant has its number of hostile mobs, the garrison first, from its own
+  bank, inside the floor's level band, no noun, adjective or habit twice, every
+  one written up and in the Bestiary; and one white-tagged mob, written up as not
+  attacking unless provoked and in the Bestiary as white-tagged;
+- mob grounds go to the quadrant's mobs, a different one each while they last;
 - each faction posts its quota of quests, nine on a large bubble, no two from the
   same template, each in the write-up and the box suggestions;
 - every name a quest fills in is really on the floor, checked by reading each quest

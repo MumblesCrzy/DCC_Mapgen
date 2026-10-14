@@ -1989,6 +1989,13 @@ def floor_bestiary(fl) -> List[MobBuild]:
             boss(getattr(c, "boss", None), f"region {c.label}", c.mob.noun)
     for q in getattr(fl, "quadrants", None) or []:                 # floor 5
         mob(q.mob, q.level_range, f"the {q.name} quadrant")
+        for om in getattr(q, "other_mobs", None) or []:
+            mob(om.mob, om.level_range, f"the {q.name} quadrant")
+        if getattr(q, "white", None):
+            w = q.white
+            out.append(build_mob(w.name, _middle(w.level_range), description=w.hazard,
+                                 where=f"the {q.name} quadrant, white-tagged",
+                                 band=tuple(w.level_range)))
         castle = getattr(q, "castle", None)
         boss(castle.boss if castle else None, f"the {q.name} castle", q.mob.noun)
         for g in castle.guardians if castle else []:
@@ -4513,6 +4520,9 @@ FLOOR5_CFG = {
     # bubble's crawlers are split unevenly between the quadrants, then between
     # each quadrant's sites, by weights drawn from this range.
     "sites": {"small": 2, "medium": 3, "large": 4},
+    # Kinds of hostile mob in a quadrant, the castle's garrison among them: the
+    # books field three to five. Each quadrant also has one white-tagged mob.
+    "mobs": {"small": 2, "medium": 3, "large": 4},
     "share_weight": (0.5, 1.5),
     "quadrant_min": 15,
     "site_min": 2,
@@ -4559,6 +4569,22 @@ class Site:
     kind: str            # settlement | mob | ruin
     note: str
     crawlers: int
+    mob: str = ""        # whose ground it is, for a mob site
+
+
+@dataclass
+class QuadrantMob:
+    """A hostile mob a quadrant has besides its castle's garrison."""
+    mob: Mob
+    level_range: Tuple[int, int]
+
+
+@dataclass
+class WhiteMob:
+    """A white-tagged mob: it won't attack unless provoked. A hazard, not an enemy."""
+    name: str
+    level_range: Tuple[int, int]
+    hazard: str
 
 
 @dataclass
@@ -4574,6 +4600,13 @@ class Quadrant:
     castle: Castle
     crawlers: int = 0                     # how many start here, locked in
     sites: List[Site] = field(default_factory=list)
+    other_mobs: List[QuadrantMob] = field(default_factory=list)
+    white: Optional[WhiteMob] = None
+
+    @property
+    def hostile(self) -> List[Tuple[Mob, Tuple[int, int]]]:
+        """Every hostile mob here, the castle's garrison first."""
+        return [(self.mob, self.level_range)] + [(m.mob, m.level_range) for m in self.other_mobs]
 
 
 @dataclass
@@ -4703,8 +4736,34 @@ class Generator5:
         fl.quests = self._quests(factions, quadrants)
         fl.achievements = [list(a) for a in ACHIEVEMENTS5["books"] + ACHIEVEMENTS5["ours"]]
         # And after those, so the castles and quests stay what they were.
+        self._more_mobs(fl)
         self._populate(fl)
         return fl
+
+    def _band(self) -> Tuple[int, int]:
+        lo, hi = self.cfg["mob_band"]
+        a = self.rng.randint(lo, hi - 8)
+        return a, a + self.rng.randint(5, 8)
+
+    def _more_mobs(self, fl: Floor5) -> None:
+        """The rest of each quadrant's mobs: more hostile kinds from its own bank,
+        none sharing a noun, an adjective or a habit with another here, and one
+        white-tagged mob that won't attack unless provoked."""
+        for q in fl.quadrants:
+            qd = QUADRANT_DATA[q.name]
+            nouns = [x for x in qd["mobs"] if x != q.mob.noun]
+            adjs, quirks = {q.mob.adj}, {q.mob.quirk}
+            for noun in self.rng.sample(nouns, self.cfg["mobs"][fl.size] - 1):
+                m = self.make_mob(noun)
+                for _ in range(20):
+                    if m.adj not in adjs and m.quirk not in quirks:
+                        break
+                    m = self.make_mob(noun)
+                adjs.add(m.adj)
+                quirks.add(m.quirk)
+                q.other_mobs.append(QuadrantMob(m, self._band()))
+            name, hazard = self.rng.choice(qd["white"])
+            q.white = WhiteMob(name, self._band(), hazard)
 
     def _split(self, total: int, n: int, least: int) -> List[int]:
         """total shared unevenly between n, none under least, adding up exactly."""
@@ -4725,24 +4784,31 @@ class Generator5:
         n = c5["sites"][fl.size]
         for q, share in zip(fl.quadrants, shares):
             q.crawlers = share
-            mob_words_ = set(q.mob.noun.lower().split())
-            places = [p for p in QUADRANT_DATA[q.name]["sites"]
-                      if not set(p.lower().split()) & mob_words_]
-            places = self.rng.sample(places, len(places))
+            places = self.rng.sample(QUADRANT_DATA[q.name]["sites"],
+                                     len(QUADRANT_DATA[q.name]["sites"]))
             kinds = ["settlement" if q.faction else "ruin"]
             kinds += [self.rng.choice(["mob", "ruin"]) for _ in range(n - 1)]
-            vals = {"mob": q.mob.name, "mob_s": possessive(q.mob.name)}
-            for kind, place, count in zip(kinds, places, self._split(share, n, c5["site_min"])):
+            # Each mob ground is somebody different's while there are mobs to go
+            # round, as each of the books' Air sites was a different race's home.
+            holders = Deck(self.rng, [m for m, _ in q.hostile])
+            for kind, count in zip(kinds, self._split(share, n, c5["site_min"])):
+                holder = holders.draw() if kind == "mob" else None
+                # A place that shares a word with its holder reads as a stutter:
+                # "the Storm Shelf of the Storm Crows".
+                clash = set(holder.noun.lower().split()) if holder else set()
+                place = next(p for p in places if not set(p.lower().split()) & clash)
+                places.remove(place)
                 if kind == "settlement":
                     name, note = (q.settlement.split(",")[0],
                                   f"a {q.faction.name} settlement with a safe-room inn")
                 elif kind == "mob":
-                    name = f"the {place} of the {q.mob.noun}"
-                    note = deck["mob"].draw().format(**vals)
+                    name = f"the {place} of the {holder.noun}"
+                    note = deck["mob"].draw().format(mob=holder.name,
+                                                     mob_s=possessive(holder.name))
                 else:
                     name = f"the {deck['ruin_adj'].draw()} {place}"
                     note = deck["ruin"].draw()
-                q.sites.append(Site(name, kind, note, count))
+                q.sites.append(Site(name, kind, note, count, holder.name if holder else ""))
 
     def _quests(self, factions: List[Faction], quadrants: List[Quadrant]) -> List[Quest]:
         """What each faction asks of the crawlers. Templates are dealt from one deck
@@ -4816,6 +4882,16 @@ def render5(fl: Floor5) -> str:
         o.append(f"- **Mob:** {q.mob.name}, Level {q.level_range[0]}–{q.level_range[1]}")
         o.append(f"  - {q.mob.quirk}")
         o.append(f"  - *{q.mob.description}*")
+        if q.other_mobs:
+            o.append("- **Also in the quadrant:**")
+            for om in q.other_mobs:
+                lo_, hi_ = om.level_range
+                o.append(f"  - **{om.mob.name}**, Level {lo_}–{hi_}. {om.mob.quirk}")
+                o.append(f"    - *{om.mob.description}*")
+        if q.white:
+            w = q.white
+            o.append(f"- **White-tagged:** {w.name}, Level {w.level_range[0]}–"
+                     f"{w.level_range[1]}. They won't attack unless provoked. {w.hazard}")
         o.append(f"- **Getting to the castle:** {q.traversal}")
         o.append(f"- **Castle:** {c.name} — {c.form}, ruled by {c.ruler}.")
         if c.approach:
@@ -4898,7 +4974,8 @@ def render5_svg(fl: Floor5) -> str:
             (_fit(q.biome, 34), 11, "normal", "#222"),
             (_fit(q.faction.name if q.faction else "no faction", 30), 11, "normal", "#222"),
             (f"{q.mob.name} L{q.level_range[0]}–{q.level_range[1]}", 11, "normal", "#222"),
-            (f"~{q.crawlers} crawlers at {len(q.sites)} sites", 11, "normal", "#222"),
+            (f"~{q.crawlers} crawlers, {len(q.sites)} sites, {len(q.hostile)} mobs", 11,
+             "normal", "#222"),
             (_fit(q.castle.name, 30), 12, "bold", "#111"),
             (f"{q.castle.boss.tier.capitalize()} boss L{q.castle.boss.level}"
              + (f" + {len(q.castle.guardians)} guardian{'s' if len(q.castle.guardians) != 1 else ''}"
