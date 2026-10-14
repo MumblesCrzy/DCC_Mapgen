@@ -4509,6 +4509,13 @@ FLOOR5_CFG = {
     "guardian_bump": (8, 12),
     # Quests each faction posts; a large bubble's nine match the books' count.
     "quests_per_faction": {"small": 1, "medium": 2, "large": 3},
+    # Where crawlers start: the books' Air quadrant alone had four places. The
+    # bubble's crawlers are split unevenly between the quadrants, then between
+    # each quadrant's sites, by weights drawn from this range.
+    "sites": {"small": 2, "medium": 3, "large": 4},
+    "share_weight": (0.5, 1.5),
+    "quadrant_min": 15,
+    "site_min": 2,
 }
 
 QUADRANT_ORDER = ["Air", "Land", "Sea", "Subterranean"]
@@ -4546,6 +4553,15 @@ class Castle:
 
 
 @dataclass
+class Site:
+    """Somewhere in a quadrant that crawlers start."""
+    name: str            # "Grayridge", "the Kite City of the Razorfoxes"
+    kind: str            # settlement | mob | ruin
+    note: str
+    crawlers: int
+
+
+@dataclass
 class Quadrant:
     name: str
     color: str
@@ -4556,6 +4572,8 @@ class Quadrant:
     level_range: Tuple[int, int]
     traversal: str
     castle: Castle
+    crawlers: int = 0                     # how many start here, locked in
+    sites: List[Site] = field(default_factory=list)
 
 
 @dataclass
@@ -4684,7 +4702,47 @@ class Generator5:
         # Last, so the bubble above is the one it was before quests existed.
         fl.quests = self._quests(factions, quadrants)
         fl.achievements = [list(a) for a in ACHIEVEMENTS5["books"] + ACHIEVEMENTS5["ours"]]
+        # And after those, so the castles and quests stay what they were.
+        self._populate(fl)
         return fl
+
+    def _split(self, total: int, n: int, least: int) -> List[int]:
+        """total shared unevenly between n, none under least, adding up exactly."""
+        w = [self.rng.uniform(*self.cfg["share_weight"]) for _ in range(n)]
+        counts = [max(least, int(total * x / sum(w))) for x in w]
+        counts[counts.index(max(counts))] += total - sum(counts)
+        return counts
+
+    def _populate(self, fl: Floor5) -> None:
+        """Where the bubble's crawlers start. Each quadrant gets an uneven share,
+        and a few sites to start at: a faction's own settlement, the quadrant
+        mob's ground, or a ruin with an abandoned safe room. A quadrant with no
+        faction always has a ruin, so it still has a safe room."""
+        c5, notes = self.cfg, SITE_NOTES5
+        # Dealt across the bubble, so two ruins are seldom alike.
+        deck = {k: Deck(self.rng, notes[k]) for k in ("mob", "ruin", "ruin_adj")}
+        shares = self._split(fl.crawlers, len(fl.quadrants), c5["quadrant_min"])
+        n = c5["sites"][fl.size]
+        for q, share in zip(fl.quadrants, shares):
+            q.crawlers = share
+            mob_words_ = set(q.mob.noun.lower().split())
+            places = [p for p in QUADRANT_DATA[q.name]["sites"]
+                      if not set(p.lower().split()) & mob_words_]
+            places = self.rng.sample(places, len(places))
+            kinds = ["settlement" if q.faction else "ruin"]
+            kinds += [self.rng.choice(["mob", "ruin"]) for _ in range(n - 1)]
+            vals = {"mob": q.mob.name, "mob_s": possessive(q.mob.name)}
+            for kind, place, count in zip(kinds, places, self._split(share, n, c5["site_min"])):
+                if kind == "settlement":
+                    name, note = (q.settlement.split(",")[0],
+                                  f"a {q.faction.name} settlement with a safe-room inn")
+                elif kind == "mob":
+                    name = f"the {place} of the {q.mob.noun}"
+                    note = deck["mob"].draw().format(**vals)
+                else:
+                    name = f"the {deck['ruin_adj'].draw()} {place}"
+                    note = deck["ruin"].draw()
+                q.sites.append(Site(name, kind, note, count))
 
     def _quests(self, factions: List[Faction], quadrants: List[Quadrant]) -> List[Quest]:
         """What each faction asks of the crawlers. Templates are dealt from one deck
@@ -4721,7 +4779,9 @@ def render5(fl: Floor5) -> str:
     lo, hi = FLOOR5_CFG["mob_band"]
     o = [f"# Floor 5 — Bubble {fl.bubble} ({fl.size})", "", "## Summary", ""]
     o.append(f"- **Countdown:** {fl.days} days")
-    o.append(f"- **Crawlers in the bubble:** about {fl.crawlers}. {fl.bubble_state} Of note: {fl.rival}.")
+    split = ", ".join(f"{q.name} {q.crawlers}" for q in fl.quadrants)
+    o.append(f"- **Crawlers in the bubble:** about {fl.crawlers} ({split}). {fl.bubble_state} "
+             f"Of note: {fl.rival}.")
     o.append("- **Quadrants:** Air, Land, Sea, Subterranean — one castle each, stairwell in every throne room.")
     o.append(f"- **Quadrant mob levels:** {lo}–{hi}. Each castle's ruler is the quadrant's "
              f"boss: a borough boss, or a city boss in the castle meant to fall last. Harder "
@@ -4745,7 +4805,12 @@ def render5(fl: Floor5) -> str:
         o.append(f"### {q.name} Quadrant")
         o.append("")
         o.append(f"- **Biome:** {q.biome}.")
-        o.append(f"- **Settlement:** {q.settlement}.")
+        o.append(f"- **Crawlers:** about {q.crawlers} start in this quadrant. None of them can "
+                 f"leave it until its castle falls.")
+        o.append("- **Starting sites:**")
+        for s in q.sites:
+            o.append(f"  - **{s.name[:1].upper() + s.name[1:]}** (about {s.crawlers} "
+                     f"crawlers): {s.note}.")
         if q.faction:
             o.append(f"- **Faction:** {q.faction.name}; want {q.faction.want}.")
         o.append(f"- **Mob:** {q.mob.name}, Level {q.level_range[0]}–{q.level_range[1]}")
@@ -4791,7 +4856,10 @@ def render5(fl: Floor5) -> str:
     o.append("")
     for q in fl.quadrants:
         o.append(f"- **{q.name}:** {q.castle.difficulty}. {q.castle.difficulty_note}")
-    o.append(f"- **Suggested starting quadrant:** {fl.suggested_start} (the easiest castle). Your call.")
+    first = next(q for q in fl.quadrants if q.name == fl.suggested_start)
+    gentle = next(s for s in first.sites if s.kind != "mob")
+    o.append(f"- **Suggested starting quadrant:** {fl.suggested_start} (the easiest castle), "
+             f"at {gentle.name}. Your call; the books dealt crawlers out at random.")
     o.extend(crawler_section(fl))
     if fl.achievements:
         books = len(ACHIEVEMENTS5["books"])
@@ -4830,6 +4898,7 @@ def render5_svg(fl: Floor5) -> str:
             (_fit(q.biome, 34), 11, "normal", "#222"),
             (_fit(q.faction.name if q.faction else "no faction", 30), 11, "normal", "#222"),
             (f"{q.mob.name} L{q.level_range[0]}–{q.level_range[1]}", 11, "normal", "#222"),
+            (f"~{q.crawlers} crawlers at {len(q.sites)} sites", 11, "normal", "#222"),
             (_fit(q.castle.name, 30), 12, "bold", "#111"),
             (f"{q.castle.boss.tier.capitalize()} boss L{q.castle.boss.level}"
              + (f" + {len(q.castle.guardians)} guardian{'s' if len(q.castle.guardians) != 1 else ''}"
@@ -6525,6 +6594,19 @@ def _where_phrases(rng, fl, count: int) -> List[str]:
     nbhds = getattr(fl, "neighborhoods", None)
     if nbhds:
         return [f"in neighborhood {nb.label}" for nb in _pick_distinct(rng, nbhds, count)]
+    # Floor 5: a quadrant and a starting site, where the crawlers are locked in
+    # until their castle falls. A group lands at a site as often as crawlers
+    # start there, and no two groups share one while there are sites to spare.
+    sites = [(q, s) for q in getattr(fl, "quadrants", None) or [] for s in q.sites]
+    if sites:
+        out = []
+        while len(out) < count:
+            pool = list(sites)
+            while pool and len(out) < count:
+                q, s = rng.choices(pool, weights=[s_.crawlers for _, s_ in pool])[0]
+                pool.remove((q, s))
+                out.append(f"in the {q.name} quadrant, near {s.name}")
+        return out
     return _pick_distinct(rng, TEAM_PLACE_GENERIC, count)
 
 

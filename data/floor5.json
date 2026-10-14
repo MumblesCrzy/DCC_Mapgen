@@ -34,6 +34,18 @@
     "Grass Wyrms",
     "Ash Hounds",
     "Tomb Scarabs"
+   ],
+   "sites": [
+    "Dune Camp",
+    "Oasis",
+    "Salt Works",
+    "Stone Circle",
+    "Bone Market",
+    "Glass Quarry",
+    "Caravanserai",
+    "Tomb Village",
+    "Dry Wells",
+    "Ash Fields"
    ]
   },
   "Sea": {
@@ -70,6 +82,18 @@
     "Siren Eels",
     "Salt-Drowned Sailors",
     "Kraken Spawn"
+   ],
+   "sites": [
+    "Reef Town",
+    "Stilt Village",
+    "Wreck Harbor",
+    "Lighthouse Rock",
+    "Kelp Market",
+    "Raft City",
+    "Ice Floe",
+    "Pearl Beds",
+    "Tide Caves",
+    "Sandbar"
    ]
   },
   "Air": {
@@ -105,6 +129,18 @@
     "Storm Crows",
     "Ballast Golems",
     "Sky-Lampreys"
+   ],
+   "sites": [
+    "Kite City",
+    "Wasteland Fortress",
+    "Precipice",
+    "Dirt Island",
+    "Cable Town",
+    "Cloud Harbor",
+    "Wreck Field",
+    "Storm Shelf",
+    "Mooring Mast",
+    "Wind Caves"
    ]
   },
   "Subterranean": {
@@ -141,6 +177,18 @@
     "Deep Gnomes",
     "Blind Cavefish-men",
     "Shaft Ghouls"
+   ],
+   "sites": [
+    "Glow-Worm Grotto",
+    "Mushroom Town",
+    "Mine Camp",
+    "Ossuary Market",
+    "Lava Forge",
+    "Sunken Chapel",
+    "Cave Lake",
+    "Root Hall",
+    "Echo Galleries",
+    "Deep Wells"
    ]
   }
  },
@@ -622,6 +670,30 @@
     "Finish quests for two factions at war with each other.",
     "Silver Lucky Bastard Box"
    ]
+  ]
+ },
+ "SITE_NOTES5": {
+  "mob": [
+   "home to the {mob}; a crawler who starts here starts in a fight",
+   "where the {mob} nest, mostly asleep by day",
+   "the {mob_s} hunting ground, with one way out",
+   "the {mob_s} camp, which they defend before anything else",
+   "overrun by the {mob}, who did not build it and do not care"
+  ],
+  "ruin": [
+   "empty but for an abandoned safe room",
+   "picked clean, with an abandoned safe room in the cellar",
+   "burned out; its safe room still works, and nobody runs it",
+   "deserted in a hurry, the safe room door still open",
+   "quiet, with an abandoned safe room and a lot of graffiti about why"
+  ],
+  "ruin_adj": [
+   "Abandoned",
+   "Burned-Out",
+   "Empty",
+   "Silent",
+   "Collapsed",
+   "Looted"
   ]
  }
 }

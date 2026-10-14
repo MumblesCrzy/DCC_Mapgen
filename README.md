@@ -20,6 +20,7 @@ A procedural floor/map generator in the style of the *Dungeon Crawler Carl* book
   - **The tail and the yards:** how to fight the Station Mimic, 435's non-combatant staff, the Abyss's pull, and every yard the floor's lines run from. Station 435 has its own marker on the map.
   - **Achievements:** the ones most often earned on the Iron Tangle. Every quest and achievement box shows up in the floor's box suggestions. Nothing says what opens the portals at the Abyss.
 - **Floor 5** (The Bubbles) — four quadrants, castles, factions. Each castle's ruler is its quadrant's boss: a borough boss, or a city boss in the castle meant to fall last, as the books field borough bosses at L52–55 and a city boss at L82. Harder castles keep borough-boss guardians as well, and killing one doesn't take the castle. A popped bubble lets its crawlers out, but they can't enter another until it has popped too.
+  - **Crawlers and where they start:** the bubble's 130–170 crawlers are shared out unevenly between the quadrants, at least 15 to each, and each quadrant says how many it holds, since none can leave until its castle falls. Each quadrant has two to four starting sites by size (the books' Air quadrant had four), each with its share of crawlers: a faction's own settlement with its safe-room inn, the quadrant mob's ground ("the Kite City of the Razorfoxes", where a crawler starts in a fight), or a ruin with an abandoned safe room. Other Crawlers names the quadrant and the site each group is at.
   - **Quests:** each faction posts quests (one each on a small bubble, three on a large, the books' nine), shaped like the books' Fifth Floor ones — free a prisoner, find out who killed my son, kill someone, stay out of a building, get a loose creature back — and filled in with the bubble's own castles, rulers, rival factions, settlements and mobs.
   - **Achievements:** nine the books hand out on the Fifth Floor, leaving out the ones tied to its plot, then eight built on how a bubble works. Their boxes reach the floor's box suggestions and open in the roller.
   - Both sections say they are suggested ideas, not a definitive list.
@@ -814,6 +815,13 @@ Floor 5's bosses have their own group, with the books' tiers written into the te
   the castle, in the Bestiary, dropping a box, and never sharing a ruler's first name;
 - the rules say a popped bubble lets crawlers out but not into another bubble, and
   that its stairwells have no time limit;
+- the quadrants' crawlers add up to the bubble's, unevenly, never under 15 to a
+  quadrant or 2 to a site, even with the shares forced far wider than the bubble's;
+- each quadrant has its number of sites, adding up to its crawlers: a faction's own
+  settlement, named as it is, the quadrant mob's ground, or a ruin with a safe room,
+  and a quadrant with no faction always has a ruin;
+- every group in Other Crawlers is at a real quadrant and site, no two at one site
+  while there are sites to spare;
 - each faction posts its quota of quests, nine on a large bubble, no two from the
   same template, each in the write-up and the box suggestions;
 - every name a quest fills in is really on the floor, checked by reading each quest

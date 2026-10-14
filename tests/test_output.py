@@ -1451,6 +1451,104 @@ class Floor5QuestTest(unittest.TestCase):
             self.assertEqual(names[:books], [a[0] for a in mg.ACHIEVEMENTS5["books"]])
 
 
+class Floor5SiteTest(unittest.TestCase):
+    """Where a bubble's crawlers start. The books share them out at random, about
+    150 to a bubble, and nobody leaves their quadrant until its castle falls, so
+    each quadrant says how many it holds; the Air quadrant alone had four places
+    a crawler could start, each somebody's home. Other Crawlers says which
+    quadrant, and which site, each group is in."""
+
+    SITES = {"small": 2, "medium": 3, "large": 4}
+
+    @classmethod
+    def setUpClass(cls):
+        cls.floors = [mg.generate(5, size, seed, images=False)
+                      for size in ("small", "medium", "large") for seed in range(1, 13)]
+
+    def test_the_crawlers_are_shared_out_between_the_quadrants(self):
+        spreads = []
+        for res in self.floors:
+            fl, md = res.floor, res.markdown
+            where = f"{fl.size} seed {fl.seed}"
+            counts = [q.crawlers for q in fl.quadrants]
+            self.assertEqual(sum(counts), fl.crawlers, where)
+            self.assertGreaterEqual(min(counts), 15, where)
+            spreads.append(max(counts) - min(counts))
+            split = ", ".join(f"{q.name} {q.crawlers}" for q in fl.quadrants)
+            self.assertIn(f"about {fl.crawlers} ({split})", md)
+            for q in fl.quadrants:
+                self.assertIn(f"- **Crawlers:** about {q.crawlers} start in this quadrant. "
+                              f"None of them can leave it until its castle falls.", md)
+        self.assertGreater(max(spreads), 15, "every bubble shared out evenly")
+
+    def test_no_quadrant_or_site_is_left_nearly_empty(self):
+        """Fifteen crawlers at least to a quadrant and two to a site, however
+        unevenly the shares fall: forced here with weights far wider than the
+        bubble's own, which seldom push a share that low by themselves."""
+        gen = mg.Generator5("large", 1, None)
+        gen.cfg = dict(gen.cfg, share_weight=(0.05, 3.0))
+        for total in (130, 150, 170):
+            for _ in range(200):
+                shares = gen._split(total, 4, gen.cfg["quadrant_min"])
+                self.assertEqual(sum(shares), total)
+                self.assertGreaterEqual(min(shares), 15, shares)
+                sites = gen._split(min(shares), 4, gen.cfg["site_min"])
+                self.assertEqual(sum(sites), min(shares))
+                self.assertGreaterEqual(min(sites), 2, sites)
+
+    def test_each_quadrant_has_its_starting_sites(self):
+        for res in self.floors:
+            fl, md = res.floor, res.markdown
+            where = f"{fl.size} seed {fl.seed}"
+            names = []
+            for q in fl.quadrants:
+                self.assertEqual(len(q.sites), self.SITES[fl.size], f"{where}: {q.name}")
+                self.assertEqual(sum(s.crawlers for s in q.sites), q.crawlers, where)
+                self.assertTrue(all(s.crawlers >= 2 for s in q.sites), where)
+                kinds = [s.kind for s in q.sites]
+                if q.faction:
+                    home = next(s for s in q.sites if s.kind == "settlement")
+                    self.assertEqual(kinds.count("settlement"), 1, where)
+                    self.assertEqual(home.name, q.settlement.split(",")[0], where)
+                    self.assertIn(f"{q.faction.name} settlement with a safe-room inn", home.note)
+                else:
+                    self.assertNotIn("settlement", kinds, where)
+                    self.assertIn("ruin", kinds, f"{where}: a factionless quadrant with no safe room")
+                for s in q.sites:
+                    if s.kind == "mob":
+                        self.assertTrue(s.name.endswith(f" of the {q.mob.noun}"), s.name)
+                        self.assertIn(q.mob.name, s.note.replace("'", ""), where)
+                    if s.kind == "ruin":
+                        self.assertIn("safe room", s.note, where)
+                    self.assertIn(f"  - **{s.name[:1].upper() + s.name[1:]}** (about "
+                                  f"{s.crawlers} crawlers): {s.note}.", md)
+                names += [s.name for s in q.sites]
+            self.assertEqual(len(set(names)), len(names), where)
+            start = next(q for q in fl.quadrants if q.name == fl.suggested_start)
+            gentle = next(s for s in start.sites if s.kind != "mob")
+            self.assertIn(f"(the easiest castle), at {gentle.name}.", md)
+        kinds = collections.Counter(s.kind for res in self.floors
+                                    for q in res.floor.quadrants for s in q.sites)
+        self.assertTrue(kinds["mob"] and kinds["ruin"] and kinds["settlement"], kinds)
+
+    def test_other_crawlers_say_where_each_group_is(self):
+        placed = 0
+        for res in self.floors:
+            fl = res.floor
+            places = {f"in the {q.name} quadrant, near {s.name}"
+                      for q in fl.quadrants for s in q.sites}
+            used = []
+            for t in fl.other_crawlers:
+                hits = [p for p in places if p in t.status]
+                self.assertEqual(len(hits), 1, f"{fl.size} seed {fl.seed}: {t.status}")
+                used += hits
+                placed += 1
+            if len(used) <= len(places):
+                self.assertEqual(len(set(used)), len(used),
+                                 f"{fl.size} seed {fl.seed}: two groups at one site")
+        self.assertGreater(placed, 30)
+
+
 class SystemsTest(unittest.TestCase):
     """What's switched on: the dungeon's systems by the floor they arrive on.
 
