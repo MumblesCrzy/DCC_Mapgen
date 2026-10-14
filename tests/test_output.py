@@ -22,6 +22,7 @@ import json
 import os
 import random
 import re
+import string
 import subprocess
 import sys
 import tempfile
@@ -1321,6 +1322,133 @@ class Floor5BossTest(unittest.TestCase):
             self.assertIn("no time limit on them", rules)
             self.assertIn("killing them takes nothing", rules)
             self.assertNotIn("lacuna", md)
+
+
+class Floor5QuestTest(unittest.TestCase):
+    """What a bubble's factions ask of the crawlers, and the achievements a bubble
+    invites. Both are labelled suggested ideas, not a definitive list. A large
+    bubble posts nine quests, the books' count for the Fifth Floor, and every
+    name a quest fills in is something really on that floor."""
+
+    PER_FACTION = {"small": 1, "medium": 2, "large": 3}
+    NOTE = "Suggested ideas, not a definitive list"
+    # Achievements the books hand out on the Fifth Floor, with their rewards.
+    BOOKS = {"Quarry Sees Another Spring": "Gold Venison Box",
+             "Cannonball!": "Silver Skydiver's Box",
+             "Milquetoast": "Silver Pacifist's Box",
+             "I was in the Pool!": "Bronze I'm Wet Box",
+             "Rock Bottom": "Gold I'm Wet Box",
+             "Soft Vore": "Platinum Spicy Box",
+             "Disarming Personality": "Silver Savage Box"}
+
+    @classmethod
+    def setUpClass(cls):
+        cls.floors = [mg.generate(5, size, seed, images=False)
+                      for size in ("small", "medium", "large") for seed in range(1, 9)]
+
+    @staticmethod
+    def _pattern(template):
+        """A template as a regex: each {slot} a named group, repeats back-referenced."""
+        seen, out = set(), []
+        for literal, slot, _, _ in string.Formatter().parse(template):
+            out.append(re.escape(literal))
+            if slot:
+                out.append(f"(?P={slot})" if slot in seen else f"(?P<{slot}>.+?)")
+                seen.add(slot)
+        return re.compile("^" + "".join(out) + "$")
+
+    def _filled(self, q):
+        """The template a quest came from, and what filled its slots."""
+        for t in mg.QUESTS5["templates"]:
+            mt = self._pattern(t["title"]).match(q.title)
+            mo = self._pattern(t["objective"]).match(q.objective)
+            if mt and mo:
+                return t, {**mt.groupdict(), **mo.groupdict()}
+        self.fail(f"no template makes {q.title!r}: {q.objective}")
+
+    def test_each_faction_posts_its_quests(self):
+        for res in self.floors:
+            fl, md = res.floor, res.markdown
+            where = f"{fl.size} seed {fl.seed}"
+            for f in fl.factions:
+                mine = [q for q in fl.quests if q.giver.endswith(f", of the {f.name}")]
+                self.assertEqual(len(mine), self.PER_FACTION[fl.size], f"{where}: {f.name}")
+            self.assertEqual(len(fl.quests), 3 * self.PER_FACTION[fl.size])
+            titles = [q.title for q in fl.quests]
+            self.assertEqual(len(set(titles)), len(titles), f"{where}: {titles}")
+            section = md[md.index("## Quests"):md.index("## DM Material")]
+            self.assertIn(self.NOTE, section)
+            boxed = {s.source for s in mg.floor_box_suggestions(fl) if s.kind == "quest"}
+            for q in fl.quests:
+                text = f"{q.title} {q.objective} {q.reward} {q.flavor}"
+                self.assertNotIn("{", text, where)
+                for f in fl.factions:                    # "the Brine Knights' lands"
+                    if f.name.endswith("s"):
+                        self.assertNotIn(f"{f.name}'s", text, f"{where}: {text}")
+                self.assertIn("Quest Box", q.reward, where)
+                self.assertIn(f"- **{q.giver.split(',')[0]} — {q.title}.** {q.objective} "
+                              f"Reward: {q.reward}.", section)
+                self.assertIn(q.title, boxed, where)
+        self.assertEqual(len(self.floors[-1].floor.quests), 9, "a large bubble posts the books' nine")
+
+    def test_a_quest_names_what_is_really_on_the_floor(self):
+        seen = set()
+        for res in self.floors:
+            fl = res.floor
+            where = f"{fl.size} seed {fl.seed}"
+            castles = {q.castle.name: q for q in fl.quadrants}
+            factions = {f.name: f for f in fl.factions}
+            homes = {q.name: q.settlement.split(",")[0] for q in fl.quadrants}
+            for q in fl.quests:
+                t, slots = self._filled(q)
+                seen.add(t["title"])
+                own = q.giver.split(", of the ")[1]
+                giver = q.giver.split(",")[0]
+                if "giver" in slots:
+                    self.assertEqual(slots["giver"], giver, where)
+                if "faction" in slots:
+                    self.assertEqual(slots["faction"], own, where)
+                if "rival" in slots:
+                    self.assertIn(slots["rival"], factions, where)
+                    self.assertNotEqual(slots["rival"], own, f"{where}: a faction is its own rival")
+                if "rival_home" in slots:
+                    self.assertEqual(slots["rival_home"],
+                                     homes[factions[slots["rival"]].home], where)
+                if "npc" in slots:
+                    self.assertNotEqual(slots["npc"], giver, where)
+                if "castle" in slots:
+                    quad = castles[slots["castle"]]
+                    if "ruler" in slots:
+                        self.assertEqual(slots["ruler"], quad.castle.ruler, where)
+                    if "quadrant" in slots:
+                        self.assertEqual(slots["quadrant"], quad.name, where)
+                if "mob" in slots:
+                    self.assertEqual(slots["mob"],
+                                     next(x.mob.name for x in fl.quadrants
+                                          if x.name == slots["quadrant"]), where)
+        self.assertEqual(seen, {t["title"] for t in mg.QUESTS5["templates"]},
+                         "a quest template never came up, so its slots went unchecked")
+
+    def test_the_achievements_a_bubble_invites(self):
+        for res in self.floors[:3]:
+            fl, md = res.floor, res.markdown
+            section = md[md.index("## Achievements"):md.index("## Bestiary")]
+            self.assertIn(self.NOTE, section)
+            names = [a[0] for a in fl.achievements]
+            self.assertEqual(len(set(names)), len(names))
+            for name, reward in self.BOOKS.items():
+                self.assertIn([name, reward], [[a[0], a[2]] for a in fl.achievements])
+            boxed = {s.source for s in mg.floor_box_suggestions(fl) if s.kind == "achievement"}
+            for name, trigger, reward in fl.achievements:
+                self.assertIn(f"- **{name}:** {trigger} → {reward}", section)
+                if reward.startswith("flavor only"):
+                    self.assertNotIn(name, boxed)
+                else:
+                    self.assertRegex(reward, r"^(Bronze|Silver|Gold|Platinum|Legendary|Celestial) ")
+                    self.assertIn(name, boxed)
+            books = len(mg.ACHIEVEMENTS5["books"])
+            self.assertIn(f"The first {books} are ones the books hand out", section)
+            self.assertEqual(names[:books], [a[0] for a in mg.ACHIEVEMENTS5["books"]])
 
 
 class SystemsTest(unittest.TestCase):

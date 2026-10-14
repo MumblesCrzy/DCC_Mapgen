@@ -2877,6 +2877,42 @@
     ],
     "earned": "achievements",
     "from_floor": 1
+   },
+   {
+    "name": "Skydiver's",
+    "pools": [
+     "apparel",
+     "tools"
+    ],
+    "earned": "achievements",
+    "from_floor": 5
+   },
+   {
+    "name": "Pacifist's",
+    "pools": [
+     "consumables",
+     "magic"
+    ],
+    "earned": "achievements",
+    "from_floor": 5
+   },
+   {
+    "name": "I'm Wet",
+    "pools": [
+     "apparel",
+     "consumables"
+    ],
+    "earned": "achievements",
+    "from_floor": 5
+   },
+   {
+    "name": "Spicy",
+    "pools": [
+     "consumables",
+     "oddities"
+    ],
+    "earned": "achievements",
+    "from_floor": 5
    }
   ],
   "contents": {

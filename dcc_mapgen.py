@@ -190,6 +190,11 @@ def cap_words(text: str) -> str:
     return " ".join(out)
 
 
+def possessive(name: str) -> str:
+    """"the Brine Knights'", not "the Brine Knights's"; "the Camel-folk's"."""
+    return name + ("'" if name.endswith("s") else "'s")
+
+
 def mid_phrase(name: str) -> str:
     """A proper name used inside a phrase: "The Sunken Market" reads better as
     "Business in the Sunken Market" than as "Business in The Sunken Market"."""
@@ -4502,6 +4507,8 @@ FLOOR5_CFG = {
     # more of them the harder the castle. Killing one does not take the castle.
     "guardians": {"Easy": (0, 0), "Moderate": (0, 1), "Hard": (1, 1), "Brutal": (1, 2)},
     "guardian_bump": (8, 12),
+    # Quests each faction posts; a large bubble's nine match the books' count.
+    "quests_per_faction": {"small": 1, "medium": 2, "large": 3},
 }
 
 QUADRANT_ORDER = ["Air", "Land", "Sea", "Subterranean"]
@@ -4567,6 +4574,8 @@ class Floor5:
     seed: int
     number: int = 5
     other_crawlers: List[CrawlerTeam] = field(default_factory=list)
+    quests: List[Quest] = field(default_factory=list)           # by faction, in order
+    achievements: List[list] = field(default_factory=list)      # the books' first
 
 
 class Generator5:
@@ -4666,12 +4675,46 @@ class Generator5:
                 castle=self.make_castle(q, mob, lr[1], diff)))
 
         start = next(qq.name for qq in quadrants if qq.castle.difficulty == "Easy")
-        return Floor5(
+        fl = Floor5(
             size=self.size, bubble=self.rng.randint(1, self.cfg["bubbles"]),
             days=self.days_override or self.cfg["days"], crawlers=self.rng.randint(*self.cfg["crawlers"]),
             bubble_state=self.rng.choice(BUBBLE_STATE), rival=self.rng.choice(RIVALS),
             factions=factions, tension=tension, storyline=self.rng.choice(STORYLINE),
             quadrants=quadrants, suggested_start=start, seed=self.seed)
+        # Last, so the bubble above is the one it was before quests existed.
+        fl.quests = self._quests(factions, quadrants)
+        fl.achievements = [list(a) for a in ACHIEVEMENTS5["books"] + ACHIEVEMENTS5["ours"]]
+        return fl
+
+    def _quests(self, factions: List[Faction], quadrants: List[Quadrant]) -> List[Quest]:
+        """What each faction asks of the crawlers. Templates are dealt from one deck
+        for the whole bubble, so no two quests on it share one, and each fills in
+        with what is really on the floor: its castles and rulers, the other
+        factions and their settlements, the quadrants' mobs."""
+        qb = QUESTS5
+        deck = {k: Deck(self.rng, qb[k]) for k in
+                ("templates", "npcs", "items", "places", "creatures", "rewards", "flavor")}
+        home = {q.name: q for q in quadrants}
+        out = []
+        for f in factions:
+            for _ in range(self.cfg["quests_per_faction"][self.size]):
+                t = deck["templates"].draw()
+                rival = self.rng.choice([r for r in factions if r is not f])
+                q = self.rng.choice(quadrants)
+                giver, npc = deck["npcs"].draw(), deck["npcs"].draw()
+                item, (creature, what) = deck["items"].draw(), deck["creatures"].draw()
+                vals = dict(giver=giver, npc=npc, faction=f.name, rival=rival.name,
+                            giver_s=possessive(giver), faction_s=possessive(f.name),
+                            rival_home=home[rival.home].settlement.split(",")[0],
+                            castle=q.castle.name, ruler=q.castle.ruler, quadrant=q.name,
+                            mob=q.mob.name, item=item,
+                            Item=cap_words(re.sub(r"^(?:a|an|the)\s+", "", item)),
+                            place=deck["places"].draw(), creature=creature, creature_what=what)
+                out.append(Quest(t["title"].format(**vals), f"{giver}, of the {f.name}",
+                                 t["objective"].format(**vals),
+                                 deck["flavor"].draw().format(**vals),
+                                 deck["rewards"].draw().format(**vals)))
+        return out
 
 
 def render5(fl: Floor5) -> str:
@@ -4728,6 +4771,20 @@ def render5(fl: Floor5) -> str:
             o.append(f"  - Mechanic: {g.mechanic}")
             o.append(f"  - Drops: a {boss_box(g.tier, fl.number)}")
         o.append("")
+    if fl.quests:
+        o.append("## Quests")
+        o.append("")
+        o.append("Suggested ideas, not a definitive list: the bubble's people will ask for "
+                 "whatever the story needs. A quest in another quadrant can't be reached until "
+                 "the crawler's own castle has fallen.")
+        o.append("")
+        for f in fl.factions:
+            o.append(f"### {f.name} ({f.home} quadrant)")
+            o.append("")
+            for q in fl.quests:
+                if q.giver.endswith(f", of the {f.name}"):
+                    o += _quest_lines(q, q.giver.split(",")[0])
+            o.append("")
     o.append("## DM Material")
     o.append("")
     o.append("Crawlers are meant to work this out on their own (or not).")
@@ -4736,6 +4793,17 @@ def render5(fl: Floor5) -> str:
         o.append(f"- **{q.name}:** {q.castle.difficulty}. {q.castle.difficulty_note}")
     o.append(f"- **Suggested starting quadrant:** {fl.suggested_start} (the easiest castle). Your call.")
     o.extend(crawler_section(fl))
+    if fl.achievements:
+        books = len(ACHIEVEMENTS5["books"])
+        o.append("## Achievements")
+        o.append("")
+        o.append(f"Suggested ideas, not a definitive list: the System hands achievements out for "
+                 f"whatever amuses it. The first {books} are ones the books hand out on the "
+                 f"Fifth Floor; the rest are built on how a bubble works.")
+        o.append("")
+        for name, trigger, reward in fl.achievements:
+            o.append(f"- **{name}:** {trigger} → {reward}")
+        o.append("")
     return "\n".join(o)
 
 

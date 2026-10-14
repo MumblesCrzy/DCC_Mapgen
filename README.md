@@ -20,6 +20,9 @@ A procedural floor/map generator in the style of the *Dungeon Crawler Carl* book
   - **The tail and the yards:** how to fight the Station Mimic, 435's non-combatant staff, the Abyss's pull, and every yard the floor's lines run from. Station 435 has its own marker on the map.
   - **Achievements:** the ones most often earned on the Iron Tangle. Every quest and achievement box shows up in the floor's box suggestions. Nothing says what opens the portals at the Abyss.
 - **Floor 5** (The Bubbles) — four quadrants, castles, factions. Each castle's ruler is its quadrant's boss: a borough boss, or a city boss in the castle meant to fall last, as the books field borough bosses at L52–55 and a city boss at L82. Harder castles keep borough-boss guardians as well, and killing one doesn't take the castle. A popped bubble lets its crawlers out, but they can't enter another until it has popped too.
+  - **Quests:** each faction posts quests (one each on a small bubble, three on a large, the books' nine), shaped like the books' Fifth Floor ones — free a prisoner, find out who killed my son, kill someone, stay out of a building, get a loose creature back — and filled in with the bubble's own castles, rulers, rival factions, settlements and mobs.
+  - **Achievements:** nine the books hand out on the Fifth Floor, leaving out the ones tied to its plot, then eight built on how a bubble works. Their boxes reach the floor's box suggestions and open in the roller.
+  - Both sections say they are suggested ideas, not a definitive list.
 - **Floor 6** (The Hunting Grounds) — Floor 3's grid reskinned as jungle, with hunter parties and a bounty board.
 - **Floor 8** (Ghosts of Earth) — polar folklore map with totem cards and a deckmaster ladder.
 - **Floor 9** (Faction Wars) — the nine-slice pie around Larracos, warlords, stance paths.
@@ -810,7 +813,15 @@ Floor 5's bosses have their own group, with the books' tiers written into the te
   borough boss between its quadrant's mobs and its ruler, written up as not taking
   the castle, in the Bestiary, dropping a box, and never sharing a ruler's first name;
 - the rules say a popped bubble lets crawlers out but not into another bubble, and
-  that its stairwells have no time limit.
+  that its stairwells have no time limit;
+- each faction posts its quota of quests, nine on a large bubble, no two from the
+  same template, each in the write-up and the box suggestions;
+- every name a quest fills in is really on the floor, checked by reading each quest
+  back against its template: the castle's own ruler and quadrant, a rival that is
+  never the giver's own faction, that rival's settlement, the quadrant's mob;
+- the books' Fifth Floor achievements are listed with the books' rewards, and every
+  boxed reward is a box the roller knows;
+- both sections say they are suggested ideas, not a definitive list.
 
 The leaderboard has its own group. The canon bounties are written into the test
 rather than read from the bank, and checked against the table every floor prints:

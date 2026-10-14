@@ -371,5 +371,257 @@
   "It guards a vault the ruler has forgotten about.",
   "It hunts the open ground between the settlements and the castle.",
   "It lives in the castle's lowest level and comes up when the ruler calls."
- ]
+ ],
+ "QUESTS5": {
+  "templates": [
+   {
+    "title": "Free {npc}",
+    "objective": "{npc}, one of the {faction}, is held in the cells under {castle} in the {quadrant} quadrant. Get them out alive."
+   },
+   {
+    "title": "Find Out Who Killed My Son",
+    "objective": "{giver_s} son was found dead outside {rival_home}. The {rival} swear they had nothing to do with it. Find out who did."
+   },
+   {
+    "title": "Kill {npc}",
+    "objective": "{npc} of the {rival} has to die before the bubble pops. Nobody is to know who asked."
+   },
+   {
+    "title": "Stay Out of {place}",
+    "objective": "Stay out of {place} until the bubble pops. That's the whole quest. It is harder than it sounds."
+   },
+   {
+    "title": "Get {creature}",
+    "objective": "{creature}, the {faction_s} {creature_what}, got loose in the {quadrant} quadrant. Bring it back alive. It bites."
+   },
+   {
+    "title": "The {Item} Job",
+    "objective": "Steal {item} from {castle} before {ruler} notices it's gone, and bring it to {giver}."
+   },
+   {
+    "title": "The Hidden Shrine",
+    "objective": "The {rival} keep a shrine hidden somewhere in the {quadrant} quadrant. Find it, and tell nobody but {giver}."
+   },
+   {
+    "title": "Peace Talks",
+    "objective": "Escort {giver} to {rival_home} and back, and keep the peace while the {faction} and the {rival} talk."
+   },
+   {
+    "title": "Thin the Herd",
+    "objective": "Kill thirty {mob} in the {quadrant} quadrant. {giver} will know if you're lying."
+   },
+   {
+    "title": "Hold the Throne",
+    "objective": "Take the throne room of {castle} and keep it until the {faction} arrive to claim it."
+   },
+   {
+    "title": "Turncoat",
+    "objective": "{npc} of the {rival} wants to defect. Get them out of {rival_home} without the {rival} noticing."
+   },
+   {
+    "title": "The Ruler's Ear",
+    "objective": "Get an audience with {ruler}, who rules {castle}, and deliver the {faction_s} terms. Survive the reply."
+   }
+  ],
+  "npcs": [
+   "Wennick",
+   "Brask",
+   "Old Mott",
+   "Tilly Fenn",
+   "Sarvo",
+   "Hesk",
+   "Ruddle",
+   "Pim",
+   "Corva",
+   "Mags",
+   "Jory",
+   "Ottilie",
+   "Snell",
+   "Brunhold",
+   "Fitch",
+   "Vada",
+   "Kestrel",
+   "Dunmore",
+   "Ysolde",
+   "Grub",
+   "Lark",
+   "Tamsin",
+   "Bram",
+   "Quill",
+   "Nedda",
+   "Sorrel",
+   "Harrow",
+   "Wick",
+   "Esk",
+   "Maud"
+  ],
+  "items": [
+   "the ruler's spare crown",
+   "a map of the dome's weak points",
+   "the castle's war chest",
+   "a jar of the ruler's teeth",
+   "the key to the castle's lowest cell",
+   "a ledger of who owes the ruler what",
+   "the ruler's favorite hat",
+   "a pressure gauge nobody can explain"
+  ],
+  "places": [
+   "the Customs House",
+   "the Lighthouse",
+   "City Hall",
+   "the Bathhouse",
+   "the Counting House",
+   "the Map Room",
+   "the Old Mill",
+   "the Signal Tower"
+  ],
+  "creatures": [
+   [
+    "Bollard",
+    "two-headed guard dog"
+   ],
+   [
+    "Mister Pickles",
+    "racing beetle"
+   ],
+   [
+    "Old Grudge",
+    "war tortoise"
+   ],
+   [
+    "Duchess",
+    "hunting eel"
+   ],
+   [
+    "Biscuit",
+    "riding lizard"
+   ],
+   [
+    "Thunderguts",
+    "pack yak"
+   ],
+   [
+    "Saint Agnes",
+    "messenger bat"
+   ],
+   [
+    "Chompers",
+    "prize sand shark"
+   ]
+  ],
+  "rewards": [
+   "a Bronze Quest Box",
+   "a Silver Quest Box",
+   "a Gold Quest Box",
+   "a Silver Quest Box and the {faction_s} inn free for the rest of the floor",
+   "a Gold Quest Box and a favor from the {faction}",
+   "a Bronze Quest Box and a guide through the {faction_s} lands",
+   "a Silver Quest Box and the {faction_s} help with your castle"
+  ],
+  "flavor": [
+   "The {faction} have asked three other parties. None of them came back to say no.",
+   "Whoever posted this has crossed out the reward twice and written it in larger.",
+   "It is a simple job, they say, the way people say that about the jobs that aren't.",
+   "The {rival} would pay more for you to fail. Nobody has told you that.",
+   "There is a deadline. It has not been mentioned.",
+   "Half the {faction} want this done. The other half want it done quietly.",
+   "The last crawler who took this one is now a cautionary tale with a statue.",
+   "The quest text has been translated from the {faction_s} language, badly.",
+   "It pays on completion, and the {faction} define completion generously.",
+   "Nobody in the settlement will meet your eye while you hold this one.",
+   "Somebody has scratched GOOD LUCK into the notice. It does not read as sincere.",
+   "The reward is real. The {faction_s} account of events is decoratively arranged."
+  ]
+ },
+ "ACHIEVEMENTS5": {
+  "books": [
+   [
+    "Quarry Sees Another Spring",
+    "Be on the Leaderboard.",
+    "Gold Venison Box"
+   ],
+   [
+    "Total, Utter Failure",
+    "Fail a quest.",
+    "flavor only (the System says \"Ha.\")"
+   ],
+   [
+    "Cannonball!",
+    "Fall from a great height, and live.",
+    "Silver Skydiver's Box"
+   ],
+   [
+    "Milquetoast",
+    "Win a boss battle without killing the boss.",
+    "Silver Pacifist's Box"
+   ],
+   [
+    "I was in the Pool!",
+    "Spend more than 60 seconds fully submerged.",
+    "Bronze I'm Wet Box"
+   ],
+   [
+    "Rock Bottom",
+    "Dive more than 1,000 meters below the surface.",
+    "Gold I'm Wet Box"
+   ],
+   [
+    "Soft Vore",
+    "Get eaten by a monster.",
+    "Platinum Spicy Box"
+   ],
+   [
+    "Flex in the City",
+    "Kill a city boss with five or fewer crawlers.",
+    "flavor only (go open your Boss Box)"
+   ],
+   [
+    "Disarming Personality",
+    "Rip off a crawler's arm.",
+    "Silver Savage Box"
+   ]
+  ],
+  "ours": [
+   [
+    "King of the Castle",
+    "Be in the throne room when a castle falls.",
+    "Silver Adventurer Box"
+   ],
+   [
+    "That Didn't Count",
+    "Kill a quadrant's guardian. It takes nothing.",
+    "Bronze Brawler Box"
+   ],
+   [
+    "Regicide",
+    "Kill a castle's ruler.",
+    "Gold Brawler Box"
+   ],
+   [
+    "Good Neighbor",
+    "Help take a castle in a quadrant that isn't your own.",
+    "Silver Adventurer Box"
+   ],
+   [
+    "Grand Tour",
+    "Set foot in all four quadrants of your bubble.",
+    "Bronze Adventurer Box"
+   ],
+   [
+    "Pop!",
+    "Be in a bubble when its fourth castle falls.",
+    "Gold Adventurer Box"
+   ],
+   [
+    "Wrong Bubble",
+    "Try to walk into a bubble that hasn't popped.",
+    "flavor only"
+   ],
+   [
+    "Diplomatic Immunity",
+    "Finish quests for two factions at war with each other.",
+    "Silver Lucky Bastard Box"
+   ]
+  ]
+ }
 }
