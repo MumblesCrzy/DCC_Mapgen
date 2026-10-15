@@ -66,6 +66,9 @@ FLOOR_LABELS = {
 
 PAD = 8
 
+# The maker's tip jar, behind the small button at the right of the status bar.
+COFFEE_URL = "https://buymeacoffee.com/MumblesCrzy"
+
 
 def svg_size(svg: str) -> tuple:
     """Natural pixel size from the SVG root element."""
@@ -1153,8 +1156,17 @@ class App(tk.Tk):
         right.add(self.loot_tab, text="Loot Boxes")
         self.notebook = right
 
-        ttk.Label(self, textvariable=self.status, relief="sunken", anchor="w",
-                  padding=(PAD, 3)).pack(fill="x", side="bottom")
+        # The status line, with a small coffee button tucked in at its right end:
+        # in Buy Me a Coffee's own yellow, and out of the way of everything else.
+        foot = ttk.Frame(self)
+        foot.pack(fill="x", side="bottom")
+        self.coffee = tk.Button(foot, text="☕ Buy me a coffee", command=self.buy_coffee,
+                                font=("Segoe UI", 8, "bold"), bg="#FFDD00", fg="#000000",
+                                activebackground="#FFE866", activeforeground="#000000",
+                                relief="flat", bd=0, padx=8, pady=1, cursor="hand2")
+        self.coffee.pack(side="right", padx=(4, PAD), pady=2)
+        ttk.Label(foot, textvariable=self.status, relief="sunken", anchor="w",
+                  padding=(PAD, 3)).pack(fill="x", side="left", expand=True)
 
         self._build_controls()
         self._sync_floor()
@@ -1176,6 +1188,10 @@ class App(tk.Tk):
     def post(self, fn):
         """Queue `fn` to run on the main thread. Safe to call from any thread."""
         self._q.put(fn)
+
+    def buy_coffee(self):
+        """Open the maker's Buy Me a Coffee page in the browser."""
+        webbrowser.open(COFFEE_URL)
 
     def _poll(self):
         while True:
@@ -1830,6 +1846,18 @@ def selftest() -> int:
     check(loot.box_type.get() == "Benefactor"
           and loot.threat.get() == loot.threat_suggestions[0].threat,
           "picking a threat sets a Benefactor box prepared for it")
+
+    # The coffee button: on screen, and it opens the maker's page. The browser is
+    # stood in for, so the test opens nothing.
+    opened = []
+    real_open = webbrowser.open
+    webbrowser.open = lambda url, *a, **kw: opened.append(url)
+    try:
+        app.coffee.invoke()
+    finally:
+        webbrowser.open = real_open
+    check(app.coffee.winfo_ismapped(), "the coffee button is on screen")
+    check(opened == [COFFEE_URL], f"the coffee button opens {COFFEE_URL} (got {opened})")
 
     # An option combination the generator must reject rather than crash on.
     errs = []
