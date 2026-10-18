@@ -19,6 +19,7 @@ run, because within one process that order is perfectly stable.
 import collections
 import glob
 import json
+import math
 import os
 import random
 import re
@@ -81,6 +82,34 @@ class GoldenOutputTest(unittest.TestCase):
         ids = [corpus.case_id(c) for c in corpus.CASES]
         dupes = sorted({i for i in ids if ids.count(i) > 1})
         self.assertEqual(dupes, [], f"duplicate case ids would mask each other: {dupes}")
+
+
+class CrossPlatformMapTest(unittest.TestCase):
+    """Maps come out the same on every platform. Python's sin and cos come from the
+    platform's C library, and Linux's and Windows' disagree in the last bit for
+    some angles: CI once found Floor 8 and Floor 9 maps hashing differently on
+    Ubuntu for exactly that, from label positions written at full precision. Here
+    every sin and cos is nudged one bit up, then one bit down, as another
+    platform's library might return it, and no map may move."""
+
+    @staticmethod
+    def _maps(case, nudge=None):
+        if nudge is None:
+            return mg.generate(**case).svgs
+        sin, cos = math.sin, math.cos
+        with mock.patch("math.sin", lambda x: math.nextafter(sin(x), nudge)), \
+                mock.patch("math.cos", lambda x: math.nextafter(cos(x), nudge)):
+            return mg.generate(**case).svgs
+
+    def test_a_last_bit_of_trig_moves_no_map(self):
+        """Every case the golden file pins, so a renderer that takes up trig later
+        is covered without anyone remembering to add it here."""
+        for case in corpus.CASES:
+            plain = self._maps(case)
+            for nudge in (math.inf, -math.inf):
+                self.assertEqual(self._maps(case, nudge), plain,
+                                 f"{corpus.case_id(case)}: a map moved when sin and cos "
+                                 f"were one bit {'up' if nudge > 0 else 'down'}")
 
 
 class DeterminismTest(unittest.TestCase):

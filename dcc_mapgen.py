@@ -2527,6 +2527,13 @@ def _text(x, y, t, size=12, weight="normal", anchor="start", fill="#222", style=
     return (f'<text x="{x}" y="{y}" font-size="{size}" font-weight="{weight}" '
             f'text-anchor="{anchor}" fill="{fill}" style="{style}">{_esc(t)}</text>')
 
+def _px(v: float) -> float:
+    """A map coordinate worked out with sin or cos, rounded before it reaches an
+    SVG. Python's trig comes from the platform's C library, and Linux's and
+    Windows' disagree in the last bit for some angles; written at full precision,
+    a label's position then differs between the two, and so does the map's hash."""
+    return round(v, 2)
+
 def _fit(t: str, max_chars: int) -> str:
     return t if len(t) <= max_chars else t[: max_chars - 1] + "…"
 
@@ -4973,7 +4980,7 @@ def render5_svg(fl: Floor5) -> str:
         o.append(f'<path d="M {cx},{cy} L {x0:.1f},{y0:.1f} A {R},{R} 0 0 1 {x1:.1f},{y1:.1f} Z" '
                  f'fill="{q.color}" stroke="#333" stroke-width="3"/>')
         mid = math.radians((a0 + a1) / 2)
-        tx = cx + 0.58 * R * math.cos(mid); ty = cy + 0.58 * R * math.sin(mid)
+        tx = _px(cx + 0.58 * R * math.cos(mid)); ty = _px(cy + 0.58 * R * math.sin(mid))
         lines = [
             (f"{q.name.upper()}", 16, "bold", "#111"),
             (_fit(q.biome, 34), 11, "normal", "#222"),
@@ -4990,7 +4997,7 @@ def render5_svg(fl: Floor5) -> str:
             o.append(_text(tx, ty - 34 + i * 16, t, size=sz, weight=wt, anchor="middle", fill=col))
         # castle marker
         off = mid + math.radians(28)
-        kx = cx + 0.80 * R * math.cos(off); ky = cy + 0.80 * R * math.sin(off)
+        kx = _px(cx + 0.80 * R * math.cos(off)); ky = _px(cy + 0.80 * R * math.sin(off))
         o.append(f'<rect x="{kx-9}" y="{ky-9}" width="18" height="18" fill="#222"/>')
         o.append(_stair_icon(kx - 7, ky - 32))
         if q.name == fl.suggested_start:
@@ -5685,7 +5692,7 @@ def render8_svg(fl: Floor8) -> str:
         o.append(f'<path d="{p}" fill="{ring_fill[z.ring]}" stroke="#444" stroke-width="1.5"/>')
         mid = (a0 + a1) / 2
         rm = (r0 + r1) / 2 if z.ring > 1 else r1 * 0.62
-        tx, ty = cx + rm * math.cos(mid), cy + rm * math.sin(mid)
+        tx, ty = _px(cx + rm * math.cos(mid)), _px(cy + rm * math.sin(mid))
         o.append(_text(tx, ty - 8, z.label, size=11, weight="bold", anchor="middle"))
         o.append(_text(tx, ty + 5, _fit(z.mob, 22), size=10, anchor="middle"))
         o.append(_text(tx, ty + 17, f"L{z.level_range[0]}–{z.level_range[1]}", size=9, anchor="middle", fill="#444"))
@@ -5998,7 +6005,7 @@ def render9_svg(fl: Floor9) -> str:
              f'A {r_city},{r_city} 0 0 0 {cx + r_city*math.cos(a0):.1f},{cy + r_city*math.sin(a0):.1f} Z')
         o.append(f'<path d="{p}" fill="{t.color}" fill-opacity="0.55" stroke="#333" stroke-width="2"/>')
         mid = (a0 + a1) / 2
-        tx, ty = cx + 0.62 * R * math.cos(mid), cy + 0.62 * R * math.sin(mid)
+        tx, ty = _px(cx + 0.62 * R * math.cos(mid)), _px(cy + 0.62 * R * math.sin(mid))
         o.append(_text(tx, ty - 10, f"{t.slot}. {t.name}", size=12, weight="bold", anchor="middle"))
         o.append(_text(tx, ty + 4, _fit(t.warlord.split(" (")[0], 26), size=10, anchor="middle", fill="#333"))
         o.append(_text(tx, ty + 17, _fit(t.fortress, 24), size=9, anchor="middle", fill="#444"))
@@ -6006,7 +6013,7 @@ def render9_svg(fl: Floor9) -> str:
             o.append(_text(tx, ty + 30, "KING'S POINT", size=9, weight="bold", anchor="middle", fill="#8a5a1a"))
         if t.is_party_team:
             o.append(_text(tx, ty + 43, "CRAWLER TEAM", size=9, weight="bold", anchor="middle", fill="#7a1f7a"))
-        fx, fy = cx + 0.40 * R * math.cos(mid), cy + 0.40 * R * math.sin(mid)
+        fx, fy = _px(cx + 0.40 * R * math.cos(mid)), _px(cy + 0.40 * R * math.sin(mid))
         o.append(f'<rect x="{fx-8}" y="{fy-8}" width="16" height="16" fill="#222"/>')
     # forest band ring
     o.append(f'<circle cx="{cx}" cy="{cy}" r="{r_forest}" fill="none" stroke="#2f5a2f" stroke-width="2" stroke-dasharray="6,4"/>')
@@ -6018,7 +6025,7 @@ def render9_svg(fl: Floor9) -> str:
         # stair icons to new angles on every run of the same seed.
         ang = math.radians(-90 + (i + 0.2 + 0.6 * ((zlib.crc32(sp.encode("utf-8")) % 100) / 100)) * 360 / n)
         rr = r_forest + (R - r_forest) * 0.5
-        sx, sy = cx + rr * math.cos(ang), cy + rr * math.sin(ang)
+        sx, sy = _px(cx + rr * math.cos(ang)), _px(cy + rr * math.sin(ang))
         o.append(_stair_icon(sx - 7, sy - 7))
     # Larracos
     for rr in (r_city, r_city * 0.7, r_city * 0.4):
