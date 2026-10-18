@@ -68,6 +68,11 @@ one (canon) unless --no-boss-stairs is passed. Borough bosses are likewise one p
 default; --borough-boss-rate turns that into a probability too.
 """
 
+# Annotations are read lazily, as Python 3.14 reads them anyway. Without this, a
+# return type naming a class defined further down ("-> Mob") is a NameError on
+# 3.12, which CI and the release builds run, while 3.14 never notices.
+from __future__ import annotations
+
 import argparse
 import math
 import random
