@@ -7711,6 +7711,10 @@ def regenerate_rooms(path: str, label: Optional[str] = None, floor: int = 1, *,
 FLOOR_FILE_FORMAT = "dcc-mapgen-floor"
 FLOOR_FILE_VERSION = 1
 FLOOR_FILE_SUFFIX = ".floor.json"
+# What a floor that cannot be drawn fails with: a hand edit that left a value of
+# the wrong kind, or took away something a renderer looks for (StopIteration).
+_DRAW_ERRORS = (TypeError, ValueError, KeyError, AttributeError, IndexError, StopIteration,
+                ZeroDivisionError)
 
 _HINTS: Dict[type, dict] = {}
 
@@ -7893,11 +7897,296 @@ def render_floor_data(data: dict, where: str = "the floor file") -> GenResult:
     try:
         text = _render_floor(fl, number)
         svgs = floor_svgs(fl, boss_stairs)
-    except (TypeError, ValueError, KeyError, AttributeError, IndexError) as e:
+    except _DRAW_ERRORS as e:
         raise MapgenError(f"{where} has a value the generator cannot draw ({type(e).__name__}: "
                           f"{e}). Check anything you changed by hand.")
     return GenResult(floor=fl, number=number, size=size, seed=seed, markdown=text,
                      svgs=svgs, roster=None, boss_stairs=boss_stairs)
+
+
+def redraw_floor(res: GenResult) -> GenResult:
+    """Draw a floor again after it has been changed in place: the same result,
+    with the write-up and maps drawn from the floor as it stands now."""
+    try:
+        text = _render_floor(res.floor, res.number)
+        svgs = floor_svgs(res.floor, res.boss_stairs)
+    except _DRAW_ERRORS as e:
+        raise MapgenError(f"the generator cannot draw that ({type(e).__name__}: {e})")
+    return replace(res, markdown=text, svgs=svgs)
+
+
+# ===========================================================================
+# EDITING A FLOOR
+# What the desktop app's edit panel shows and changes, for every floor alike.
+# A part (a dataclass, or a dict of values) has fields -- its text, numbers,
+# switches and short lists -- and children: the parts and lists of parts it
+# holds. A list of plain rows (a quest's three columns, a corridor's two rooms)
+# is a group whose rows edit by position. Everything is reached by its path
+# from the floor, the same keys a floor file uses.
+# ===========================================================================
+
+# The campaign's record on this floor: edited in the Campaign and Leaderboard
+# tabs, where a change carries to the next floor.
+EDIT_HIDDEN = {"other_crawlers", "leaderboard", "board_news", "history"}
+# Shown but not editable: what ties a floor's parts together or lays out its map.
+# A neighborhood's letter is in every one of its rooms' ids; a station's number,
+# a line's colour and a quadrant's name are how the rest of the floor finds them.
+EDIT_LOCKED = {"idx", "row", "col", "label", "id", "connects_to", "number", "transfer_to",
+               "kind", "wedge", "ring", "slot", "seed", "size", "spawn", "distance",
+               "is_entry", "color", "hex", "region_label", "home", "tier", "grid",
+               "wedges", "deckmasters", "floor", "first_seen", "suggested_start",
+               "borough", "city", "roams_to", "zone"}
+EDIT_LOCKED_IN = {("Quadrant", "name"),
+                  # A line's yard letter is how it finds its yard; the thorn wall's
+                  # side, its schedule; a Floor 8 zone's stairwell, key and vending
+                  # machine are markers the floor looks for, one of each.
+                  ("RailLine", "yard"), ("Floor6", "thorn_side"),
+                  ("Zone8", "stairwell"), ("Zone8", "key"), ("Zone8", "vending"),
+                  # One team on Floor 9 is the party's, and one holds King's Point.
+                  ("Team", "is_party_team"), ("Team", "kings_point")}
+# Rows whose leading cells are links, by the group they are in: a corridor runs
+# between two rooms, a named train stops at a line and a station, a Floor 9
+# stairwell sits in a team's slot.
+EDIT_LOCKED_CELLS = {"corridor_encounters": {0, 1}, "stops": {0, 1}, "stairs": {0}}
+
+
+@dataclass
+class EditField:
+    """One editable value of a part, as the edit panel shows it."""
+    key: object              # the attribute, dict key or position it is under
+    label: str
+    kind: str                # text | long | int | float | bool | lines | list
+    value: object
+    locked: bool = False
+    optional: bool = False   # blank means none
+
+
+def _scalar(v) -> bool:
+    return v is None or isinstance(v, (str, int, float, bool))
+
+
+def _row(v) -> bool:
+    return isinstance(v, (list, tuple)) and all(_scalar(x) for x in v)
+
+
+def _part(v) -> bool:
+    return (is_dataclass(v) and not isinstance(v, type)) or isinstance(v, dict)
+
+
+def _edit_items(v):
+    if is_dataclass(v) and not isinstance(v, type):
+        return list(vars(v).items())
+    if isinstance(v, dict):
+        return list(v.items())
+    return list(enumerate(v))
+
+
+def _human(key) -> str:
+    if isinstance(key, int):
+        return str(key + 1)
+    return str(key).replace("_", " ").strip().capitalize()
+
+
+def _kind_name(v) -> str:
+    """ "RailLine" is "Rail line"; "Zone8" is "Zone"."""
+    words = re.findall(r"[A-Z][a-z]*", type(v).__name__)
+    return " ".join([words[0]] + [w.lower() for w in words[1:]]) if words else type(v).__name__
+
+
+def edit_label(v, key=None) -> str:
+    """What the edit panel calls a part, a group or a row."""
+    if is_dataclass(v) and not isinstance(v, type):
+        ids = [str(getattr(v, k)) for k in ("label", "id", "number", "slot")
+               if _scalar(getattr(v, k, None)) and getattr(v, k, None) is not None]
+        if isinstance(getattr(v, "adj", None), str) and isinstance(getattr(v, "noun", None), str):
+            name = f"{v.adj} {v.noun}"
+        else:
+            name = next((getattr(v, k) for k in ("name", "title", "leader", "theme", "color")
+                         if isinstance(getattr(v, k, None), str) and getattr(v, k)), "")
+        head = " ".join([_kind_name(v)] + ids[:1])
+        return f"{head} — {name[:48]}" if name else head
+    if isinstance(v, dict):
+        name = next((str(v[k]) for k in ("name", "title", "label") if _scalar(v.get(k))
+                     and v.get(k)), "")
+        num = v.get("number")
+        head = _human(key) if isinstance(key, str) else "Item"
+        if _scalar(num) and num is not None:
+            head = f"{head} {num}" if isinstance(key, str) else f"No. {num}"
+        return f"{head} — {name[:48]}" if name else head
+    if _row(v):
+        bits = [str(x)[:28] for x in v if x not in (None, "")][:2]
+        return f"{_human(key)}. " + " · ".join(bits) if isinstance(key, int) else _human(key)
+    return f"{_human(key)} ({len(v)})"
+
+
+def edit_children(v) -> list:
+    """(key, label) for what a part or group holds that is a node of its own."""
+    out = []
+    for key, x in _edit_items(v):
+        if key in EDIT_HIDDEN:
+            continue
+        if _part(x):
+            out.append((key, edit_label(x, key)))
+        elif isinstance(x, (list, tuple)) and x and not _row(x):
+            out.append((key, edit_label(x, key)))
+        elif not _part(v) and _row(x):               # a row in a group
+            out.append((key, edit_label(x, key)))
+    return out
+
+
+def _holds_parts(hint) -> bool:
+    """Whether a field's type says it holds a part, or parts: an empty one of
+    those is a part missing, not a blank to type into."""
+    hint = _bare(hint)
+    if isinstance(hint, type) and is_dataclass(hint):
+        return True
+    return get_origin(hint) in (list, tuple, dict) and not all(
+        a in (str, int, float, bool, type(None), Ellipsis) for a in get_args(hint))
+
+
+def edit_fields(v, group=None) -> List[EditField]:
+    """The values of a part, or the cells of a row, that the panel edits. For a
+    row, group is the key of the list it is in, which says which cells link."""
+    cls = type(v).__name__
+    hints = _hints(type(v)) if is_dataclass(v) else {}
+    out = []
+    for key, x in _edit_items(v):
+        if key in EDIT_HIDDEN:
+            continue
+        if not (_scalar(x) or (_part(v) and _row(x))):
+            continue
+        if isinstance(key, str) and _holds_parts(hints.get(key)):
+            continue
+        hint = _bare(hints.get(key)) if isinstance(key, str) else None
+        optional = x is None or (key in hints and get_origin(hints[key]) is Union)
+        locked = ((isinstance(key, str) and key in EDIT_LOCKED)
+                  or (cls, key) in EDIT_LOCKED_IN
+                  or (not _part(v) and key in EDIT_LOCKED_CELLS.get(group, ()))
+                  # A dict says nothing of what an empty value would hold: a Floor 4
+                  # ghoul station's "merged" is empty at four stations and a boss
+                  # at the fifth.
+                  or (isinstance(v, dict) and x is None))
+        label = str(key) if isinstance(v, dict) and isinstance(key, int) else _human(key)
+        if isinstance(x, bool) or hint is bool:
+            kind = "bool"
+        elif isinstance(x, int) or hint is int:
+            kind = "int"
+        elif isinstance(x, float) or hint is float:
+            kind = "float"
+        elif isinstance(x, str) or x is None:
+            kind = "long" if x and (len(x) > 70 or "\n" in x) else "text"
+        elif x and all(isinstance(i, str) for i in x):
+            kind = "lines"
+        else:
+            # Numbers ("3, 5"), or an empty list -- adding to it would add a part
+            # of the floor, which is layout, not content.
+            kind, locked = "list", locked or not x
+        out.append(EditField(key, label, kind, x, locked, optional))
+    return out
+
+
+def edit_get(root, path):
+    """What a path leads to from a floor."""
+    v = root
+    for k in path:
+        v = getattr(v, k) if is_dataclass(v) and not isinstance(v, type) else v[k]
+    return v
+
+
+def edit_set(root, path, value) -> None:
+    """Change what a path leads to. A tuple is rebuilt and put back."""
+    *head, last = path
+    parent = edit_get(root, head)
+    if isinstance(parent, tuple):
+        edit_set(root, head, parent[:last] + (value,) + parent[last + 1:])
+    elif is_dataclass(parent) and not isinstance(parent, type):
+        setattr(parent, last, value)
+    else:
+        parent[last] = value
+
+
+def parse_edit(f: EditField, raw):
+    """A value typed into the panel, as the floor holds it. Raises MapgenError,
+    naming the field, for one that can't be."""
+    if f.locked:
+        raise MapgenError(f"{f.label} can't be changed here: it holds the floor together")
+    if f.kind == "bool":
+        return bool(raw)
+    text = str(raw).strip()
+    if f.kind in ("text", "long"):
+        return None if (f.optional and f.value is None and not text) else text
+    if f.kind in ("int", "float"):
+        if not text and f.optional:
+            return None
+        try:
+            return int(text) if f.kind == "int" else float(text)
+        except ValueError:
+            word = "a whole number" if f.kind == "int" else "a number"
+            raise MapgenError(f"{f.label} should be {word}, not {text!r}")
+    if f.kind == "lines":
+        items = [line.strip() for line in str(raw).splitlines() if line.strip()]
+        return tuple(items) if isinstance(f.value, tuple) else items
+    # "list": the same number of values, each the kind it was.
+    parts = [p.strip() for p in text.split(",")] if text else []
+    if len(parts) != len(f.value):
+        raise MapgenError(f"{f.label} needs {len(f.value)} values, separated by commas")
+    values = []
+    for p, old in zip(parts, f.value):
+        try:
+            values.append(type(old)(p) if isinstance(old, (int, float)) and not
+                          isinstance(old, bool) else p)
+        except ValueError:
+            raise MapgenError(f"{f.label}: {p!r} should be a number")
+    if (len(values) == 2 and all(isinstance(x, (int, float)) for x in values)
+            and values[0] > values[1]):
+        raise MapgenError(f"{f.label}: the first value can't be above the second")
+    return tuple(values) if isinstance(f.value, tuple) else values
+
+
+def find_text(root, text: str, skip=None) -> list:
+    """Every place a piece of text is written in a floor, as paths: what
+    renaming something everywhere would change. Dict keys are left alone."""
+    hits = []
+    skip = list(skip) if skip is not None else None
+
+    def walk(v, path):
+        if isinstance(v, str):
+            if text in v and path != skip:
+                hits.append(path)
+        elif _part(v) or isinstance(v, (list, tuple)):
+            for k, x in _edit_items(v):
+                walk(x, path + [k])
+
+    if text:
+        walk(root, [])
+    return hits
+
+
+def replace_text(root, old: str, new: str, paths) -> int:
+    """Write new for old at each of the paths find_text gave."""
+    for p in paths:
+        edit_set(root, p, edit_get(root, p).replace(old, new))
+    return len(paths)
+
+
+def describe_path(root, path) -> str:
+    """Where a path leads, in the panel's own words: "Neighborhood A — The
+    Rusting Undercroft › Boss — Bernadette Peasgood › Name"."""
+    names, v = [], root
+    for k in path:
+        nxt = getattr(v, k) if is_dataclass(v) and not isinstance(v, type) else v[k]
+        names.append(edit_label(nxt, k) if not _scalar(nxt) else _human(k))
+        v = nxt
+    return " › ".join(names)
+
+
+def snapshot_floor(fl) -> dict:
+    """A floor as data, to put back with restore_floor: what undo keeps."""
+    return _to_data(fl)
+
+
+def restore_floor(data: dict):
+    return _from_data(data)
 
 
 def open_floor_file(path: str) -> GenResult:
