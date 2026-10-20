@@ -1079,6 +1079,7 @@ class App(tk.Tk):
         self.result = None
         self.roster = None            # the campaign being carried, when one is open
         self.campaign_path = None
+        self.floor_path = None        # the floor file on show, for Reload
         self._resting = "Ready"      # status line to fall back to once a render finishes
 
         # tkinter is not thread-safe, so worker threads never touch a widget: they
@@ -1173,6 +1174,9 @@ class App(tk.Tk):
         f.add_command(label="Generate", accelerator="Ctrl+G", command=self.generate)
         f.add_command(label="Save output...", accelerator="Ctrl+S", command=self.save)
         f.add_separator()
+        f.add_command(label="Open floor file...", accelerator="Ctrl+O", command=self.open_floor)
+        f.add_command(label="Reload floor file", accelerator="Ctrl+R", command=self.reload_floor)
+        f.add_separator()
         f.add_command(label="Re-roll rooms from a saved floor...", command=self.reroll_rooms)
         f.add_separator()
         f.add_command(label="Quit", command=self.destroy)
@@ -1180,6 +1184,8 @@ class App(tk.Tk):
         self.configure(menu=m)
         self.bind("<Control-g>", lambda e: self.generate())
         self.bind("<Control-s>", lambda e: self.save())
+        self.bind("<Control-o>", lambda e: self.open_floor())
+        self.bind("<Control-r>", lambda e: self.reload_floor())
 
     # -- controls -----------------------------------------------------------
 
@@ -1408,6 +1414,7 @@ class App(tk.Tk):
 
     def _gen_done(self, res):
         self.result = res
+        self.floor_path = None
         self.gen_btn.configure(state="normal")
         self.save_btn.configure(state="normal")
         self.seed.set(str(res.seed))                       # so the same map can be re-rolled
@@ -1444,10 +1451,14 @@ class App(tk.Tk):
         base = os.path.join(folder, res.basename())
         md_path = base + ".md"
         img_path = base + "." + fmt
+        # The editable floor file goes alongside, for a whole floor; a re-rolled
+        # neighborhood's rooms are not one.
+        floor_path = base + mg.FLOOR_FILE_SUFFIX if mg.is_dataclass(res.floor) else None
         # Check the real target names, not just the base: floor 10 writes only
         # _heat1..n and never the bare base name, so checking that alone would have
         # let a re-save clobber a folder without asking.
         targets = [md_path] + [f"{base}{suffix}.{fmt}" for suffix, _ in res.svgs]
+        targets += [floor_path] if floor_path else []
         existing = [p for p in targets if os.path.exists(p)]
         if existing and not messagebox.askyesno(
                 "Overwrite?",
@@ -1465,14 +1476,68 @@ class App(tk.Tk):
                 with open(md_path, "w", encoding="utf-8") as f:
                     f.write(res.markdown)
                 paths = mg.save_svgs(res.svgs, img_path)
+                if floor_path:
+                    mg.save_floor_file(res, floor_path)
             except (mg.MapgenError, OSError) as e:
                 msg = str(e)
                 self.post(lambda: self._save_failed(msg))
             else:
-                n = 1 + len(paths)
+                n = 1 + len(paths) + (1 if floor_path else 0)
                 self.post(lambda: self._save_done(folder, n))
 
         threading.Thread(target=work, daemon=True).start()
+
+    # -- floor files ------------------------------------------------------------
+
+    def open_floor(self, path=None):
+        """Draw a floor file: one Save output wrote, edited by hand or not. It is
+        drawn as it stands -- it does not touch the campaign, and Generate still
+        makes a fresh floor from the controls."""
+        if path is None:
+            path = filedialog.askopenfilename(
+                parent=self, title="Open a floor file",
+                filetypes=[("DCC Mapgen floor", "*" + mg.FLOOR_FILE_SUFFIX),
+                           ("JSON", "*.json"), ("All files", "*.*")])
+        if not path:
+            return
+        self.status.set(f"Opening {os.path.basename(path)}...")
+
+        def work():
+            try:
+                res = mg.open_floor_file(path)
+            except mg.MapgenError as e:
+                msg = str(e)
+                self.post(lambda: self._floor_failed(msg))
+            except Exception:                              # noqa: BLE001
+                tb = traceback.format_exc()
+                self.post(lambda: self._floor_failed(tb))
+            else:
+                self.post(lambda: self._floor_opened(res, path))
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def reload_floor(self):
+        """Draw the open floor file again, after editing it in a text editor."""
+        if self.floor_path:
+            self.open_floor(self.floor_path)
+        else:
+            self._set_status("No floor file is open. File > Open floor file... opens one.")
+
+    def _floor_opened(self, res, path):
+        self.result = res
+        self.floor_path = path
+        self.save_btn.configure(state="normal")
+        self.text.delete("1.0", "end")
+        self.text.insert("1.0", res.markdown)
+        self.view.load(res.svgs)
+        self.loot_tab.load_floor(res)
+        self._set_status(f"{os.path.basename(path)} - floor {res.number}, {res.size}, "
+                         f"seed {res.seed} - {len(res.svgs)} map(s). Edit the file and "
+                         f"press Ctrl+R to redraw.")
+
+    def _floor_failed(self, msg):
+        self._set_status("Could not open the floor file")
+        messagebox.showerror("Could not open the floor file", msg, parent=self)
 
     def _save_done(self, folder, count):
         self.save_btn.configure(state="normal")
@@ -1819,6 +1884,52 @@ def selftest() -> int:
         webbrowser.open = real_open
     check(app.coffee.winfo_ismapped(), "the coffee button is on screen")
     check(opened == [COFFEE_URL], f"the coffee button opens {COFFEE_URL} (got {opened})")
+
+    # Floor files: Save output writes one beside the Markdown; Open draws it as it
+    # was; an edit made in a text editor shows after Reload; a broken one is
+    # reported rather than crashed on.
+    import json
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmp:
+        generated = app.result
+        real_ask = filedialog.askdirectory
+        filedialog.askdirectory = lambda **kw: tmp
+        try:
+            app.save()
+            pump(120, lambda: app.status.get().startswith(("Saved", "Save failed")))
+        finally:
+            filedialog.askdirectory = real_ask
+        path = os.path.join(tmp, generated.basename() + mg.FLOOR_FILE_SUFFIX)
+        check(os.path.exists(path), "Save output writes the floor file too")
+        app.open_floor(path)
+        pump(60, lambda: app.floor_path == path)
+        check(app.result is not generated and app.result.markdown == generated.markdown
+              and app.result.svgs == generated.svgs,
+              "a floor file opens to the same write-up and maps")
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        old = data["data"]["neighborhoods"][0]["boss"]["name"]
+        data["data"]["neighborhoods"][0]["boss"]["name"] = "Mumbles the Unedited"
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+        before = app.result
+        app.reload_floor()
+        pump(60, lambda: app.result is not before)
+        shown = app.text.get("1.0", "end")
+        check("Mumbles the Unedited" in shown and old not in shown,
+              "an edit to the floor file shows after Reload")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write('{"format": "dcc-mapgen-floor", ')
+        errs_seen = []
+        real_err = messagebox.showerror
+        messagebox.showerror = lambda title, msg, **kw: errs_seen.append(msg)
+        try:
+            app.reload_floor()
+            pump(30, lambda: bool(errs_seen))
+        finally:
+            messagebox.showerror = real_err
+        check(bool(errs_seen) and "not valid JSON" in errs_seen[0],
+              "a broken floor file is reported, not crashed on")
 
     # An option combination the generator must reject rather than crash on.
     errs = []

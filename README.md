@@ -367,6 +367,40 @@ shows the map instead of the built-in preview.
 through a generate and checks the write-up, the map list and the rendered preview all
 arrive — this is what CI runs against the packaged builds.
 
+## Floor files: make a floor your own
+
+Every floor can be saved as a **floor file**, `floorN_size_seedS.floor.json`, which
+holds everything the write-up and the maps are drawn from. Change anything in it —
+a boss's name or level, a neighborhood's mob, a description, a quest — and draw it
+again: the write-up and every map come out with your changes.
+
+- **Saving:** the desktop app's **Save output...** and the command line's `--save`
+  write it beside the Markdown and maps. `--floor-file PATH` writes just the floor file.
+- **Editing:** any text editor. It's JSON, laid out one value a line, and each part
+  says what it is (`"__type__": "Boss"`), so you can find what you want to change.
+- **Drawing it again:** **File → Open floor file...** (Ctrl+O) in the app, or
+  `python dcc_mapgen.py --from my_floor.floor.json` with `--out`, `--image` or `--save`
+  as usual. In the app, after editing the file, **File → Reload floor file** (Ctrl+R)
+  redraws it.
+
+What is worked out from the floor follows your edits: raise a boss's level and the
+Bestiary stats it at the new level. What changes, and what doesn't:
+
+- **Sentences with a name written into them keep the old name.** Some text is written
+  once, when the floor is generated, with a name inside it, such as a quest that names a
+  castle. Renaming the castle doesn't change that quest; search the file for the old
+  name to find every place it appears.
+- **Changing what is there is fine; changing the layout isn't, yet.** Adding or removing
+  neighborhoods, stations or rooms, or moving them, changes the layout the map is drawn
+  from.
+- **An edited floor is no longer its seed.** The file is the floor now, and its seed only
+  says where it started.
+- **No campaign.** A floor file is drawn as it stands, so `--from` doesn't continue a
+  campaign, and opening one in the app leaves the campaign alone.
+- **Mistakes are named.** A value of the wrong kind says which one, e.g.
+  `data.cells[1].level_range[0] should be a whole number, not "ten"`. A file can only
+  build floor parts, so one passed around online can't make the app do anything else.
+
 ## Web page (phones)
 
 **https://mumblescrzy.github.io/DCC_Mapgen/**
@@ -914,6 +948,21 @@ city bosses. It checks:
   bosses;
 - an ordinary crawler lives through every ordinary mob on their floor, and the
   Floor 11 boss kills an ordinary crawler there in one hit.
+
+Floor files have their own group:
+- every pinned floor, saved and opened again, draws the same write-up and maps byte
+  for byte, with its floor, size, seed and stairwell setting;
+- the file reads like the floor: every part says what it is, and no tuple is
+  tagged, so a level range is a plain `[3, 5]` on one line;
+- an edited boss's name and level reach the write-up, the map and the Bestiary, and a
+  note of your own added to the file is kept through a re-save;
+- a file can build floor parts and nothing else: naming one of the generator's
+  functions, or anything it imported, is refused;
+- each hand-edit mistake says where it is (the wrong kind of value, a missing field,
+  broken JSON, a newer file, a floor this generator doesn't make);
+- `--save` writes the floor file, `--from` draws it the same as the saved write-up,
+  `--floor-file` writes one on its own, and `--from` with `--campaign` is refused
+  without touching the campaign.
 
 What's switched on and shops have their own groups, with the books' facts written into the tests rather than read back from the banks:
 - each system arrives on the DCC Database's floor, and each floor's list of new, gone and still-on systems is checked against those floors;

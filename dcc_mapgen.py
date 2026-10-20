@@ -79,8 +79,8 @@ import random
 import re
 import sys
 import zlib
-from dataclasses import dataclass, field, replace
-from typing import Dict, List, Optional, Tuple
+from dataclasses import MISSING, dataclass, field, fields, is_dataclass, replace
+from typing import Dict, List, Optional, Tuple, Union, get_args, get_origin, get_type_hints
 
 
 class MapgenError(Exception):
@@ -7594,6 +7594,7 @@ class GenResult:
     markdown: str
     svgs: List[Tuple[str, str]]     # (filename suffix, SVG source); "" is the main map
     roster: Optional["CampaignRoster"] = None   # the campaign, updated by this floor
+    boss_stairs: bool = True        # floors 1-2: whether the map marks boss-chamber stairwells
 
     def basename(self) -> str:
         """The stem the CLI names saved files with."""
@@ -7665,7 +7666,7 @@ def generate(floor: int = 1, size: str = "medium", seed: Optional[int] = None, *
 
     svgs = floor_svgs(fl, boss_stairs) if images else []
     return GenResult(floor=fl, number=floor, size=size, seed=seed, markdown=text,
-                     svgs=svgs, roster=roster)
+                     svgs=svgs, roster=roster, boss_stairs=boss_stairs)
 
 
 def regenerate_rooms(path: str, label: Optional[str] = None, floor: int = 1, *,
@@ -7696,6 +7697,219 @@ def regenerate_rooms(path: str, label: Optional[str] = None, floor: int = 1, *,
                        markdown=render_rooms_only(nb),
                        svgs=[(f"_room_{nb.label}", render_room_svg(nb, fake_fl))])
     return nb, result
+
+
+# ===========================================================================
+# FLOOR FILES
+# A generated floor saved as data, so it can be edited and drawn again. The
+# Markdown and the maps are both drawn from the floor's dataclasses, so a floor
+# written out as JSON and read back draws exactly the same write-up and maps --
+# and an edited one draws its edits into both. This is the file to change, not
+# the Markdown: there is no reading a write-up back into a floor.
+# ===========================================================================
+
+FLOOR_FILE_FORMAT = "dcc-mapgen-floor"
+FLOOR_FILE_VERSION = 1
+FLOOR_FILE_SUFFIX = ".floor.json"
+
+_HINTS: Dict[type, dict] = {}
+
+
+def _hints(cls: type) -> dict:
+    """A dataclass's field types, resolved once. A class whose annotations will
+    not resolve is read without them: its tuples are tagged, and nothing is
+    type-checked, but it still saves and loads."""
+    if cls not in _HINTS:
+        try:
+            _HINTS[cls] = get_type_hints(cls)
+        except (NameError, TypeError):
+            _HINTS[cls] = {}
+    return _HINTS[cls]
+
+
+def _bare(tp):
+    """Optional[X] is X."""
+    if get_origin(tp) is Union:
+        inner = [a for a in get_args(tp) if a is not type(None)]
+        if len(inner) == 1:
+            return inner[0]
+    return tp
+
+
+def _inner(tp, i: int = 0):
+    """The type of an element of a typed list, tuple or dict, where it says."""
+    tp = _bare(tp)
+    origin, args = get_origin(tp), get_args(tp)
+    if origin is list and args:
+        return args[0]
+    if origin is tuple and args:
+        if len(args) == 2 and args[1] is Ellipsis:
+            return args[0]
+        return args[i] if i < len(args) else None
+    if origin is dict and len(args) == 2:
+        return args[1]
+    return None
+
+
+def _says_tuple(tp) -> bool:
+    return get_origin(_bare(tp)) is tuple
+
+
+def _to_data(v, tp=None):
+    """A floor as plain JSON. Every object is tagged with its class, so a list
+    that mixes settlements and regions comes back as both. A tuple the class
+    declares as one is a plain list -- [25, 31], not {"__tuple__": [25, 31]} --
+    which keeps a hand-edited file readable; any other tuple says so."""
+    if is_dataclass(v) and not isinstance(v, type):
+        hints = _hints(type(v))
+        out = {"__type__": type(v).__name__}
+        for k, x in vars(v).items():     # fields, and anything set on it after
+            out[k] = _to_data(x, hints.get(k))
+        return out
+    if isinstance(v, tuple):
+        items = [_to_data(x, _inner(tp, i)) for i, x in enumerate(v)]
+        return items if _says_tuple(tp) else {"__tuple__": items}
+    if isinstance(v, list):
+        return [_to_data(x, _inner(tp)) for x in v]
+    if isinstance(v, dict):
+        if all(isinstance(k, str) and not k.startswith("__") for k in v):
+            return {k: _to_data(x, _inner(tp)) for k, x in v.items()}
+        return {"__dict__": [[_to_data(k), _to_data(x, _inner(tp))] for k, x in v.items()]}
+    if isinstance(v, (set, frozenset)):
+        return {"__set__": sorted((_to_data(x) for x in v), key=repr)}
+    if v is None or isinstance(v, (str, int, float, bool)):
+        return v
+    raise MapgenError(f"a floor holds a {type(v).__name__}, which a floor file cannot keep")
+
+
+_PLAIN = {int: "a whole number", float: "a number", str: "text", bool: "true or false"}
+
+
+def _from_data(v, tp=None, where: str = "data"):
+    """Read _to_data's JSON back. Only this module's dataclasses can be named, so
+    a file passed around online can build a floor and nothing else. A hand edit
+    that puts the wrong kind of value in a field says which field."""
+    want = _bare(tp)
+    if want in _PLAIN and v is not None:
+        ok = (isinstance(v, bool) if want is bool else
+              isinstance(v, (int, float)) and not isinstance(v, bool) if want is float else
+              isinstance(v, want) and not isinstance(v, bool))
+        if not ok:
+            raise MapgenError(f"{where} should be {_PLAIN[want]}, not {json.dumps(v)}")
+    if isinstance(v, list):
+        items = [_from_data(x, _inner(tp, i), f"{where}[{i}]") for i, x in enumerate(v)]
+        return tuple(items) if _says_tuple(tp) else items
+    if not isinstance(v, dict):
+        return v
+    if "__tuple__" in v:
+        return tuple(_from_data(x, None, f"{where}[{i}]") for i, x in enumerate(v["__tuple__"]))
+    if "__set__" in v:
+        return {_from_data(x, None, where) for x in v["__set__"]}
+    if "__dict__" in v:
+        return {_from_data(k, None, where): _from_data(x, _inner(tp), f"{where}[{k!r}]")
+                for k, x in v["__dict__"]}
+    if "__type__" not in v:
+        return {k: _from_data(x, _inner(tp), f"{where}.{k}") for k, x in v.items()}
+    name = v["__type__"]
+    cls = globals().get(name)
+    if not (isinstance(cls, type) and is_dataclass(cls) and cls.__module__ == __name__):
+        raise MapgenError(f"{where} is a {name!r}, which is not part of a floor")
+    hints, init = _hints(cls), {f.name for f in fields(cls) if f.init}
+    needed = [f.name for f in fields(cls) if f.init and f.default is MISSING
+              and f.default_factory is MISSING and f.name not in v]
+    if needed:
+        raise MapgenError(f"{where} (a {name}) needs " +
+                          ", ".join(json.dumps(n) for n in needed))
+    values = {k: _from_data(x, hints.get(k), f"{where}.{k}")
+              for k, x in v.items() if k != "__type__"}
+    obj = cls(**{k: x for k, x in values.items() if k in init})
+    for k, x in values.items():
+        if k not in init:
+            setattr(obj, k, x)
+    return obj
+
+
+def floor_file_data(res: GenResult) -> dict:
+    """A generated floor as a floor file's contents."""
+    return {
+        "format": FLOOR_FILE_FORMAT,
+        "version": FLOOR_FILE_VERSION,
+        "about": ("A DCC Mapgen floor. Change any value -- a name, a level, a "
+                  "description -- then open this file in the app, or run "
+                  "dcc_mapgen.py --from on it, to draw the write-up and maps again "
+                  "with your changes."),
+        "floor": res.number, "size": res.size, "seed": res.seed,
+        "boss_stairs": res.boss_stairs,
+        "data": _to_data(res.floor),
+    }
+
+
+def _floor_json(v, depth: int = 0) -> str:
+    """JSON laid out for editing by hand: one value a line, except that a short
+    list of plain values -- a level range, a pair of room ids -- stays on one."""
+    pad, inner = " " * depth, " " * (depth + 1)
+    if isinstance(v, dict):
+        if not v:
+            return "{}"
+        rows = [f"{inner}{json.dumps(k, ensure_ascii=False)}: {_floor_json(x, depth + 1)}"
+                for k, x in v.items()]
+        return "{\n" + ",\n".join(rows) + f"\n{pad}}}"
+    if isinstance(v, list):
+        if not v:
+            return "[]"
+        flat = json.dumps(v, ensure_ascii=False)
+        if not any(isinstance(x, (dict, list)) for x in v) and len(flat) <= 80:
+            return flat
+        return "[\n" + ",\n".join(f"{inner}{_floor_json(x, depth + 1)}" for x in v) + f"\n{pad}]"
+    return json.dumps(v, ensure_ascii=False)
+
+
+def save_floor_file(res: GenResult, path: str) -> None:
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(_floor_json(floor_file_data(res)) + "\n")
+
+
+def render_floor_data(data: dict, where: str = "the floor file") -> GenResult:
+    """Draw a floor file's contents: the write-up and every map, from the floor
+    as it stands in the file, edits and all."""
+    if not isinstance(data, dict) or data.get("format") != FLOOR_FILE_FORMAT:
+        raise MapgenError(f"{where} is not a DCC Mapgen floor file")
+    version = data.get("version")
+    if not isinstance(version, int) or version > FLOOR_FILE_VERSION:
+        raise MapgenError(f"{where} was made by a newer DCC Mapgen (floor file version "
+                          f"{version}); this one reads up to {FLOOR_FILE_VERSION}")
+    try:
+        number, size, seed = int(data["floor"]), str(data["size"]), int(data["seed"])
+        tree = data["data"]
+    except (KeyError, TypeError, ValueError) as e:
+        raise MapgenError(f"{where} is missing its floor, size, seed or data ({e})")
+    if number not in FLOORS:
+        raise MapgenError(f"{where} says floor {number}, which this generator does not make")
+    try:
+        fl = _from_data(tree)
+    except MapgenError as e:
+        raise MapgenError(f"{where}: {e}")
+    boss_stairs = bool(data.get("boss_stairs", True))
+    try:
+        text = _render_floor(fl, number)
+        svgs = floor_svgs(fl, boss_stairs)
+    except (TypeError, ValueError, KeyError, AttributeError, IndexError) as e:
+        raise MapgenError(f"{where} has a value the generator cannot draw ({type(e).__name__}: "
+                          f"{e}). Check anything you changed by hand.")
+    return GenResult(floor=fl, number=number, size=size, seed=seed, markdown=text,
+                     svgs=svgs, roster=None, boss_stairs=boss_stairs)
+
+
+def open_floor_file(path: str) -> GenResult:
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+    except OSError as e:
+        raise MapgenError(f"could not read {path}: {e}")
+    except ValueError as e:
+        raise MapgenError(f"{path} is not valid JSON ({e}). A hand edit may have left a "
+                          f"comma or a quote out.")
+    return render_floor_data(data, path)
 
 
 def main(argv=None):
@@ -7740,8 +7954,17 @@ def main(argv=None):
     p.add_argument("--image", type=str, default=None,
                    help="also write a map image to this path (.svg needs nothing; .png needs resvg-py)")
     p.add_argument("--save", nargs="?", const=".", default=None, metavar="DIR",
-                   help="write both floorN_size_seedS.md and .png (falls back to .svg without resvg-py) "
-                        "into DIR (default: current directory)")
+                   help="write floorN_size_seedS.md, its maps as .png (falls back to .svg "
+                        "without resvg-py) and its editable .floor.json into DIR (default: "
+                        "current directory)")
+    p.add_argument("--floor-file", type=str, default=None, metavar="PATH",
+                   help="also write the floor as an editable data file (.floor.json): change "
+                        "names, levels, descriptions and the rest, then draw it again with --from")
+    p.add_argument("--from", dest="from_file", type=str, default=None, metavar="FILE",
+                   help="skip generating and draw a floor file instead -- one written by "
+                        "--save or --floor-file, edited or not. The write-up and maps come "
+                        "out with every change in the file; --out, --image and --save work "
+                        "as usual")
     p.add_argument("--campaign", type=str, default=None, metavar="FILE",
                    help="carry other crawler teams between floors: teams still alive in FILE "
                         "come onto this floor with their name and standing intact and are dealt "
@@ -7841,28 +8064,39 @@ def _run(a) -> None:
     if a.standing and not a.campaign:
         raise MapgenError("--standing needs --campaign: there is nowhere to record a "
                           "standing without a campaign roster")
-    roster = load_roster(a.campaign) if a.campaign else None
-    for change in a.standing or []:
-        name, _, standing = change.partition("=")
-        if not standing:
-            raise MapgenError(f'--standing wants "NAME=STANDING", got {change!r}')
-        print(_set_standing(roster, name.strip(), standing.strip()), file=sys.stderr)
 
-    res = generate(a.floor, a.size, a.seed, scaling=a.scaling, days=a.days,
-                   boss_stairs=not a.no_boss_stairs, stair_chance=a.stair_chance,
-                   borough_boss_rate=a.borough_boss_rate, region=a.region,
-                   warlords=a.warlords, wildcard=a.wildcard, winner=a.winner,
-                   runner_up=a.runner_up, vehicle=a.vehicle, party=a.party,
-                   images=bool(a.image or a.save is not None), roster=roster)
+    if a.from_file:
+        # A floor file is drawn as it stands. A campaign would deal its teams a
+        # fresh fate, which is generating, not drawing.
+        if a.campaign:
+            raise MapgenError("--from draws a floor file as it stands, so it cannot "
+                              "continue a campaign; leave --campaign off")
+        res = open_floor_file(a.from_file)
+        print(f"drew {a.from_file}: floor {res.number}, {res.size}, seed {res.seed}",
+              file=sys.stderr)
+    else:
+        roster = load_roster(a.campaign) if a.campaign else None
+        for change in a.standing or []:
+            name, _, standing = change.partition("=")
+            if not standing:
+                raise MapgenError(f'--standing wants "NAME=STANDING", got {change!r}')
+            print(_set_standing(roster, name.strip(), standing.strip()), file=sys.stderr)
 
-    if a.campaign:
-        save_roster(res.roster, a.campaign)
-        alive = len(res.roster.active())
-        carried = sum(1 for t in res.floor.other_crawlers if t.first_seen != t.floor)
-        print(f"campaign {a.campaign}: {carried} team(s) carried in, "
-              f"{alive} alive of {len(res.roster.teams)} met so far", file=sys.stderr)
+        res = generate(a.floor, a.size, a.seed, scaling=a.scaling, days=a.days,
+                       boss_stairs=not a.no_boss_stairs, stair_chance=a.stair_chance,
+                       borough_boss_rate=a.borough_boss_rate, region=a.region,
+                       warlords=a.warlords, wildcard=a.wildcard, winner=a.winner,
+                       runner_up=a.runner_up, vehicle=a.vehicle, party=a.party,
+                       images=bool(a.image or a.save is not None), roster=roster)
 
-    out, image = a.out, a.image
+        if a.campaign:
+            save_roster(res.roster, a.campaign)
+            alive = len(res.roster.active())
+            carried = sum(1 for t in res.floor.other_crawlers if t.first_seen != t.floor)
+            print(f"campaign {a.campaign}: {carried} team(s) carried in, "
+                  f"{alive} alive of {len(res.roster.teams)} met so far", file=sys.stderr)
+
+    out, image, floor_file = a.out, a.image, a.floor_file
     if a.save is not None:
         os.makedirs(a.save, exist_ok=True)
         base = os.path.join(a.save, res.basename())
@@ -7873,10 +8107,15 @@ def _run(a) -> None:
             ext = ".svg"
         out = out or base + ".md"
         image = image or base + ext
+        floor_file = floor_file or base + FLOOR_FILE_SUFFIX
 
     if image:
         for pth in save_svgs(res.svgs, image):
             print(f"wrote {pth}", file=sys.stderr)
+
+    if floor_file:
+        save_floor_file(res, floor_file)
+        print(f"wrote {floor_file} (edit it, then draw it again with --from)", file=sys.stderr)
 
     if out:
         with open(out, "w", encoding="utf-8") as f:

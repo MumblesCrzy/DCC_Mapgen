@@ -88,6 +88,153 @@ class GoldenOutputTest(unittest.TestCase):
         self.assertEqual(dupes, [], f"duplicate case ids would mask each other: {dupes}")
 
 
+class FloorFileTest(unittest.TestCase):
+    """A floor saved as data, edited, and drawn again. A user asked to change what
+    was generated and make the floor their own; the write-up and the maps are both
+    drawn from the floor's data, so that data is what gets saved and edited."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+
+    def _path(self, name="f"):
+        return os.path.join(self.tmp.name, name + mg.FLOOR_FILE_SUFFIX)
+
+    def _edit(self, path, change):
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        change(data)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+
+    def test_every_golden_floor_comes_back_exactly(self):
+        """Saved and opened, every pinned floor draws the same write-up and maps,
+        byte for byte, and keeps its floor, size, seed and stairwell setting."""
+        for case in corpus.CASES:
+            res = mg.generate(**case)
+            path = self._path()
+            mg.save_floor_file(res, path)
+            back = mg.open_floor_file(path)
+            where = corpus.case_id(case)
+            self.assertEqual(back.markdown, res.markdown, where)
+            self.assertEqual(back.svgs, res.svgs, where)
+            self.assertEqual((back.number, back.size, back.seed, back.boss_stairs),
+                             (res.number, res.size, res.seed, res.boss_stairs), where)
+
+    def test_the_file_reads_like_the_floor(self):
+        """For editing by hand: each part says what it is, and a level range is
+        a plain pair on one line, not a tagged tuple."""
+        for case in corpus.CASES:
+            path = self._path()
+            mg.save_floor_file(mg.generate(**case), path)
+            with open(path, encoding="utf-8") as f:
+                text = f.read()
+            self.assertNotIn("__tuple__", text, corpus.case_id(case))
+        mg.save_floor_file(mg.generate(1, "small", 4242), path)
+        with open(path, encoding="utf-8") as f:
+            text = f.read()
+        self.assertRegex(text, r'"level_range": \[\d+, \d+\]')
+        self.assertIn('"__type__": "Boss"', text)
+
+    def test_an_edit_is_drawn_into_the_write_up_and_the_map(self):
+        res = mg.generate(1, "small", 4242)
+        path = self._path()
+        mg.save_floor_file(res, path)
+        old = res.floor.neighborhoods[0].boss.name
+
+        def change(data):
+            boss = data["data"]["neighborhoods"][0]["boss"]
+            boss["name"], boss["level"] = "Mumbles the Unedited", 30
+        self._edit(path, change)
+        back = mg.open_floor_file(path)
+        self.assertIn("Mumbles the Unedited (Level 30)", back.markdown)
+        self.assertNotIn(old, back.markdown)
+        self.assertIn("Mumbles the Unedited", back.svgs[0][1])
+        # What is worked out from the floor follows the edit: the Bestiary stats
+        # the boss at its new level.
+        beast = next(b for b in mg.floor_bestiary(back.floor) if b.name == "Mumbles the Unedited")
+        self.assertEqual(beast.level, 30)
+
+    def test_a_note_of_your_own_is_kept(self):
+        path = self._path()
+        mg.save_floor_file(mg.generate(5, "small", 1), path)
+        self._edit(path, lambda d: d["data"].__setitem__("my_note", "the party owes Wennick"))
+        again = self._path("again")
+        mg.save_floor_file(mg.open_floor_file(path), again)
+        with open(again, encoding="utf-8") as f:
+            self.assertEqual(json.load(f)["data"]["my_note"], "the party owes Wennick")
+
+    def test_only_a_floor_can_be_built_from_a_file(self):
+        """A floor file passed around online names classes to build. Only this
+        module's dataclasses can be named: not its functions, which can read and
+        write files, and not anything it imported."""
+        path = self._path()
+        mg.save_floor_file(mg.generate(3, "small", 2), path)
+        for name in ("generate", "save_roster", "open_floor_file", "MapgenError", "os",
+                     "open", "LootRoller", "json"):
+            self._edit(path, lambda d: d["data"].__setitem__("janitor", {"__type__": name}))
+            with self.assertRaises(mg.MapgenError, msg=name) as cm:
+                mg.open_floor_file(path)
+            self.assertIn("not part of a floor", str(cm.exception), name)
+
+    def test_a_hand_edit_mistake_says_where(self):
+        path = self._path()
+        mg.save_floor_file(mg.generate(3, "small", 2), path)
+        with open(path, encoding="utf-8") as f:
+            good = f.read()
+
+        def attempt(change):
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(good)
+            self._edit(path, change)
+            with self.assertRaises(mg.MapgenError) as cm:
+                mg.open_floor_file(path)
+            return str(cm.exception)
+
+        region = next(i for i, c in enumerate(json.loads(good)["data"]["cells"])
+                      if c["__type__"] == "Region")
+        msg = attempt(lambda d: d["data"]["cells"][region].__setitem__("level_range", ["ten", 12]))
+        self.assertIn(f"data.cells[{region}].level_range[0] should be a whole number", msg)
+        msg = attempt(lambda d: d["data"].__setitem__("janitor_level", "high"))
+        self.assertIn("data.janitor_level should be a whole number", msg)
+        msg = attempt(lambda d: d["data"]["janitor"].pop("noun"))
+        self.assertIn('data.janitor (a Mob) needs "noun"', msg)
+        self.assertIn("newer DCC Mapgen", attempt(lambda d: d.__setitem__("version", 99)))
+        self.assertIn("not a DCC Mapgen floor file", attempt(lambda d: d.pop("format")))
+        self.assertIn("does not make", attempt(lambda d: d.__setitem__("floor", 7)))
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(good[:-40])
+        with self.assertRaises(mg.MapgenError) as cm:
+            mg.open_floor_file(path)
+        self.assertIn("not valid JSON", str(cm.exception))
+
+    def _cli(self, *args):
+        env = dict(os.environ, PYTHONIOENCODING="utf-8")
+        return subprocess.run([sys.executable, os.path.join(ROOT, "dcc_mapgen.py"), *args],
+                              capture_output=True, text=True, env=env, encoding="utf-8")
+
+    def test_the_command_line_saves_and_draws_floor_files(self):
+        d = self.tmp.name
+        r = self._cli("--floor", "3", "--size", "small", "--seed", "77", "--save", d)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        saved = os.path.join(d, "floor3_small_seed77" + mg.FLOOR_FILE_SUFFIX)
+        self.assertTrue(os.path.exists(saved), "--save wrote no floor file")
+        with open(os.path.join(d, "floor3_small_seed77.md"), encoding="utf-8") as f:
+            written = f.read()
+        r = self._cli("--from", saved)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(r.stdout.rstrip("\n"), written.rstrip("\n"))
+        extra = self._path("extra")
+        r = self._cli("--floor", "8", "--seed", "3", "--floor-file", extra, "--out",
+                      os.path.join(d, "f8.md"))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(mg.open_floor_file(extra).seed, 3)
+        r = self._cli("--from", saved, "--campaign", os.path.join(d, "c.json"))
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("cannot continue a campaign", r.stderr)
+        self.assertFalse(os.path.exists(os.path.join(d, "c.json")))
+
+
 class WebPageTest(unittest.TestCase):
     """The mobile web page's Python side, run here on the desktop: web_api is what
     the page calls inside Pyodide, and build_site assembles what GitHub Pages
