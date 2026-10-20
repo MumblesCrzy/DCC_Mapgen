@@ -5001,7 +5001,8 @@ def render5_svg(fl: Floor5) -> str:
         o.append(f'<rect x="{kx-9}" y="{ky-9}" width="18" height="18" fill="#222"/>')
         o.append(_stair_icon(kx - 7, ky - 32))
         if q.name == fl.suggested_start:
-            o.append(_text(tx, ty + 66, "suggested start (DM)", size=10, weight="bold", anchor="middle", fill="#c0392b"))
+            o.append(_text(tx, ty - 34 + len(lines) * 16 + 2, "suggested start (DM)", size=10,
+                           weight="bold", anchor="middle", fill="#c0392b"))
     o.append(f'<circle cx="{cx}" cy="{cy}" r="{R}" fill="none" stroke="#111" stroke-width="5"/>')
     o.append(f'<circle cx="{cx}" cy="{cy}" r="34" fill="#f6f2ea" stroke="#111" stroke-width="3"/>')
     o.append(_text(cx, cy + 5, str(fl.bubble), size=16, weight="bold", anchor="middle"))
