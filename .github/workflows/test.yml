@@ -50,3 +50,34 @@ jobs:
         run: |
           python dcc_mapgen.py --floor 1 --size small --seed 1 --out cli_check.md
           python dcc_mapgen.py --floor 9 --size medium --seed 1 --save cli_check_dir
+
+  # The mobile web page runs the same generator in the browser through Pyodide.
+  # pages.yml repeats these before it publishes; here they catch a break on the
+  # push that causes it, not at release time.
+  web:
+    name: web page
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Pyodide and Playwright
+        run: |
+          npm install --no-save "pyodide@$(node -p "require('./web/versions.json').pyodide")" playwright@1.64.1
+          npx playwright install --with-deps chromium
+
+      - name: The generator gives the same floors in Pyodide
+        run: node web/check_pyodide.mjs
+
+      - name: Build the site
+        run: python web/build_site.py _site
+
+      - name: The page works in a phone-sized browser, online and off
+        run: node web/smoke_test.mjs _site

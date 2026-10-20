@@ -6564,6 +6564,54 @@ def render_rooms_only(nb: Neighborhood) -> str:
 
 FLOORS = (1, 2, 3, 4, 5, 6, 8, 9, 10, 11)
 
+# For the front ends, the desktop app and the web page.
+#
+# Which optional controls apply to which floor. Everything not listed here is
+# either universal (floor/size/seed) or unused by that floor's generator, and
+# passing it anyway would just be ignored -- but hiding it keeps a panel honest
+# about what actually affects the map in front of you.
+FLOOR_OPTIONS = {
+    1:  {"scaling", "days", "stairs"},
+    2:  {"scaling", "days", "stairs"},
+    3:  {"scaling", "days"},
+    4:  {"days"},
+    5:  {"days"},
+    6:  {"scaling", "days"},
+    8:  {"days", "region"},
+    9:  {"days", "floor9"},
+    10: {"floor10"},
+    11: set(),
+}
+
+# Floors 3-11 are named as this module's docstring names them; keep them in step
+# with it. Floors 1 and 2 have no name there -- they title themselves per seed
+# ("The Gilded Neighborhood") -- so these two are the setting's names for them
+# rather than anything the generator emits.
+FLOOR_LABELS = {
+    1: "1 - The Collapse",
+    2: "2 - The Crawl",
+    3: "3 - The Over City",
+    4: "4 - The Iron Tangle",
+    5: "5 - The Bubbles",
+    6: "6 - The Hunting Grounds",
+    8: "8 - Ghosts of Earth",
+    9: "9 - Faction Wars",
+    10: "10 - Don't Come In Last",
+    11: "11 - A Parade of Horribles",
+}
+
+
+def map_title(suffix: str) -> str:
+    """Turn a filename suffix from floor_svgs() into something worth reading."""
+    if not suffix:
+        return "Main map"
+    if suffix.startswith("_room_"):
+        return f"Rooms - neighborhood {suffix[len('_room_'):]}"
+    if suffix.startswith("_heat"):
+        return f"Heat {suffix[len('_heat'):]}"
+    return suffix.lstrip("_").replace("_", " ").capitalize()
+
+
 # How many other teams a floor starts a campaign with, at its size.
 TEAM_COUNT = {"small": 1, "medium": 2, "large": 3, "huge": 4,
               "giant": 5, "massive": 6, "continent": 7}

@@ -30,39 +30,11 @@ try:
 except ImportError:
     resvg_py = None
 
-# Which optional controls apply to which floor. Everything not listed here is
-# either universal (floor/size/seed) or unused by that floor's generator, and
-# passing it anyway would just be ignored -- but hiding it keeps the panel honest
-# about what actually affects the map in front of you.
-FLOOR_OPTIONS = {
-    1:  {"scaling", "days", "stairs"},
-    2:  {"scaling", "days", "stairs"},
-    3:  {"scaling", "days"},
-    4:  {"days"},
-    5:  {"days"},
-    6:  {"scaling", "days"},
-    8:  {"days", "region"},
-    9:  {"days", "floor9"},
-    10: {"floor10"},
-    11: set(),
-}
-
-# Floors 3-11 are named as this generator's own module docstring names them; keep
-# them in step with it. Floors 1 and 2 have no name there -- they title themselves
-# per seed ("The Gilded Neighborhood") -- so these two are the setting's names for
-# them rather than anything the generator emits.
-FLOOR_LABELS = {
-    1: "1 - The Collapse",
-    2: "2 - The Crawl",
-    3: "3 - The Over City",
-    4: "4 - The Iron Tangle",
-    5: "5 - The Bubbles",
-    6: "6 - The Hunting Grounds",
-    8: "8 - Ghosts of Earth",
-    9: "9 - Faction Wars",
-    10: "10 - Don't Come In Last",
-    11: "11 - A Parade of Horribles",
-}
+# Which options apply to which floor, what each floor is called, and what each
+# map is titled live with the generator, so the web page reads the same ones.
+FLOOR_OPTIONS = mg.FLOOR_OPTIONS
+FLOOR_LABELS = mg.FLOOR_LABELS
+map_title = mg.map_title
 
 PAD = 8
 
@@ -75,17 +47,6 @@ def svg_size(svg: str) -> tuple:
     w = re.search(r'<svg[^>]*?\bwidth="([\d.]+)', svg)
     h = re.search(r'<svg[^>]*?\bheight="([\d.]+)', svg)
     return (float(w.group(1)) if w else 800.0, float(h.group(1)) if h else 600.0)
-
-
-def map_title(suffix: str) -> str:
-    """Turn a filename suffix from floor_svgs() into something worth reading."""
-    if not suffix:
-        return "Main map"
-    if suffix.startswith("_room_"):
-        return f"Rooms - neighborhood {suffix[len('_room_'):]}"
-    if suffix.startswith("_heat"):
-        return f"Heat {suffix[len('_heat'):]}"
-    return suffix.lstrip("_").replace("_", " ").capitalize()
 
 
 class MapView(ttk.Frame):

@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>DCC Mapgen</title>
+  <meta name="description" content="Generate a Dungeon Crawler Carl floor from a seed: the map, the write-up, and its loot boxes.">
+  <meta name="theme-color" content="#222222">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-180.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="DCC Mapgen">
+  <link rel="stylesheet" href="style.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <header class="top">
+    <h1>DCC Mapgen</h1>
+    <span class="version" id="version"></span>
+  </header>
+
+  <main>
+    <section class="card controls" aria-label="Floor to generate">
+      <label class="field">
+        <span>Floor</span>
+        <select id="floor"></select>
+      </label>
+      <div class="row">
+        <label class="field">
+          <span>Size</span>
+          <select id="size"></select>
+        </label>
+        <label class="field">
+          <span>Seed</span>
+          <input id="seed" inputmode="numeric" pattern="[0-9]*" placeholder="random" autocomplete="off">
+        </label>
+      </div>
+      <details id="more">
+        <summary>More options</summary>
+        <label class="field" data-option="days">
+          <span>Countdown days</span>
+          <input id="days" inputmode="numeric" pattern="[0-9]*" placeholder="the floor's own" autocomplete="off">
+        </label>
+        <label class="field" data-option="scaling">
+          <span>Mob levels</span>
+          <select id="scaling">
+            <option value="distance">rise with distance from the entry</option>
+            <option value="random">random by zone</option>
+          </select>
+        </label>
+        <label class="field" data-option="region">
+          <span>Folklore region</span>
+          <select id="region"><option value="">random</option></select>
+        </label>
+        <p class="hint" id="no-options">This floor has no other options.</p>
+      </details>
+      <button id="generate" class="primary" disabled>Loading…</button>
+      <p class="status" id="status" role="status">Loading the dungeon. The first visit downloads Python, a few megabytes.</p>
+    </section>
+
+    <nav class="tabs" role="tablist">
+      <button role="tab" id="tab-map" aria-controls="panel-map" aria-selected="true">Map</button>
+      <button role="tab" id="tab-text" aria-controls="panel-text" aria-selected="false">Write-up</button>
+      <button role="tab" id="tab-loot" aria-controls="panel-loot" aria-selected="false">Loot boxes</button>
+    </nav>
+
+    <section class="panel" id="panel-map" role="tabpanel" aria-labelledby="tab-map">
+      <div class="toolbar">
+        <select id="map-pick" aria-label="Which map" hidden></select>
+        <div class="zoom">
+          <button id="zoom-out" aria-label="Zoom out">−</button>
+          <button id="zoom-fit">Fit</button>
+          <button id="zoom-in" aria-label="Zoom in">+</button>
+        </div>
+      </div>
+      <div class="viewer" id="viewer">
+        <p class="empty" id="map-empty">Generate a floor to see its map here. Pinch or use the buttons to zoom.</p>
+        <img id="map-img" alt="" hidden>
+      </div>
+      <button id="save-svg" class="secondary" disabled>Save this map (SVG)</button>
+    </section>
+
+    <section class="panel" id="panel-text" role="tabpanel" aria-labelledby="tab-text" hidden>
+      <div class="toolbar">
+        <select id="jump" aria-label="Jump to a section" disabled><option>Jump to a section</option></select>
+        <button id="save-md" class="secondary" disabled>Save (Markdown)</button>
+      </div>
+      <article class="writeup" id="writeup">
+        <p class="empty">Generate a floor to read its write-up here.</p>
+      </article>
+    </section>
+
+    <section class="panel" id="panel-loot" role="tabpanel" aria-labelledby="tab-loot" hidden>
+      <div class="card">
+        <h2>Boxes this floor names</h2>
+        <p class="hint" id="sugg-empty">Generate a floor to list the boxes it names. Tap one to start from it.</p>
+        <ul class="suggestions" id="suggestions"></ul>
+      </div>
+      <div class="card">
+        <div class="row">
+          <label class="field"><span>Tier</span><select id="tier"></select></label>
+          <label class="field"><span>Type</span><input id="box-type" list="box-types" value="Boss" autocomplete="off"></label>
+          <datalist id="box-types"></datalist>
+        </div>
+        <div class="row">
+          <label class="field"><span>Floor</span><input id="loot-floor" inputmode="numeric" value="1"></label>
+          <label class="field"><span>How many</span><input id="count" inputmode="numeric" value="1"></label>
+        </div>
+        <label class="field">
+          <span>Benefactor box prepared for</span>
+          <select id="threat"><option value="">nothing in particular</option></select>
+        </label>
+        <label class="field">
+          <span>Fan box: how much the audience liked them (<output id="liked-out">50</output>%)</span>
+          <input id="liked" type="range" min="0" max="100" step="5" value="50">
+          <small class="hint" id="odds"></small>
+        </label>
+        <button id="open" class="primary" disabled>Open</button>
+        <p class="hint" id="roller-seed"></p>
+      </div>
+      <div class="opened" id="opened"></div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <a class="coffee" href="https://buymeacoffee.com/MumblesCrzy" target="_blank" rel="noopener">☕ Buy me a coffee</a>
+    <a href="https://github.com/MumblesCrzy/DCC_Mapgen" target="_blank" rel="noopener">GitHub</a>
+  </footer>
+</body>
+</html>

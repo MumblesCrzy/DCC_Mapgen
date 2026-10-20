@@ -319,6 +319,10 @@ Check the [Releases](../../releases) page for bundled builds — no Python insta
 
 On Linux the desktop app needs your distribution's Tk package if it isn't already present (`sudo apt install python3-tk` on Debian/Ubuntu); the command-line build needs nothing.
 
+### Option C: in a browser, phones included
+
+Nothing to install: open **https://mumblescrzy.github.io/DCC_Mapgen/**. It is a smaller version of the app; see [Web page](#web-page-phones).
+
 ## Desktop app
 
 ```
@@ -362,6 +366,41 @@ shows the map instead of the built-in preview.
 `python dcc_mapgen_gui.py --self-test` (or `python gui_smoke_test.py`) drives the app
 through a generate and checks the write-up, the map list and the rendered preview all
 arrive — this is what CI runs against the packaged builds.
+
+## Web page (phones)
+
+**https://mumblescrzy.github.io/DCC_Mapgen/**
+
+For phones and tablets, or any browser: pick a floor, size and seed, and the page
+shows the map (pinch or the buttons to zoom), the write-up (with a menu to jump
+between sections), and a Loot Boxes tab like the desktop app's. **Save** downloads the
+Markdown, or the map on show as SVG.
+
+- **Add to Home Screen** installs it like an app, and after the first visit it works
+  offline.
+- **Same seed, same floor.** The page runs this repo's `dcc_mapgen.py` itself, in the
+  browser, through [Pyodide](https://pyodide.org) (Python compiled to WebAssembly).
+  There is no server, and nothing is sent anywhere.
+- The first visit downloads Python, a few megabytes, and takes a few seconds to start
+  on a phone. After that it is cached.
+- It is the smaller version of the app. It has no campaigns or leaderboard, no PNG
+  export (the browser draws the SVG itself), and leaves the stairwell and boss sliders
+  and the Floor 9 and 10 options at their defaults. The Massive and Continent sizes
+  work, but make 257–401 maps, so they are slow on a phone.
+
+How it is built and checked:
+
+- `web/` holds the page: `index.html`, `app.js`, `style.css`, and `web_api.py`, the thin
+  layer the page calls in Python. `python web/build_site.py` assembles it with the
+  generator and its `data/` into `_site/`, which `python -m http.server --directory
+  _site` serves locally.
+- `.github/workflows/pages.yml` publishes it to GitHub Pages on every release tag, or
+  by hand from the Actions tab. One-time setup: **Settings → Pages → Build and
+  deployment → Source: GitHub Actions**.
+- Before it publishes, and on every push, CI checks that the generator gives every
+  [golden](#tests) floor byte for byte under Pyodide (`web/check_pyodide.mjs`), and
+  drives the built page in a phone-sized browser, online and then offline
+  (`web/smoke_test.mjs`).
 
 ## Campaigns
 

@@ -1,0 +1,67 @@
+name: Web page
+
+# Publishes the mobile web page to GitHub Pages on every release tag, the same
+# moment build-release.yml attaches the downloads. Run it by hand from the Actions
+# tab to publish without a release.
+#
+# One-time setup: Settings -> Pages -> Build and deployment -> Source: GitHub Actions.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # the page shows the version, which needs the tags
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Pyodide and Playwright
+        run: |
+          npm install --no-save "pyodide@$(node -p "require('./web/versions.json').pyodide")" playwright@1.64.1
+          npx playwright install --with-deps chromium
+
+      - name: The generator gives the same floors in Pyodide
+        run: node web/check_pyodide.mjs
+
+      - name: Build the site
+        run: python web/build_site.py _site
+
+      - name: The page works in a phone-sized browser, online and off
+        run: node web/smoke_test.mjs _site
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

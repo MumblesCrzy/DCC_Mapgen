@@ -17,3 +17,9 @@ dist/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Web page build output and its Node tooling
+_site/
+node_modules/
+package.json
+package-lock.json

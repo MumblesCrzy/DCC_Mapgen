@@ -17,7 +17,9 @@ run, because within one process that order is perfectly stable.
 """
 
 import collections
+import contextlib
 import glob
+import io
 import json
 import math
 import os
@@ -35,6 +37,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import corpus  # noqa: E402
 import dcc_mapgen as mg  # noqa: E402
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 FIELDS = ("seed", "markdown", "map_count", "maps")
 
@@ -82,6 +86,101 @@ class GoldenOutputTest(unittest.TestCase):
         ids = [corpus.case_id(c) for c in corpus.CASES]
         dupes = sorted({i for i in ids if ids.count(i) > 1})
         self.assertEqual(dupes, [], f"duplicate case ids would mask each other: {dupes}")
+
+
+class WebPageTest(unittest.TestCase):
+    """The mobile web page's Python side, run here on the desktop: web_api is what
+    the page calls inside Pyodide, and build_site assembles what GitHub Pages
+    serves. web/check_pyodide.mjs and web/smoke_test.mjs cover the browser half
+    in CI. The page has to give the same floor as generate() for a seed."""
+
+    WEB = os.path.join(ROOT, "web")
+
+    @classmethod
+    def setUpClass(cls):
+        sys.path.insert(0, cls.WEB)
+        import web_api
+        cls.api = web_api
+
+    def _call(self, fn, payload):
+        return json.loads(getattr(self.api, fn)(json.dumps(payload)))
+
+    def test_the_controls_match_the_generator(self):
+        meta = json.loads(self.api.meta())
+        self.assertEqual([f["number"] for f in meta["floors"]], list(mg.FLOORS))
+        for f in meta["floors"]:
+            n = f["number"]
+            self.assertEqual(f["label"], mg.FLOOR_LABELS[n])
+            big = [s for s in f["sizes"] if s in mg.BIG_SIZES]
+            self.assertEqual(bool(big), n in (1, 2), f"floor {n}: {f['sizes']}")
+            self.assertEqual(set(f["options"]),
+                             mg.FLOOR_OPTIONS[n] & {"days", "scaling", "region"}, f"floor {n}")
+        self.assertEqual(meta["regions"], list(mg.FOLKLORE))
+        self.assertEqual(meta["tiers"], list(mg.LOOT_BOX_TIERS))
+
+    def test_a_seed_gives_the_same_floor_as_the_generator(self):
+        for case in ({"floor": 1, "size": "medium", "seed": 4242},
+                     {"floor": 4, "size": "large", "seed": 31},
+                     {"floor": 8, "size": "medium", "seed": 11, "region": "East Asia"},
+                     {"floor": 6, "size": "small", "seed": 7, "days": 12, "scaling": "random"}):
+            page = self._call("generate", {k: str(v) for k, v in case.items()})
+            want = mg.generate(**case)
+            self.assertEqual(page["markdown"], want.markdown, case)
+            self.assertEqual([(m["suffix"], m["svg"]) for m in page["maps"]], want.svgs, case)
+            self.assertEqual([m["title"] for m in page["maps"]],
+                             [mg.map_title(s) for s, _ in want.svgs])
+            self.assertEqual(page["basename"], want.basename())
+            boxes = {s["text"] for s in page["suggestions"] if s["kind"] == "box"}
+            self.assertEqual(boxes, {sg.label for sg in mg.floor_box_suggestions(want.floor)})
+
+    def test_options_a_floor_does_not_take_are_left_out(self):
+        page = self._call("generate", {"floor": "11", "size": "medium", "seed": "5", "days": "9"})
+        self.assertEqual(page["markdown"], mg.generate(11, "medium", 5).markdown)
+
+    def test_bad_input_comes_back_as_an_error(self):
+        for payload, words in (({"floor": "3", "size": "huge"}, "floor 1-2 only"),
+                               ({"floor": "3", "seed": "abc"}, "whole number"),
+                               ({"floor": "5", "days": "soon"}, "whole number")):
+            self.assertIn(words, self._call("generate", payload).get("error", ""), payload)
+        self.assertIn("type", self._call("open_boxes", {"type": " "})["error"])
+        self.assertIn("error", json.loads(self.api.fan_odds("lots")))
+
+    def test_boxes_open(self):
+        res = self._call("open_boxes", {"tier": "Gold", "type": "Benefactor", "floor": "6",
+                                        "count": "3", "threat": "fire", "liked": "50"})
+        self.assertEqual((res["label"], res["count"], res["floor"]), ("Gold Benefactor Box", 3, 6))
+        self.assertEqual(res["markdown"].count("**Gold Benefactor Box**"), 3)
+        self.assertIn("prepared for fire", res["markdown"])
+        odds = json.loads(self.api.fan_odds("70"))
+        self.assertEqual(odds, {k: v for k, v in mg.fan_odds(70).items() if k in odds})
+
+    def test_the_site_holds_everything_it_serves(self):
+        sys.path.insert(0, self.WEB)
+        import build_site
+        with tempfile.TemporaryDirectory() as out:
+            with contextlib.redirect_stdout(io.StringIO()):
+                build_site.build(out)
+            files = json.load(open(os.path.join(out, "files.json"), encoding="utf-8"))
+            data = sorted(n for n in os.listdir(os.path.join(ROOT, "data")) if n.endswith(".json"))
+            self.assertEqual(files["data"], [f"data/{n}" for n in data])
+            pins = json.load(open(os.path.join(self.WEB, "versions.json"), encoding="utf-8"))
+            self.assertEqual(files["pyodide"], pins["pyodide"])
+            for rel in files["python"] + files["data"]:
+                self.assertTrue(os.path.exists(os.path.join(out, rel)), rel)
+            sw = open(os.path.join(out, "sw.js"), encoding="utf-8").read()
+            self.assertNotIn("__BUILD__", sw)
+            self.assertNotIn("__SHELL__", sw)
+            shell = json.loads(re.search(r"const SHELL = (\[.*?\]);", sw).group(1))
+            for rel in shell:
+                self.assertTrue(rel == "./" or os.path.exists(os.path.join(out, rel)), rel)
+            self.assertTrue(set(files["python"] + files["data"]) <= set(shell),
+                            "a file the page loads would not be there offline")
+            html = open(os.path.join(out, "index.html"), encoding="utf-8").read()
+            for ref in re.findall(r'(?:href|src)="([^":]+)"', html):
+                self.assertTrue(os.path.exists(os.path.join(out, ref)), f"index.html links {ref}")
+            manifest = json.load(open(os.path.join(out, "manifest.webmanifest"), encoding="utf-8"))
+            for icon in manifest["icons"]:
+                self.assertTrue(os.path.exists(os.path.join(out, icon["src"])), icon["src"])
 
 
 class CrossPlatformMapTest(unittest.TestCase):
