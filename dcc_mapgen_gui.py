@@ -1406,7 +1406,7 @@ class App(tk.Tk):
         right = ttk.Notebook(outer)
         outer.add(right, weight=1)
 
-        # The Maps tab: the map, and the edit panel beside it when it is open.
+        # The Maps tab: the map, and the edit panel to its right when it is open.
         self.maps_pane = ttk.Panedwindow(right, orient="horizontal")
         right.add(self.maps_pane, text="Maps")
         self.view = MapView(self.maps_pane, self.status, self.post, lambda: self._resting)
@@ -1736,12 +1736,12 @@ class App(tk.Tk):
     # -- the edit panel ---------------------------------------------------------
 
     def toggle_editor(self):
-        """Show the edit panel beside the map, or put it away."""
+        """Show the edit panel to the right of the map, or put it away."""
         if str(self.editor) in self.maps_pane.panes():
             self.maps_pane.forget(self.editor)
             self.edit_btn.configure(text="Edit floor")
         else:
-            self.maps_pane.insert(0, self.editor, weight=0)
+            self.maps_pane.add(self.editor, weight=0)
             self.edit_btn.configure(text="Close editor")
             self.notebook.select(self.maps_pane)
 
@@ -2299,7 +2299,8 @@ def selftest() -> int:
     app.toggle_editor()
     app.update()
     ed = app.editor
-    check(str(ed) in app.maps_pane.panes(), "the edit panel opens beside the map")
+    check([str(p) for p in app.maps_pane.panes()] == [str(app.view), str(ed)],
+          "the edit panel opens to the right of the map")
     castle = ("quadrants", 0, "castle")
     ed.show(castle)
     old_name = original.floor.quadrants[0].castle.name

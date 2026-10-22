@@ -349,8 +349,8 @@ same `floorN_size_seedS.md` plus map files that `--save` produces on the command
   `--stair-chance` and `--borough-boss-rate`, which take the same thing as a fraction
   (50% is `0.5`).
 - **Edit floor** (above the map, or **Edit → Edit this floor**, Ctrl+E) opens a panel
-  beside the map where you can change anything on the floor and see it redrawn. See
-  [Editing in the app](#editing-in-the-app).
+  to the right of the map where you can change anything on the floor and see it
+  redrawn. See [Editing in the app](#editing-in-the-app).
 - **File → Re-roll rooms from a saved floor** is `--rooms-for` in the GUI: point it at a
   floor 1–2 Markdown file this app wrote and re-roll one neighborhood's rooms.
 - The **Loot Boxes** tab lists every box the current floor names; pick one, change its
@@ -382,7 +382,7 @@ make those changes for you, so you don't have to open the file at all.
 ### Editing in the app
 
 Generate a floor, or open a floor file, and click **Edit floor** above the map (Ctrl+E).
-A panel opens beside the map:
+A panel opens to the right of the map:
 
 - **The tree** lists the floor's parts, as the write-up names them: neighborhoods and
   their bosses, rooms and mobs; stations and trains; quadrants, castles and quests; and
