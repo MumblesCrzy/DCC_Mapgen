@@ -59,10 +59,10 @@
       <p class="status" id="status" role="status">Loading the dungeon. The first visit downloads Python, a few megabytes.</p>
     </section>
 
-    <nav class="tabs" role="tablist">
+    <nav class="tabs" role="tablist" aria-label="What to show">
       <button role="tab" id="tab-map" aria-controls="panel-map" aria-selected="true">Map</button>
-      <button role="tab" id="tab-text" aria-controls="panel-text" aria-selected="false">Write-up</button>
-      <button role="tab" id="tab-loot" aria-controls="panel-loot" aria-selected="false">Loot boxes</button>
+      <button role="tab" id="tab-text" aria-controls="panel-text" aria-selected="false" tabindex="-1">Write-up</button>
+      <button role="tab" id="tab-loot" aria-controls="panel-loot" aria-selected="false" tabindex="-1">Loot boxes</button>
     </nav>
 
     <section class="panel" id="panel-map" role="tabpanel" aria-labelledby="tab-map">
@@ -78,12 +78,16 @@
         <p class="empty" id="map-empty">Generate a floor to see its map here. Pinch or use the buttons to zoom.</p>
         <img id="map-img" alt="" hidden>
       </div>
+      <button id="map-words" class="secondary" hidden>Read this map as text</button>
       <button id="save-svg" class="secondary" disabled>Save this map (SVG)</button>
     </section>
 
     <section class="panel" id="panel-text" role="tabpanel" aria-labelledby="tab-text" hidden>
       <div class="toolbar">
-        <select id="jump" aria-label="Jump to a section" disabled><option>Jump to a section</option></select>
+        <details class="jump" id="jump" hidden>
+          <summary>Jump to a section</summary>
+          <ul id="jump-list"></ul>
+        </details>
         <button id="save-md" class="secondary" disabled>Save (Markdown)</button>
       </div>
       <article class="writeup" id="writeup">

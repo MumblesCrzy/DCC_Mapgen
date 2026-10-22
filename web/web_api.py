@@ -61,7 +61,11 @@ def generate(options: str) -> str:
     return json.dumps({
         "seed": res.seed, "floor": res.number, "basename": res.basename(),
         "markdown": res.markdown,
-        "maps": [{"suffix": s, "title": mg.map_title(s), "svg": svg} for s, svg in res.svgs],
+        "size": res.size,
+        # Each map with the write-up section that tells what it shows in words.
+        "maps": [{"suffix": s, "title": mg.map_title(s), "svg": svg,
+                  "section": mg.map_section(res.markdown, res.number, s)}
+                 for s, svg in res.svgs],
         "suggestions": _suggestions(res),
     })
 

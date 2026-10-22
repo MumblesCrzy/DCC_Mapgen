@@ -1,17 +1,22 @@
 // Drive the built web page in a real browser, as a phone: start it, generate a
 // floor, read the map and the write-up, open a loot box, then go offline and do
-// it again from the cache.
+// it again from the cache. Along the way, check it as a screen reader and a
+// keyboard user meet it: axe-core finds nothing wrong, the maps say where they
+// are told in words, and focus goes where the eye is sent.
 //
 //   python web/build_site.py _site
-//   npm install playwright && npx playwright install chromium
+//   npm install playwright axe-core && npx playwright install chromium
 //   node web/smoke_test.mjs _site [screenshot-dir]
 //
 // BROWSER_CHANNEL=msedge (or chrome) uses an installed browser instead of
-// Playwright's own Chromium. Exits non-zero on the first thing that fails.
+// Playwright's own Chromium. Exits non-zero if anything fails.
 
 import { createServer } from "node:http";
 import { readFile, mkdir } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { extname, join, normalize, resolve } from "node:path";
+
+const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
 
 let chromium;
 try {
@@ -66,38 +71,85 @@ const shot = async (name) => {
   await page.screenshot({ path: join(shots, `${name}.png`) });
 };
 
+// Everything axe-core can find wrong with the page as it stands: a control
+// with no name, text too faint to read, ARIA that says the wrong thing.
+async function axeCheck(what) {
+  if (!(await page.evaluate(() => "axe" in window))) await page.addScriptTag({ path: axePath });
+  const found = await page.evaluate(async () =>
+    (await window.axe.run(document, { resultTypes: ["violations"] })).violations.map((v) =>
+      `${v.id} (${v.impact}, ${v.nodes.length}x, e.g. ${v.nodes[0].target.join(" ")})`));
+  check(found.length === 0, `${what}: nothing axe-core flags${found.length ? " -- " + found.join("; ") : ""}`);
+}
+const said = () => page.$eval("#status", (s) => s.textContent);
+const focused = () => page.evaluate(() => {
+  const el = document.activeElement;
+  return { id: el.id, tag: el.tagName, text: el.textContent.trim() };
+});
+const generated = (words) => page.waitForFunction(
+  (w) => document.getElementById("status").textContent.startsWith(w), words, { timeout: 60_000 });
+
 try {
   await page.goto(url);
   await page.waitForSelector("#generate:not([disabled])", { timeout: 180_000 });
   check(true, "Python loaded and the page is ready");
   await shot("1-ready");
+  await axeCheck("the page as it starts");
 
   await page.selectOption("#floor", "4");
   await page.selectOption("#size", "medium");
   await page.fill("#seed", "4242");
   await page.click("#generate");
-  await page.waitForFunction(() => document.getElementById("status").textContent.includes("floor4_medium_seed4242"),
-    null, { timeout: 60_000 });
-  check(true, "generated Floor 4, medium, seed 4242");
-  const img = await page.$eval("#map-img", (i) => ({ hidden: i.hidden, w: i.naturalWidth, src: i.src }));
+  await generated("Floor 4, medium, seed 4242:");
+  check(true, `generated Floor 4, medium, seed 4242, and said so in words ("${await said()}")`);
+  const img = await page.$eval("#map-img", (i) => ({ hidden: i.hidden, w: i.naturalWidth, src: i.src, alt: i.alt }));
   check(!img.hidden && img.w > 0 && img.src.startsWith("blob:"), `the map is on show (${img.w}px wide)`);
+  check(img.alt.includes('"Colored Lines"'), `the map says which section tells it in words ("${img.alt}")`);
   const inView = await page.$eval("#viewer", (v) => v.getBoundingClientRect().top < innerHeight);
   check(inView, "the page has scrolled the map into view");
   await page.waitForTimeout(800);            // let the smooth scroll finish
   await shot("2-map");
+  await axeCheck("a floor with its map on show");
+
   await page.selectOption("#floor", "1");
   await page.click("#generate");
-  await page.waitForFunction(() => document.getElementById("status").textContent.includes("floor1_medium_seed4242"),
-    null, { timeout: 60_000 });
+  await generated("Floor 1, medium, seed 4242:");
   const maps = await page.$$eval("#map-pick option", (o) => o.length);
   check(maps > 1 && await page.$eval("#map-pick", (p) => !p.hidden), `Floor 1 offers its ${maps} maps to pick from`);
   await page.selectOption("#map-pick", "1");
   await page.click("#zoom-in");
   await shot("2b-rooms");
+  // A room map is told in words in its neighborhood's section; the button goes
+  // there, focus and all.
+  await page.click("#map-words");
+  let at = await focused();
+  check(at.tag === "H3" && at.text.startsWith("A. ")
+        && await page.$eval("#tab-text", (t) => t.getAttribute("aria-selected") === "true"),
+        `"Read this map as text" opens the write-up at neighborhood A ("${at.text}")`);
+  const layout = await page.$eval("#writeup", (w) => {
+    const h = [...w.querySelectorAll("h2")].find((x) => x.textContent === "Layout");
+    const part = [];
+    for (let el = h.nextElementSibling; el && el.tagName !== "H2"; el = el.nextElementSibling) part.push(el);
+    const table = part.map((el) => el.querySelector("table")).find(Boolean);
+    return { pre: part.some((el) => el.matches("pre") || el.querySelector("pre")),
+             rows: table ? table.querySelectorAll("tbody th[scope=row]").length : 0,
+             cols: table ? table.querySelectorAll("thead th[scope=col]").length : 0 };
+  });
+  check(!layout.pre && layout.rows === 2 && layout.cols === 3,
+        `the layout is a table with its rows and columns named, not a drawing in characters (${JSON.stringify(layout)})`);
+
+  // The tabs answer the keys a screen reader user expects of tabs.
+  await page.focus("#tab-text");
+  const keyed = [];
+  for (const key of ["ArrowRight", "ArrowRight", "Home", "End", "ArrowLeft"]) {
+    await page.keyboard.press(key);
+    keyed.push((await focused()).id);
+  }
+  check(keyed.join() === "tab-loot,tab-map,tab-map,tab-loot,tab-text",
+        `arrow keys, Home and End move along the tabs (${keyed.join(", ")})`);
+
   await page.selectOption("#floor", "4");
   await page.click("#generate");
-  await page.waitForFunction(() => document.getElementById("status").textContent.includes("floor4_medium_seed4242"),
-    null, { timeout: 60_000 });
+  await generated("Floor 4, medium, seed 4242:");
 
   await page.click("#tab-text");
   const writeup = await page.$eval("#writeup", (w) => ({
@@ -106,18 +158,33 @@ try {
   }));
   check(writeup.h1.startsWith("Floor 4"), `the write-up is rendered ("${writeup.h1}")`);
   check(writeup.h2 > 10 && writeup.tables > 0, `${writeup.h2} sections, ${writeup.tables} tables, tables wrapped to scroll`);
-  const jumps = await page.$$eval("#jump option", (o) => o.length);
-  check(jumps === writeup.h2 + 1, "every section is in the jump menu");
+  const jumps = await page.$$eval("#jump-list a", (a) => a.map((x) => x.textContent));
+  check(jumps.length === writeup.h2, "every section is in the jump list");
+  await page.click("#jump summary");
+  await page.click("#jump-list a >> nth=3");
+  at = await focused();
+  check(at.tag === "H2" && at.text === jumps[3] && !(await page.$eval("#jump", (d) => d.open)),
+        `a section picked from the list gets the focus ("${at.text}")`);
   await shot("3-writeup");
+  await axeCheck("the write-up");
 
   await page.click("#tab-loot");
   const suggestions = await page.$$eval("#suggestions button", (b) => b.length);
   check(suggestions > 0, `${suggestions} boxes suggested by the floor`);
   await page.click("#suggestions button >> nth=0");
+  at = await focused();
+  check(at.id === "open" && (await said()).endsWith("Open is next."),
+        `picking a box moves focus to Open and says what was picked ("${await said()}")`);
   await page.click("#open");
   const opened = await page.$$eval("#opened .box", (b) => b.length);
   check(opened === 1, "a box opens");
   await shot("4-loot");
+  await axeCheck("the loot boxes, one opened");
+  await page.emulateMedia({ colorScheme: "dark" });
+  await axeCheck("the loot boxes in the dark theme");
+  await page.click("#tab-text");
+  await axeCheck("the write-up in the dark theme");
+  await page.emulateMedia({ colorScheme: "light" });
 
   // A bad seed is reported, not crashed on.
   await page.fill("#seed", "abc");
@@ -137,8 +204,7 @@ try {
   await page.selectOption("#floor", "9");
   await page.fill("#seed", "11");
   await page.click("#generate");
-  await page.waitForFunction(() => document.getElementById("status").textContent.includes("floor9_medium_seed11"),
-    null, { timeout: 60_000 });
+  await generated("Floor 9, medium, seed 11:");
   check(true, "offline, it still starts and generates");
   await shot("5-offline");
 

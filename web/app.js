@@ -48,13 +48,52 @@ function markdown(md) {
   const html = DOMPurify.sanitize(marked.parse(md));
   const box = document.createElement("div");
   box.innerHTML = html;
-  // Wide tables scroll on their own rather than pushing the page sideways.
   for (const t of box.querySelectorAll("table")) {
+    // Every table's first column says what its row is about (a mob, a stat, a
+    // row of the floor's grid), so it is the row's header: a screen reader
+    // moving down a column names the row as well as the column.
+    for (const th of t.querySelectorAll("thead th")) th.scope = "col";
+    for (const tr of t.querySelectorAll("tbody tr")) {
+      const td = tr.firstElementChild;
+      if (!td || td.tagName !== "TD") continue;
+      const th = document.createElement("th");
+      for (const a of td.attributes) th.setAttribute(a.name, a.value);   // alignment
+      th.scope = "row";
+      th.append(...td.childNodes);
+      td.replaceWith(th);
+    }
+    // Wide tables scroll on their own rather than pushing the page sideways.
     const wrap = Object.assign(document.createElement("div"), { className: "table-wrap" });
     t.replaceWith(wrap);
     wrap.append(t);
   }
   return box;
+}
+
+// A table too wide for the screen scrolls in a box of its own, and a keyboard
+// can scroll the box only if it takes focus: those boxes do, named for the
+// section they are in, and the rest stay out of the way of the Tab key.
+function markScrollers() {
+  for (const wrap of document.querySelectorAll(".table-wrap")) {
+    if (!wrap.offsetParent) continue;            // in a hidden tab: done when shown
+    if (wrap.scrollWidth > wrap.clientWidth + 1) {
+      let head = wrap.previousElementSibling;
+      while (head && !/^H[1-4]$/.test(head.tagName)) head = head.previousElementSibling;
+      wrap.tabIndex = 0;
+      wrap.setAttribute("role", "region");
+      wrap.setAttribute("aria-label", `${head ? head.textContent : "Table"}, wide table`);
+    } else {
+      for (const a of ["tabindex", "role", "aria-label"]) wrap.removeAttribute(a);
+    }
+  }
+}
+
+// Move a screen reader (and the keyboard) to a heading, as well as the eye.
+function goTo(el) {
+  if (!el) return;
+  el.tabIndex = -1;
+  el.scrollIntoView({ behavior: "smooth", block: "start" });
+  el.focus({ preventScroll: true });
 }
 
 // -- starting up ----------------------------------------------------------------
@@ -147,7 +186,9 @@ async function generate() {
     showWriteup();
     showSuggestions();
     const n = res.maps.length;
-    setStatus(`${res.basename}: ${n} map${n === 1 ? "" : "s"}. Same seed, same floor.`);
+    // Read aloud, so in words: "floor4_medium_seed4242" is spelled out.
+    setStatus(`Floor ${res.floor}, ${res.size}, seed ${res.seed}: ${n} map${n === 1 ? "" : "s"} `
+              + "and a write-up. Same seed, same floor.");
     // On a phone the controls fill the first screen; bring the result up.
     document.querySelector(".tabs").scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (e) {
@@ -182,7 +223,11 @@ function showMap(i) {
   mapUrl = URL.createObjectURL(new Blob([m.svg], { type: "image/svg+xml" }));
   img.width = w;
   img.height = h;
-  img.alt = m.title;
+  // The write-up has what the map shows in words; say where.
+  img.alt = m.section
+    ? `${m.title} of Floor ${result.floor}. The write-up's section "${m.section}" describes it in words.`
+    : `${m.title} of Floor ${result.floor}.`;
+  $("map-words").hidden = !m.section;
   img.hidden = false;
   $("map-empty").hidden = true;
   img.onload = fit;
@@ -211,15 +256,36 @@ function fit() {
 
 function showWriteup() {
   const box = markdown(result.markdown);
-  const jump = $("jump");
-  jump.replaceChildren(new Option("Jump to a section", ""));
-  box.querySelectorAll("h2").forEach((h, i) => {
+  // Links, not a dropdown: a dropdown that jumps when it changes jumps on the
+  // first arrow key, before a keyboard user has heard the rest.
+  const links = [];
+  box.querySelectorAll("h2, h3").forEach((h, i) => {
     h.id = `s${i}`;
-    jump.add(new Option(h.textContent, h.id));
+    if (h.tagName !== "H2") return;
+    const a = Object.assign(document.createElement("a"), { href: `#${h.id}`, textContent: h.textContent });
+    a.addEventListener("click", (e) => {
+      e.preventDefault();
+      $("jump").open = false;
+      goTo($(h.id));
+    });
+    const li = document.createElement("li");
+    li.append(a);
+    links.push(li);
   });
-  jump.disabled = jump.options.length < 2;
+  $("jump-list").replaceChildren(...links);
+  $("jump").hidden = links.length < 2;
+  $("jump").open = false;
   $("writeup").replaceChildren(...box.childNodes);
   $("save-md").disabled = false;
+  markScrollers();
+}
+
+// The map on show, in words: its section of the write-up.
+function readMap() {
+  const m = result.maps[+$("map-pick").value || 0];
+  const head = [...$("writeup").querySelectorAll("h2, h3")].find((h) => h.textContent === m.section);
+  selectTab($("tab-text"));
+  goTo(head);
 }
 
 // -- loot boxes ---------------------------------------------------------------------
@@ -239,11 +305,15 @@ function showSuggestions() {
       if (s.kind === "threat") {
         $("box-type").value = "Benefactor";
         $("threat").value = s.threat;
+        setStatus(`Benefactor box, prepared for ${s.threat}. Open is next.`);
       } else {
         $("tier").value = s.tier;
         $("box-type").value = s.type;
+        setStatus(`${s.tier} ${s.type} box. Open is next.`);
       }
+      // Not just scrolled to: focus goes there, so a screen reader follows.
       $("open").scrollIntoView({ behavior: "smooth", block: "center" });
+      $("open").focus({ preventScroll: true });
     });
     const li = document.createElement("li");
     li.append(b);
@@ -271,6 +341,7 @@ function openBoxes() {
   const card = Object.assign(document.createElement("div"), { className: "box" });
   card.append(...markdown(res.markdown).childNodes);
   $("opened").prepend(card);
+  markScrollers();
   setStatus(`Opened ${res.count} × ${res.label} for Floor ${res.floor}.`);
 }
 
@@ -280,9 +351,24 @@ function selectTab(tab) {
   for (const t of document.querySelectorAll("[role=tab]")) {
     const on = t === tab;
     t.setAttribute("aria-selected", String(on));
+    t.tabIndex = on ? 0 : -1;            // Tab reaches the chosen tab; arrows the rest
     $(t.getAttribute("aria-controls")).hidden = !on;
   }
   if (tab.id === "tab-map") fit();
+  markScrollers();
+}
+
+// The tab keys a screen reader user expects: left and right move along the
+// tabs (round the ends), Home and End go to the first and last.
+function tabKeys(e) {
+  const tabs = [...document.querySelectorAll("[role=tab]")];
+  const at = tabs.indexOf(e.currentTarget);
+  const to = { ArrowRight: at + 1, ArrowLeft: at - 1, Home: 0, End: tabs.length - 1 }[e.key];
+  if (to === undefined) return;
+  e.preventDefault();
+  const tab = tabs[(to + tabs.length) % tabs.length];
+  selectTab(tab);
+  tab.focus();
 }
 
 function wire() {
@@ -292,19 +378,25 @@ function wire() {
   $("zoom-in").addEventListener("click", () => panzoom && panzoom.zoomIn());
   $("zoom-out").addEventListener("click", () => panzoom && panzoom.zoomOut());
   $("zoom-fit").addEventListener("click", fit);
-  window.addEventListener("resize", () => { if (!$("panel-map").hidden) fit(); });
+  window.addEventListener("resize", () => {
+    if (!$("panel-map").hidden) fit();
+    markScrollers();
+  });
   $("save-svg").addEventListener("click", () => {
     const m = result.maps[+$("map-pick").value || 0];
     download(`${result.basename}${m.suffix}.svg`, m.svg, "image/svg+xml");
   });
   $("save-md").addEventListener("click",
     () => download(`${result.basename}.md`, result.markdown, "text/markdown"));
-  $("jump").addEventListener("change", (e) => {
-    if (e.target.value) $(e.target.value).scrollIntoView({ behavior: "smooth" });
-    e.target.value = "";
+  $("map-words").addEventListener("click", readMap);
+  $("jump").addEventListener("keydown", (e) => {
+    if (e.key !== "Escape" || !$("jump").open) return;
+    $("jump").open = false;
+    $("jump").querySelector("summary").focus();
   });
   for (const t of document.querySelectorAll("[role=tab]")) {
     t.addEventListener("click", () => selectTab(t));
+    t.addEventListener("keydown", tabKeys);
   }
   $("liked").addEventListener("input", showOdds);
   $("open").addEventListener("click", openBoxes);

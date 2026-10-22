@@ -7,8 +7,9 @@
   --text: #1d1d1d;
   --muted: #666;
   --line: #d9d4c8;
-  --accent: #c0392b;
+  --accent: #c0392b;            /* button fill, under --accent-text */
   --accent-text: #ffffff;
+  --accent-ink: #c0392b;        /* the accent as text, on the page */
   --head: #222;
   --head-text: #f6f2ea;
   --map-bg: #f6f2ea;
@@ -23,7 +24,10 @@
     --text: #e9e6df;
     --muted: #a7a29a;
     --line: #3a3833;
-    --accent: #d9534f;
+    /* Dark enough under white text, and a lighter one to write with: no one
+       red is both at 4.5:1 against a dark page. */
+    --accent: #c9403a;
+    --accent-ink: #e66a65;
     --head: #0e0e0e;
     --head-text: #f6f2ea;
     --code: #2b2925;
@@ -107,7 +111,7 @@ button.primary {
 button.secondary { width: 100%; margin-top: 10px; }
 
 .status { margin: 10px 0 0; font-size: 0.9rem; color: var(--muted); min-height: 1.3em; }
-.status.error { color: var(--accent); }
+.status.error { color: var(--accent-ink); }
 .hint { font-size: 0.85rem; color: var(--muted); margin: 4px 0; }
 
 .tabs {
@@ -128,6 +132,36 @@ button.secondary { width: 100%; margin-top: 10px; }
 
 .toolbar { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
 .toolbar select { flex: 1 1 60%; }
+.jump { flex: 1 1 60%; position: relative; margin: 0; }
+.jump summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--text);
+  font-size: 1rem;
+}
+.jump[open] summary { margin-bottom: 0; }
+.jump ul {
+  position: absolute;
+  z-index: 6;
+  left: 0;
+  right: 0;
+  max-height: 60vh;
+  overflow-y: auto;
+  margin: 4px 0 0;
+  padding: 4px;
+  list-style: none;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.18);
+}
+.jump a { display: block; padding: 9px 10px; color: var(--text); text-decoration: none; border-radius: 6px; }
+.jump a:hover, .jump a:focus-visible { background: var(--code); }
 .toolbar > button { flex: 0 0 auto; }
 .zoom { display: flex; gap: 6px; margin-left: auto; }
 .zoom button { min-width: 44px; padding: 0 10px; }
@@ -159,9 +193,13 @@ button.secondary { width: 100%; margin-top: 10px; }
 .writeup li { margin: 3px 0; }
 .writeup code, .opened code { background: var(--code); padding: 1px 4px; border-radius: 4px; font-size: 0.9em; }
 .table-wrap { overflow-x: auto; margin: 10px 0; }
-.writeup table, .opened table { border-collapse: collapse; font-size: 0.85rem; }
+/* Words stay whole in a table ("north", not "nor th"); a table too wide for
+   the screen scrolls in its own box instead. */
+.writeup table, .opened table { border-collapse: collapse; font-size: 0.85rem; overflow-wrap: normal; }
 .writeup th, .writeup td, .opened th, .opened td { border: 1px solid var(--line); padding: 5px 7px; vertical-align: top; }
 .writeup th { background: var(--code); text-align: left; }
+/* A row's first cell is its header for a screen reader; it looks as it did. */
+.writeup tbody th, .opened tbody th { background: none; font-weight: normal; text-align: left; }
 
 .suggestions { list-style: none; margin: 0; padding: 0; max-height: 280px; overflow-y: auto; }
 .suggestions button {

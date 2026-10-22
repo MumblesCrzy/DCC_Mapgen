@@ -321,7 +321,7 @@ On Linux the desktop app needs your distribution's Tk package if it isn't alread
 
 ### Option C: in a browser, phones included
 
-Nothing to install: open **https://mumblescrzy.github.io/DCC_Mapgen/**. It is a smaller version of the app; see [Web page](#web-page-phones).
+Nothing to install: open **https://mumblescrzy.github.io/DCC_Mapgen/**. It is a smaller version of the app; see [Web page](#web-page-phones). It is also the one to use with a screen reader.
 
 ## Desktop app
 
@@ -335,6 +335,9 @@ Floor, size and seed are always on the left; the options below them swap to matc
 floor you picked, so you only ever see settings that affect the map in front of you.
 **Generate** fills the *Maps* tab and the *Text* tab, and **Save output...** writes the
 same `floorN_size_seedS.md` plus map files that `--save` produces on the command line.
+
+Using a screen reader? The desktop app can't be read by one; the
+[web page](#web-page-phones) can.
 
 - The map dropdown lists every map the floor produces — the overview plus one room map
   per neighborhood on floors 1–2, or the seven heats on floor 10.
@@ -372,9 +375,29 @@ arrive — this is what CI runs against the packaged builds.
 **https://mumblescrzy.github.io/DCC_Mapgen/**
 
 For phones and tablets, or any browser: pick a floor, size and seed, and the page
-shows the map (pinch or the buttons to zoom), the write-up (with a menu to jump
+shows the map (pinch or the buttons to zoom), the write-up (with a list to jump
 between sections), and a Loot Boxes tab like the desktop app's. **Save** downloads the
 Markdown, or the map on show as SVG.
+
+**With a screen reader, use the web page.** It works with NVDA, JAWS, Narrator,
+VoiceOver and TalkBack. The desktop app doesn't: Tk, the toolkit it is built with,
+shows a screen reader nothing but the window's title.
+
+- **Every map is also told in words.** **Read this map as text**, under the map, opens
+  the write-up at the section that describes it: the Layout table on Floors 1, 2, 3
+  and 6, a neighborhood's rooms (each with the rooms it connects to) for a room map,
+  the lines, quadrants, zones, teams, heats or parade route on the other floors.
+- **The layout is a table**, not a drawing in characters: rows run north to south and
+  columns west to east, and each cell says what is there in words ("B: stairwell,
+  boss, hunter camp"). A list under it says where each kind of place is ("Stairwells:
+  A, B, P").
+- **The write-up is headings, lists and tables.** Jump by heading, or use **Jump to a
+  section**. Every table's first column is its row header, so moving down a column
+  names the row too. A table too wide for the screen scrolls on its own and takes
+  focus so the arrow keys can scroll it.
+- **Focus goes where you are sent.** Generating says what was made ("Floor 4, medium,
+  seed 4242: 1 map and a write-up"). Picking a suggested box says which and moves to
+  **Open**. The tabs take the arrow keys, Home and End.
 
 - **Add to Home Screen** installs it like an app, and after the first visit it works
   offline.
@@ -400,7 +423,9 @@ How it is built and checked:
 - Before it publishes, and on every push, CI checks that the generator gives every
   [golden](#tests) floor byte for byte under Pyodide (`web/check_pyodide.mjs`), and
   drives the built page in a phone-sized browser, online and then offline
-  (`web/smoke_test.mjs`).
+  (`web/smoke_test.mjs`). Along the way it runs [axe-core](https://github.com/dequelabs/axe-core)
+  over the page as it starts, with a map on show, the write-up and the loot boxes, in
+  the light theme and the dark, and checks the keyboard and focus behaviour above.
 
 ## Campaigns
 
@@ -929,6 +954,24 @@ the section renders identically on every floor and seed, it is the last section 
 every write-up, no `{placeholder}` survives into it, the prose and the at-a-glance
 table are checked against each other value by value, and the handful of figures that
 come from the books are pinned separately from the ones that are ours to retune.
+
+What a screen reader is given has its own group:
+- every pinned floor's layout is a table, never a drawing in characters: one row per
+  row of the grid, rows named north to south and columns west to east, its columns
+  lined up in the `.md` file, each cell at its zone's place with what is there in words
+  (entry, stairwell, boss, settlement, river...), and the list under it saying the same;
+- a neighborhood with two hidden stairwells says so;
+- the loot box threat scan reads past the layout, so a river written into six cells is
+  not six signs of deep water;
+- every map of every pinned floor names a section of its write-up that tells it in
+  words: a room map its neighborhood's, a heat its heat's, and the web page is handed
+  the same.
+
+The web page's own checks (`web/smoke_test.mjs`, in CI) cover the rest: axe-core finds
+nothing on the page as it starts, with a map on show, the write-up and the loot boxes,
+in both themes; the map says where it is told in words, and **Read this map as text**
+lands on that heading with focus; a section picked from the jump list gets focus; the
+tabs answer the arrow keys, Home and End; and picking a box moves focus to **Open**.
 
 If you add a floor, the suite fails until `tests/corpus.py` covers it.
 

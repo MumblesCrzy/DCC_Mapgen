@@ -129,7 +129,10 @@ class WebPageTest(unittest.TestCase):
             self.assertEqual([(m["suffix"], m["svg"]) for m in page["maps"]], want.svgs, case)
             self.assertEqual([m["title"] for m in page["maps"]],
                              [mg.map_title(s) for s, _ in want.svgs])
+            self.assertEqual([m["section"] for m in page["maps"]],
+                             [mg.map_section(want.markdown, want.number, s) for s, _ in want.svgs])
             self.assertEqual(page["basename"], want.basename())
+            self.assertEqual((page["floor"], page["size"]), (want.number, want.size))
             boxes = {s["text"] for s in page["suggestions"] if s["kind"] == "box"}
             self.assertEqual(boxes, {sg.label for sg in mg.floor_box_suggestions(want.floor)})
 
@@ -181,6 +184,114 @@ class WebPageTest(unittest.TestCase):
             manifest = json.load(open(os.path.join(out, "manifest.webmanifest"), encoding="utf-8"))
             for icon in manifest["icons"]:
                 self.assertTrue(os.path.exists(os.path.join(out, icon["src"])), icon["src"])
+
+
+class ScreenReaderTest(unittest.TestCase):
+    """What a write-up gives someone who can't see its maps. A grid drawn in
+    characters is read out as brackets and symbols, so each floor's layout is a
+    table, its rows and columns named, what is in each cell in words; and every
+    map names the section of the write-up that tells what it shows."""
+
+    GRID_FLOORS = (1, 2, 3, 6)
+
+    @staticmethod
+    def _layout(md):
+        return md.split("\n## Layout\n", 1)[1].split("\n## ", 1)[0]
+
+    @staticmethod
+    def _zones(fl):
+        """(label, row, col, what is there) for each cell of a grid floor."""
+        if hasattr(fl, "neighborhoods"):
+            return [(nb.label, nb.row, nb.col,
+                     {"entry": nb.is_entry, "hidden stairwell": bool(nb.hidden_stairs)})
+                    for nb in fl.neighborhoods]
+        out = []
+        for i, c in enumerate(fl.cells):
+            town = isinstance(c, mg.Settlement)
+            out.append((c.label, i // fl.grid, i % fl.grid, {
+                "settlement": town and not getattr(c, "hostile", False),
+                "Zockau": town and getattr(c, "hostile", False),
+                "river": getattr(c, "on_river" if town else "river", False),
+                "entry": not town and c.is_entry,
+                "stairwell": not town and bool(c.stairwell),
+                "boss": not town and bool(c.boss),
+                "hunter camp": not town and bool(getattr(c, "camp", False)),
+            }))
+        return out
+
+    def test_every_grid_is_a_table_of_words(self):
+        for case in corpus.CASES:
+            if case["floor"] not in self.GRID_FLOORS:
+                continue
+            res = mg.generate(**case)
+            where = corpus.case_id(case)
+            part = self._layout(res.markdown)
+            self.assertNotIn("```", part, where)
+            n = res.floor.grid
+            rows = [line for line in part.splitlines() if line.startswith("|")]
+            if n == 1:
+                self.assertEqual(rows, [], f"{where}: one cell needs no table")
+            else:
+                self.assertEqual(len(rows), n + 2, where)
+                self.assertEqual(len({len(r) for r in rows}), 1, f"{where}: columns line up in the file")
+                cells = [[c.strip() for c in r.strip("|").split("|")] for r in rows]
+                head = cells[0]
+                self.assertEqual((head[1], head[-1]), ("1 west", f"{n} east"), where)
+                self.assertEqual((cells[2][0], cells[-1][0]), ("1 north", f"{n} south"), where)
+                body = cells[2:]
+                for label, r, c, there in self._zones(res.floor):
+                    text = body[r][c + 1]
+                    self.assertTrue(text == label or text.startswith(label + ": "),
+                                    f"{where}: {label} belongs at row {r + 1}, column {c + 1}, not {text!r}")
+                    words = set(text.split(": ", 1)[1].split(", ")) if ": " in text else set()
+                    words = {w.split(" ", 1)[1] if w[0].isdigit() else w for w in words}
+                    self.assertEqual(words, {w for w, on in there.items() if on}, f"{where}: {label}")
+            # The list under it says the same, kind by kind.
+            listed = dict(re.findall(r"^- \*\*(.+?):\*\* (.+)$", part, re.M))
+            for word in {w for *_, there in self._zones(res.floor) for w in there}:
+                labels = [z[0] for z in self._zones(res.floor) if z[3][word]]
+                key = next((k for k in listed if k.lower().rstrip("s").startswith(word.lower())
+                            or k.lower().startswith(word.lower())), None)
+                if not labels:
+                    self.assertIsNone(key, f"{where}: {word} listed with nowhere to be")
+                    continue
+                self.assertIsNotNone(key, f"{where}: {word} not listed")
+                self.assertEqual([x.split(" (")[0] for x in listed[key].split(", ")], labels, where)
+
+    def test_two_hidden_stairwells_are_counted(self):
+        fl = mg.generate(1, "medium", 4242).floor
+        nb = next(n for n in fl.neighborhoods if not n.hidden_stairs and not n.is_entry)
+        nb.hidden_stairs = ["behind the vending machine", "under the stage"]
+        part = "\n".join(mg.render_layout(fl))
+        self.assertIn(f"| {nb.label}: 2 hidden stairwells", part)
+        self.assertRegex(part, rf"\*\*Hidden stairwells:\*\* .*\b{nb.label} \(2\)")
+
+    def test_the_threat_scan_reads_past_the_layout(self):
+        """The layout says where a river runs, cell by cell; it isn't six signs
+        of deep water. Suggestions come out as if it weren't there."""
+        for case in corpus.CASES:
+            if case["floor"] not in self.GRID_FLOORS:
+                continue
+            body = mg.floor_body(mg.generate(**case).markdown)
+            cut = re.sub(r"\n## Layout\n.*?(?=\n## )", "", body, flags=re.S)
+            self.assertNotEqual(cut, body)
+            self.assertEqual(mg.threat_suggestions(body), mg.threat_suggestions(cut),
+                             corpus.case_id(case))
+
+    def test_every_map_names_where_it_is_told_in_words(self):
+        for case in corpus.CASES:
+            res = mg.generate(**case)
+            heads = re.findall(r"^#{2,3} (.+)$", res.markdown, re.M)
+            for suffix, _ in res.svgs:
+                section = mg.map_section(res.markdown, res.number, suffix)
+                where = f"{corpus.case_id(case)} {mg.map_title(suffix)}"
+                self.assertIn(section, heads, where)
+                if suffix.startswith("_room_"):
+                    self.assertTrue(section.startswith(suffix[len("_room_"):] + ". "), where)
+                elif suffix.startswith("_heat"):
+                    self.assertTrue(section.startswith(f"Heat {suffix[len('_heat'):]} "), where)
+                else:
+                    self.assertEqual(section, mg.MAP_SECTIONS[res.number], where)
 
 
 class CrossPlatformMapTest(unittest.TestCase):

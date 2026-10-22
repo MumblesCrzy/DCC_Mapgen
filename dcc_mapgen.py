@@ -395,6 +395,34 @@ def compass(r: int, c: int, n: int) -> str:
         return f"Inner {ns}{ew}"
     return f"Outer {ns}{ew}"
 
+
+def layout_table(rows: List[List[Tuple[str, List[str]]]]) -> List[str]:
+    """A floor's grid as a Markdown table, north at the top: each cell its label
+    and what is there in words ("B: entry, stairwell"). A screen reader walks a
+    table cell by cell and names the row and column; a grid drawn in characters
+    it can only spell out. Padded so the table lines up in the .md file too."""
+    n = len(rows[0])
+    head = [""] + [f"{c + 1}" + (" west" if c == 0 else " east" if c == n - 1 else "")
+                   for c in range(n)]
+    body = []
+    for r, row in enumerate(rows):
+        side = " north" if r == 0 else " south" if r == len(rows) - 1 else ""
+        body.append([f"{r + 1}{side}"] + [label + (": " + ", ".join(notes) if notes else "")
+                                          for label, notes in row])
+    widths = [max(len(line[i]) for line in [head] + body) for i in range(n + 1)]
+
+    def line(cells):
+        return "| " + " | ".join(c.ljust(w) for c, w in zip(cells, widths)) + " |"
+
+    return [line(head), "|" + "|".join("-" * (w + 2) for w in widths) + "|"] + [line(b) for b in body]
+
+
+def layout_where(found: List[Tuple[str, str, List[str]]]) -> List[str]:
+    """Where each kind of place is, as a list: ("Entry", "Entries", ["P"]) gives
+    "- **Entry:** P". A kind with nowhere to be is left out."""
+    return [f"- **{one if len(labels) == 1 else many}:** {', '.join(labels)}"
+            for one, many, labels in found if labels]
+
 # ---------------------------------------------------------------------------
 # Data model
 # ---------------------------------------------------------------------------
@@ -1165,12 +1193,16 @@ def threat_suggestions(text: str, top: int = 3) -> List[ThreatSign]:
     threats = LOOT_BOXES["benefactor"]["threats"]
     owners, phrase_re = _sign_index()
     hits = {key: [] for key in threats}
-    in_code = False
+    in_code = in_layout = False
     for line in text.splitlines():
         if line.strip().startswith("```"):
             in_code = not in_code
             continue
-        if in_code or not line.strip():
+        if line.startswith("## "):
+            # The layout says where each place is, not what is there: a river
+            # crossing six cells is one river, told of in the cells' own sections.
+            in_layout = line.strip() == "## Layout"
+        if in_code or in_layout or not line.strip():
             continue
         found = {}                                  # threat -> its matches on this line
         matches = [m for m in _WORD.finditer(line) if m.group(0).lower() in owners]
@@ -2285,22 +2317,30 @@ def crawler_section(fl) -> List[str]:
     return o
 
 
-def render_grid(fl: Floor) -> str:
-    n = fl.grid
+def render_layout(fl: Floor) -> List[str]:
+    """The neighborhood grid as a table, then where the entry and the hidden
+    stairwells are."""
     by_pos = {(nb.row, nb.col): nb for nb in fl.neighborhoods}
-    lines = []
-    for r in range(n):
-        row = []
-        for c in range(n):
-            nb = by_pos[(r, c)]
-            tag = nb.label
-            if nb.is_entry:
-                tag += "*"
-            if nb.hidden_stairs:
-                tag += "+" * len(nb.hidden_stairs)
-            row.append(f"[{tag:<4}]")
-        lines.append(" ".join(row))
-    return "\n".join(lines)
+    in_order = [by_pos[(r, c)] for r in range(fl.grid) for c in range(fl.grid)]
+
+    def notes(nb):
+        out = ["entry"] if nb.is_entry else []
+        k = len(nb.hidden_stairs)
+        if k:
+            out.append("hidden stairwell" if k == 1 else f"{k} hidden stairwells")
+        return out
+
+    o = []
+    if fl.grid > 1:
+        o += ["North is at the top. Each cell is a neighborhood, by its letter.", ""]
+        o += layout_table([[(nb.label, notes(nb)) for nb in in_order[r * fl.grid:(r + 1) * fl.grid]]
+                           for r in range(fl.grid)])
+        o.append("")
+    stairs = [nb.label + (f" ({len(nb.hidden_stairs)})" if len(nb.hidden_stairs) > 1 else "")
+              for nb in in_order if nb.hidden_stairs]
+    o += layout_where([("Entry", "Entries", [nb.label for nb in in_order if nb.is_entry]),
+                       ("Hidden stairwell", "Hidden stairwells", stairs)])
+    return o
 
 def boss_block(b: Boss, floor: int, label: Optional[str] = None) -> List[str]:
     out = [
@@ -2368,11 +2408,7 @@ def render(fl: Floor) -> str:
 
     o.append("## Layout")
     o.append("")
-    o.append("Grid, north at top. `*` = entry, `+` = one hidden stairwell.")
-    o.append("")
-    o.append("```")
-    o.append(render_grid(fl))
-    o.append("```")
+    o.extend(render_layout(fl))
     o.append("")
     if fl.grid >= 4:
         c_side = fl.grid // 4
@@ -3293,22 +3329,24 @@ def render3(fl: Floor3) -> str:
     o.append("")
     o.append("## Layout")
     o.append("")
-    o.append("Grid, north at top. `#` = settlement, `*` = entry, `S` = stairwell, `!` = boss.")
+    o.append("North is at the top. Each cell is a settlement or a wilderness region, by its letter.")
     o.append("")
-    o.append("```")
-    for r in range(fl.grid):
-        row = []
-        for c in fl.cells[r * fl.grid:(r + 1) * fl.grid]:
-            tag = c.label
-            if isinstance(c, Settlement):
-                tag += "#"
-            else:
-                if c.is_entry: tag += "*"
-                if c.stairwell: tag += "S"
-                if c.boss: tag += "!"
-            row.append(f"[{tag:<4}]")
-        o.append(" ".join(row))
-    o.append("```")
+
+    def notes(c):
+        if isinstance(c, Settlement):
+            return ["settlement"]
+        return [w for w, on in (("entry", c.is_entry), ("stairwell", c.stairwell),
+                                ("boss", c.boss)) if on]
+
+    o.extend(layout_table([[(c.label, notes(c)) for c in fl.cells[r * fl.grid:(r + 1) * fl.grid]]
+                           for r in range(fl.grid)]))
+    o.append("")
+    o.extend(layout_where([
+        ("Settlement", "Settlements", [c.label for c in settlements]),
+        ("Entry", "Entries", [c.label for c in regions if c.is_entry]),
+        ("Stairwell", "Stairwells", [c.label for c in regions if c.stairwell]),
+        ("Boss", "Bosses", [c.label for c in regions if c.boss]),
+    ]))
     o.append("")
 
     o.append("## Settlements")
@@ -5225,25 +5263,29 @@ def render6(fl: Floor6) -> str:
     o.append("")
     o.append("## Layout")
     o.append("")
-    o.append("Grid, north at top. `#` = settlement, `Z` = Zockau, `~` = river, `*` = entry, `S` = stairwell, `!` = boss, `X` = hunter camp.")
+    o.append("North is at the top. Each cell is a settlement or a stretch of jungle, by its letter.")
     o.append("")
-    o.append("```")
-    for r in range(fl.grid):
-        row = []
-        for c in fl.cells[r * fl.grid:(r + 1) * fl.grid]:
-            tag = c.label
-            if isinstance(c, Settlement):
-                tag += "Z" if c.hostile else "#"
-                if c.on_river: tag += "~"
-            else:
-                if c.river: tag += "~"
-                if c.is_entry: tag += "*"
-                if c.stairwell: tag += "S"
-                if c.boss: tag += "!"
-                if c.camp: tag += "X"
-            row.append(f"[{tag:<5}]")
-        o.append(" ".join(row))
-    o.append("```")
+
+    def notes(c):
+        if isinstance(c, Settlement):
+            return ["Zockau" if c.hostile else "settlement"] + (["river"] if c.on_river else [])
+        return [w for w, on in (("river", c.river), ("entry", c.is_entry),
+                                ("stairwell", c.stairwell), ("boss", c.boss),
+                                ("hunter camp", c.camp)) if on]
+
+    o.extend(layout_table([[(c.label, notes(c)) for c in fl.cells[r * fl.grid:(r + 1) * fl.grid]]
+                           for r in range(fl.grid)]))
+    o.append("")
+    o.extend(layout_where([
+        ("Zockau", "Zockau", [c.label for c in settlements if c.hostile]),
+        ("Settlement", "Settlements", [c.label for c in settlements if not c.hostile]),
+        ("River", "River", [c.label for c in fl.cells
+                            if (c.on_river if isinstance(c, Settlement) else c.river)]),
+        ("Entry", "Entries", [c.label for c in regions if c.is_entry]),
+        ("Stairwell", "Stairwells", [c.label for c in regions if c.stairwell]),
+        ("Boss", "Bosses", [c.label for c in regions if c.boss]),
+        ("Hunter camp", "Hunter camps", [c.label for c in regions if c.camp]),
+    ]))
     o.append("")
     o.append("## Zockau")
     o.append("")
@@ -6610,6 +6652,28 @@ def map_title(suffix: str) -> str:
     if suffix.startswith("_heat"):
         return f"Heat {suffix[len('_heat'):]}"
     return suffix.lstrip("_").replace("_", " ").capitalize()
+
+
+# The section of each floor's write-up that tells in words what its main map
+# shows, for anyone who can't see the map.
+MAP_SECTIONS = {1: "Layout", 2: "Layout", 3: "Layout", 4: "Colored Lines",
+                5: "Quadrants", 6: "Layout", 8: "Phase 1 — Zones", 9: "Teams",
+                10: "Heats", 11: "The Route"}
+
+
+def map_section(markdown: str, floor: int, suffix: str) -> str:
+    """The heading, as the write-up has it, of the section that describes a map
+    in words: a neighborhood's own section for its room map, a heat's for its
+    heat. The web page links each map to it."""
+    heads = re.findall(r"^#{2,3} (.+)$", markdown, re.M)
+    if suffix.startswith("_room_"):
+        label = suffix[len("_room_"):]
+        found = [h for h in heads if h.startswith(f"{label}. ")]
+    elif suffix.startswith("_heat"):
+        found = [h for h in heads if re.match(rf"Heat {suffix[len('_heat'):]}\b", h)]
+    else:
+        found = [h for h in heads if h == MAP_SECTIONS.get(floor)]
+    return found[0] if found else ""
 
 
 # How many other teams a floor starts a campaign with, at its size.

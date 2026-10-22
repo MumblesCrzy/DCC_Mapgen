@@ -68,9 +68,9 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Install Pyodide and Playwright
+      - name: Install Pyodide, Playwright and axe-core
         run: |
-          npm install --no-save "pyodide@$(node -p "require('./web/versions.json').pyodide")" playwright@1.64.1
+          npm install --no-save "pyodide@$(node -p "require('./web/versions.json').pyodide")" playwright@1.64.1 axe-core@4.13.0
           npx playwright install --with-deps chromium
 
       - name: The generator gives the same floors in Pyodide
@@ -79,5 +79,5 @@ jobs:
       - name: Build the site
         run: python web/build_site.py _site
 
-      - name: The page works in a phone-sized browser, online and off
+      - name: The page works in a phone-sized browser, online and off, and passes the accessibility checks
         run: node web/smoke_test.mjs _site
