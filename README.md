@@ -41,6 +41,7 @@ A procedural floor/map generator in the style of the *Dungeon Crawler Carl* book
   The books name no item prices, so those are this project's own. An item's list price is about the gold in a loot box of its tier on that floor (5 × the kind's factor × Floor ^ tier), so finding an item is worth about as much as finding the gold. Kind factors run from potions at ×0.5 to offworld goods at ×2. A general store pays a quarter of list. Charisma moves both buying and selling by the stat rules' 2% a point. An opened box says what a general store would pay for everything in it. The numbers live in `SHOP_RULES` in `data/common.json`.
 - **Campaigns** — other crawler teams carry from floor to floor, keeping who they are and where they stand with the party, until their luck runs out. From Floor 3 they carry a party of named races and classes too, and from Floor 4 a Top Ten leaderboard with bounties tracks who is ranked, who fell off and who came back. See [Campaigns](#campaigns).
 - A **desktop app** (`dcc_mapgen_gui.py`) wrapping all of the above: pick a floor and size, generate, and read the write-up and browse every map without leaving the window. See [Desktop app](#desktop-app).
+- **Make a floor your own** — rename a boss, raise a level, rewrite a description or a quest in the app's edit panel and watch the write-up and maps redraw, or save the floor as a **floor file** and edit it in any text editor. See [Floor files](#floor-files-make-a-floor-your-own).
 - Every floor supports `--seed` for reproducible maps — byte-for-byte, and [tested](#tests) as such — and `--image`/`--save` for SVG or PNG output (PNG needs the optional `resvg-py` package). The seed is per floor: one seed carried across a whole campaign gives a different dungeon on each floor.
 - `--rooms-for` can (re)generate just the room-level detail for one neighborhood from a floor you already generated and are playing, without touching the rest of the data.
 
@@ -350,6 +351,9 @@ Using a screen reader? The desktop app can't be read by one; the
   in whole percents: a click on the track or an arrow key moves one percent. They are
   `--stair-chance` and `--borough-boss-rate`, which take the same thing as a fraction
   (50% is `0.5`).
+- **Edit floor** (above the map, or **Edit → Edit this floor**, Ctrl+E) opens a panel
+  to the right of the map where you can change anything on the floor and see it
+  redrawn. See [Editing in the app](#editing-in-the-app).
 - **File → Re-roll rooms from a saved floor** is `--rooms-for` in the GUI: point it at a
   floor 1–2 Markdown file this app wrote and re-roll one neighborhood's rooms.
 - The **Loot Boxes** tab lists every box the current floor names; pick one, change its
@@ -369,6 +373,72 @@ shows the map instead of the built-in preview.
 `python dcc_mapgen_gui.py --self-test` (or `python gui_smoke_test.py`) drives the app
 through a generate and checks the write-up, the map list and the rendered preview all
 arrive — this is what CI runs against the packaged builds.
+
+## Floor files: make a floor your own
+
+Every floor can be saved as a **floor file**, `floorN_size_seedS.floor.json`, which
+holds everything the write-up and the maps are drawn from. Change anything in it —
+a boss's name or level, a neighborhood's mob, a description, a quest — and draw it
+again: the write-up and every map come out with your changes. The desktop app can
+make those changes for you, so you don't have to open the file at all.
+
+### Editing in the app
+
+Generate a floor, or open a floor file, and click **Edit floor** above the map (Ctrl+E).
+A panel opens to the right of the map:
+
+- **The tree** lists the floor's parts, as the write-up names them: neighborhoods and
+  their bosses, rooms and mobs; stations and trains; quadrants, castles and quests; and
+  so on for each floor. Open a part to see what it holds.
+- **The form** below it has the part's values: names and descriptions as text, levels
+  and counts as numbers, yes/no values as tick boxes, lists one item a line. Change
+  what you like and click **Apply** (Ctrl+Enter). The write-up, every map and the
+  Bestiary are redrawn with the change. **Revert** puts the form back as it was.
+- **Rename everywhere.** If what you renamed is written anywhere else on the floor,
+  for example a castle's name inside its ruler's name or a quest, the app lists where
+  and asks whether to change it there too.
+- **Undo** (Ctrl+Z) takes back the last change, and the one before that, up to 50.
+- **Save output...** (Ctrl+S) writes the edited floor: the write-up, the maps and the
+  floor file, so you can open it later and keep editing.
+- **Locked values** are shown greyed out. They are what ties the floor together or lays
+  out its map: a neighborhood's letter, a room's id and doors, a station's number, a
+  line's colour, a quadrant's name. Change what is on the floor; where things are stays
+  as generated.
+- **A value of the wrong kind is refused** with what it should be ("Level should be a
+  whole number, not 'lots'"), and nothing changes.
+
+The campaign's record (other crawlers, the leaderboard, the board's news) isn't in the
+panel: edit it in the **Campaign** and **Leaderboard** tabs, where a change carries to
+the next floor.
+
+### Floor files by hand
+
+- **Saving:** the desktop app's **Save output...** and the command line's `--save`
+  write it beside the Markdown and maps. `--floor-file PATH` writes just the floor file.
+- **Editing:** any text editor. It's JSON, laid out one value a line, and each part
+  says what it is (`"__type__": "Boss"`), so you can find what you want to change.
+- **Drawing it again:** **File → Open floor file...** (Ctrl+O) in the app, or
+  `python dcc_mapgen.py --from my_floor.floor.json` with `--out`, `--image` or `--save`
+  as usual. In the app, after editing the file, **File → Reload floor file** (Ctrl+R)
+  redraws it.
+
+What is worked out from the floor follows your edits: raise a boss's level and the
+Bestiary stats it at the new level. What changes, and what doesn't:
+
+- **Sentences with a name written into them keep the old name.** Some text is written
+  once, when the floor is generated, with a name inside it, such as a quest that names a
+  castle. Renaming the castle by hand doesn't change that quest; search the file for the
+  old name to find every place it appears. (The app's edit panel finds them for you.)
+- **Changing what is there is fine; changing the layout isn't, yet.** Adding or removing
+  neighborhoods, stations or rooms, or moving them, changes the layout the map is drawn
+  from.
+- **An edited floor is no longer its seed.** The file is the floor now, and its seed only
+  says where it started.
+- **No campaign.** A floor file is drawn as it stands, so `--from` doesn't continue a
+  campaign, and opening one in the app leaves the campaign alone.
+- **Mistakes are named.** A value of the wrong kind says which one, e.g.
+  `data.cells[1].level_range[0] should be a whole number, not "ten"`. A file can only
+  build floor parts, so one passed around online can't make the app do anything else.
 
 ## Web page (phones)
 
@@ -939,6 +1009,45 @@ city bosses. It checks:
   bosses;
 - an ordinary crawler lives through every ordinary mob on their floor, and the
   Floor 11 boss kills an ordinary crawler there in one hit.
+
+Floor files have their own group:
+- every pinned floor, saved and opened again, draws the same write-up and maps byte
+  for byte, with its floor, size, seed and stairwell setting;
+- the file reads like the floor: every part says what it is, and no tuple is
+  tagged, so a level range is a plain `[3, 5]` on one line;
+- an edited boss's name and level reach the write-up, the map and the Bestiary, and a
+  note of your own added to the file is kept through a re-save;
+- a file can build floor parts and nothing else: naming one of the generator's
+  functions, or anything it imported, is refused;
+- each hand-edit mistake says where it is (the wrong kind of value, a missing field,
+  broken JSON, a newer file, a floor this generator doesn't make);
+- `--save` writes the floor file, `--from` draws it the same as the saved write-up,
+  `--floor-file` writes one on its own, and `--from` with `--campaign` is refused
+  without touching the campaign;
+- a file missing something the floor looks for (a Floor 8 stairwell) is reported as a
+  value the generator can't draw, not a crash.
+
+The edit panel has its own group, covering one floor of each kind and every option
+that reaches code the plain sizes don't:
+- every part and value the panel lists is where its path says, every part has a label,
+  and the campaign's record is left to its own tabs;
+- every kind of value the panel offers, on every floor, is changed (text rewritten,
+  numbers to zero and up one, tick boxes both ways, a line added) and the floor still
+  draws; a value that can't be changed without breaking the floor must be locked;
+- what lays out the map is locked: a neighborhood's letter and place, a room's id and
+  doors, a corridor's two rooms, a line's colour and yard, a station's number, a
+  quadrant's name, a Floor 8 zone's stairwell; and an empty faction slot isn't offered
+  as a blank to type in;
+- what is typed in is read the way the floor holds it: numbers checked, names trimmed,
+  a level range in order and the right length, blank lines dropped, a locked value
+  refused;
+- renaming Floor 5's castle everywhere finds its ruler's name, leaves the old name
+  nowhere in the write-up, puts the new one on the map, and reaches text in a row;
+- Undo puts every floor back exactly, and an edit is kept in the floor file.
+
+`python dcc_mapgen_gui.py --self-test` also opens the panel on a Floor 5, renames a
+castle everywhere, is refused a level of the wrong kind, finds a quadrant's name locked,
+and undoes it all.
 
 What's switched on and shops have their own groups, with the books' facts written into the tests rather than read back from the banks:
 - each system arrives on the DCC Database's floor, and each floor's list of new, gone and still-on systems is checked against those floors;

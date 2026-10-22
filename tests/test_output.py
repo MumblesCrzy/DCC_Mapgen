@@ -88,6 +88,333 @@ class GoldenOutputTest(unittest.TestCase):
         self.assertEqual(dupes, [], f"duplicate case ids would mask each other: {dupes}")
 
 
+class FloorFileTest(unittest.TestCase):
+    """A floor saved as data, edited, and drawn again. A user asked to change what
+    was generated and make the floor their own; the write-up and the maps are both
+    drawn from the floor's data, so that data is what gets saved and edited."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+
+    def _path(self, name="f"):
+        return os.path.join(self.tmp.name, name + mg.FLOOR_FILE_SUFFIX)
+
+    def _edit(self, path, change):
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        change(data)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+
+    def test_every_golden_floor_comes_back_exactly(self):
+        """Saved and opened, every pinned floor draws the same write-up and maps,
+        byte for byte, and keeps its floor, size, seed and stairwell setting."""
+        for case in corpus.CASES:
+            res = mg.generate(**case)
+            path = self._path()
+            mg.save_floor_file(res, path)
+            back = mg.open_floor_file(path)
+            where = corpus.case_id(case)
+            self.assertEqual(back.markdown, res.markdown, where)
+            self.assertEqual(back.svgs, res.svgs, where)
+            self.assertEqual((back.number, back.size, back.seed, back.boss_stairs),
+                             (res.number, res.size, res.seed, res.boss_stairs), where)
+
+    def test_the_file_reads_like_the_floor(self):
+        """For editing by hand: each part says what it is, and a level range is
+        a plain pair on one line, not a tagged tuple."""
+        for case in corpus.CASES:
+            path = self._path()
+            mg.save_floor_file(mg.generate(**case), path)
+            with open(path, encoding="utf-8") as f:
+                text = f.read()
+            self.assertNotIn("__tuple__", text, corpus.case_id(case))
+        mg.save_floor_file(mg.generate(1, "small", 4242), path)
+        with open(path, encoding="utf-8") as f:
+            text = f.read()
+        self.assertRegex(text, r'"level_range": \[\d+, \d+\]')
+        self.assertIn('"__type__": "Boss"', text)
+
+    def test_an_edit_is_drawn_into_the_write_up_and_the_map(self):
+        res = mg.generate(1, "small", 4242)
+        path = self._path()
+        mg.save_floor_file(res, path)
+        old = res.floor.neighborhoods[0].boss.name
+
+        def change(data):
+            boss = data["data"]["neighborhoods"][0]["boss"]
+            boss["name"], boss["level"] = "Mumbles the Unedited", 30
+        self._edit(path, change)
+        back = mg.open_floor_file(path)
+        self.assertIn("Mumbles the Unedited (Level 30)", back.markdown)
+        self.assertNotIn(old, back.markdown)
+        self.assertIn("Mumbles the Unedited", back.svgs[0][1])
+        # What is worked out from the floor follows the edit: the Bestiary stats
+        # the boss at its new level.
+        beast = next(b for b in mg.floor_bestiary(back.floor) if b.name == "Mumbles the Unedited")
+        self.assertEqual(beast.level, 30)
+
+    def test_a_note_of_your_own_is_kept(self):
+        path = self._path()
+        mg.save_floor_file(mg.generate(5, "small", 1), path)
+        self._edit(path, lambda d: d["data"].__setitem__("my_note", "the party owes Wennick"))
+        again = self._path("again")
+        mg.save_floor_file(mg.open_floor_file(path), again)
+        with open(again, encoding="utf-8") as f:
+            self.assertEqual(json.load(f)["data"]["my_note"], "the party owes Wennick")
+
+    def test_only_a_floor_can_be_built_from_a_file(self):
+        """A floor file passed around online names classes to build. Only this
+        module's dataclasses can be named: not its functions, which can read and
+        write files, and not anything it imported."""
+        path = self._path()
+        mg.save_floor_file(mg.generate(3, "small", 2), path)
+        for name in ("generate", "save_roster", "open_floor_file", "MapgenError", "os",
+                     "open", "LootRoller", "json"):
+            self._edit(path, lambda d: d["data"].__setitem__("janitor", {"__type__": name}))
+            with self.assertRaises(mg.MapgenError, msg=name) as cm:
+                mg.open_floor_file(path)
+            self.assertIn("not part of a floor", str(cm.exception), name)
+
+    def test_a_hand_edit_mistake_says_where(self):
+        path = self._path()
+        mg.save_floor_file(mg.generate(3, "small", 2), path)
+        with open(path, encoding="utf-8") as f:
+            good = f.read()
+
+        def attempt(change):
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(good)
+            self._edit(path, change)
+            with self.assertRaises(mg.MapgenError) as cm:
+                mg.open_floor_file(path)
+            return str(cm.exception)
+
+        region = next(i for i, c in enumerate(json.loads(good)["data"]["cells"])
+                      if c["__type__"] == "Region")
+        msg = attempt(lambda d: d["data"]["cells"][region].__setitem__("level_range", ["ten", 12]))
+        self.assertIn(f"data.cells[{region}].level_range[0] should be a whole number", msg)
+        msg = attempt(lambda d: d["data"].__setitem__("janitor_level", "high"))
+        self.assertIn("data.janitor_level should be a whole number", msg)
+        msg = attempt(lambda d: d["data"]["janitor"].pop("noun"))
+        self.assertIn('data.janitor (a Mob) needs "noun"', msg)
+        self.assertIn("newer DCC Mapgen", attempt(lambda d: d.__setitem__("version", 99)))
+        self.assertIn("not a DCC Mapgen floor file", attempt(lambda d: d.pop("format")))
+        self.assertIn("does not make", attempt(lambda d: d.__setitem__("floor", 7)))
+        with open(path, "w", encoding="utf-8") as f:
+            f.write(good[:-40])
+        with self.assertRaises(mg.MapgenError) as cm:
+            mg.open_floor_file(path)
+        self.assertIn("not valid JSON", str(cm.exception))
+        # Something the floor looks for, taken away: Floor 8's near stairwell.
+        mg.save_floor_file(mg.generate(8, "small", 2), path)
+        self._edit(path, lambda d: [z.__setitem__("stairwell", None)
+                                    for z in d["data"]["zones"] if z["stairwell"] == "near"])
+        with self.assertRaises(mg.MapgenError) as cm:
+            mg.open_floor_file(path)
+        self.assertIn("a value the generator cannot draw", str(cm.exception))
+
+    def _cli(self, *args):
+        env = dict(os.environ, PYTHONIOENCODING="utf-8")
+        return subprocess.run([sys.executable, os.path.join(ROOT, "dcc_mapgen.py"), *args],
+                              capture_output=True, text=True, env=env, encoding="utf-8")
+
+    def test_the_command_line_saves_and_draws_floor_files(self):
+        d = self.tmp.name
+        r = self._cli("--floor", "3", "--size", "small", "--seed", "77", "--save", d)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        saved = os.path.join(d, "floor3_small_seed77" + mg.FLOOR_FILE_SUFFIX)
+        self.assertTrue(os.path.exists(saved), "--save wrote no floor file")
+        with open(os.path.join(d, "floor3_small_seed77.md"), encoding="utf-8") as f:
+            written = f.read()
+        r = self._cli("--from", saved)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(r.stdout.rstrip("\n"), written.rstrip("\n"))
+        extra = self._path("extra")
+        r = self._cli("--floor", "8", "--seed", "3", "--floor-file", extra, "--out",
+                      os.path.join(d, "f8.md"))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertEqual(mg.open_floor_file(extra).seed, 3)
+        r = self._cli("--from", saved, "--campaign", os.path.join(d, "c.json"))
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("cannot continue a campaign", r.stderr)
+        self.assertFalse(os.path.exists(os.path.join(d, "c.json")))
+
+
+class FloorEditTest(unittest.TestCase):
+    """What the desktop app's edit panel shows and changes, tested without it:
+    a floor's parts and their values, read from the floor's data so every floor
+    is covered alike, with the values that lay out the map locked."""
+
+    # One of each floor at medium, and the cases whose options reach code the
+    # plain sizes do not.
+    CASES = [c for c in corpus.CASES if c["size"] == "medium" or len(c) > 3]
+
+    @staticmethod
+    def _nodes(root):
+        """Every (path, node) the panel's tree can reach."""
+        out, stack = [], [((), root)]
+        while stack:
+            path, v = stack.pop()
+            out.append((path, v))
+            for key, _ in mg.edit_children(v):
+                stack.append((path + (key,), mg.edit_get(v, [key])))
+        return out
+
+    @staticmethod
+    def _group(path):
+        return path[-2] if len(path) >= 2 and isinstance(path[-1], int) else None
+
+    def test_every_part_and_value_is_where_its_path_says(self):
+        for case in self.CASES:
+            fl = mg.generate(**case).floor
+            where = corpus.case_id(case)
+            for path, node in self._nodes(fl):
+                self.assertIs(mg.edit_get(fl, list(path)), node, f"{where} {path}")
+                for key, label in mg.edit_children(node):
+                    self.assertTrue(label.strip(), f"{where} {path + (key,)}")
+                for f in mg.edit_fields(node, self._group(path)):
+                    self.assertEqual(mg.edit_get(fl, list(path) + [f.key]), f.value)
+            self.assertFalse(any(p and p[0] in mg.EDIT_HIDDEN for p, _ in self._nodes(fl)),
+                             f"{where}: the campaign's record is edited in its own tabs")
+
+    def test_every_value_the_panel_offers_still_draws(self):
+        """Each kind of editable value on each floor, changed -- text rewritten,
+        numbers to zero and up one, switches both ways, lines added to -- and the
+        floor drawn again. A value that can't be changed without breaking the
+        floor has to be locked."""
+        def edits(f):
+            if f.kind == "bool":
+                return [not f.value]
+            if f.kind in ("text", "long"):
+                return ["Rewritten at the table"]
+            if f.kind in ("int", "float"):
+                return ["0", str((f.value or 0) + 1)]
+            if f.kind == "lines":
+                return ["\n".join(list(f.value) + ["one more"])]
+            return [", ".join(map(str, f.value))]
+
+        drawn = 0
+        for case in self.CASES:
+            res = mg.generate(**case)
+            seen = set()
+            for path, node in self._nodes(res.floor):
+                group = self._group(path)
+                for f in mg.edit_fields(node, group):
+                    sig = (type(node).__name__, group, f.key, f.kind,
+                           f.value if f.kind == "bool" else None)
+                    if f.locked or sig in seen:
+                        continue
+                    seen.add(sig)
+                    for raw in edits(f):
+                        work = mg.replace(res, floor=mg.restore_floor(mg.snapshot_floor(res.floor)))
+                        mg.edit_set(work.floor, list(path) + [f.key], mg.parse_edit(f, raw))
+                        try:
+                            mg.redraw_floor(work)
+                        except mg.MapgenError as e:
+                            self.fail(f"{corpus.case_id(case)} {path + (f.key,)} = {raw!r}: {e}")
+                        drawn += 1
+        self.assertGreater(drawn, 700)
+
+    def _field(self, node, key, group=None):
+        return next(f for f in mg.edit_fields(node, group) if f.key == key)
+
+    def test_what_lays_out_the_map_is_locked(self):
+        fl1 = mg.generate(1, "medium", 4242).floor
+        nb = fl1.neighborhoods[0]
+        for key in ("idx", "label", "row", "col", "is_entry"):
+            self.assertTrue(self._field(nb, key).locked, key)
+        for key in ("name", "loot", "feature", "level_range", "safe_rooms"):
+            self.assertFalse(self._field(nb, key).locked, key)
+        room = nb.rooms[0]
+        self.assertTrue(self._field(room, "id").locked and self._field(room, "connects_to").locked)
+        row = nb.corridor_encounters[0]
+        cells = mg.edit_fields(row, "corridor_encounters")
+        self.assertEqual([c.locked for c in cells], [True, True, False],
+                         "a corridor's two rooms are links; what happens in it is not")
+        fl4 = mg.generate(4, "medium", 4242).floor
+        line = fl4.lines[0]
+        self.assertTrue(self._field(line, "color").locked and self._field(line, "yard").locked)
+        self.assertTrue(self._field(line.stations[0], "number").locked)
+        fl5 = mg.generate(5, "medium", 4242).floor
+        self.assertTrue(self._field(fl5.quadrants[0], "name").locked)
+        factionless = next(q for q in fl5.quadrants if q.faction is None)
+        self.assertNotIn("faction", [f.key for f in mg.edit_fields(factionless)],
+                         "an empty faction slot is a part missing, not a blank to type in")
+        fl8 = mg.generate(8, "medium", 4242).floor
+        self.assertTrue(self._field(fl8.zones[0], "stairwell").locked)
+
+    def test_what_is_typed_in(self):
+        fl = mg.generate(1, "small", 4242).floor
+        nb, boss = fl.neighborhoods[0], fl.neighborhoods[0].boss
+        level = self._field(boss, "level")
+        self.assertEqual(mg.parse_edit(level, " 12 "), 12)
+        with self.assertRaisesRegex(mg.MapgenError, "Level should be a whole number"):
+            mg.parse_edit(level, "lots")
+        band = self._field(nb, "level_range")
+        self.assertEqual(mg.parse_edit(band, "4, 9"), (4, 9))
+        with self.assertRaisesRegex(mg.MapgenError, "first value can't be above"):
+            mg.parse_edit(band, "9, 4")
+        with self.assertRaisesRegex(mg.MapgenError, "needs 2 values"):
+            mg.parse_edit(band, "9")
+        self.assertEqual(mg.parse_edit(self._field(boss, "name"), "  Mumbles  "), "Mumbles")
+        with self.assertRaisesRegex(mg.MapgenError, "can't be changed here"):
+            mg.parse_edit(self._field(nb, "label"), "Z")
+        stairs = self._field(nb, "hidden_stairs")
+        self.assertEqual(mg.parse_edit(stairs, "one\n\n  two  \n"), ["one", "two"])
+
+    def test_renaming_everywhere(self):
+        """A castle renamed on Floor 5 is also written in its ruler's name; changed
+        in both, the old name is gone from the write-up and the map has the new."""
+        res = mg.generate(5, "medium", 4242)
+        fl = res.floor
+        path = ["quadrants", 0, "castle", "name"]
+        old = mg.edit_get(fl, path)
+        where = mg.find_text(fl, old, skip=path)
+        self.assertIn(["quadrants", 0, "castle", "boss", "name"], where)
+        self.assertNotIn(path, where)
+        self.assertIn("Boss — ", mg.describe_path(fl, where[0]))
+        mg.edit_set(fl, path, "Castle Mumbles")
+        mg.replace_text(fl, old, "Castle Mumbles", where)
+        drawn = mg.redraw_floor(res)
+        self.assertNotIn(old, drawn.markdown)
+        self.assertIn("Castle Mumbles", drawn.svgs[0][1])
+        # In a tuple too: a corridor encounter's description.
+        fl1 = mg.generate(1, "medium", 4242).floor
+        row = ["neighborhoods", 0, "corridor_encounters", 0, 2]
+        text = mg.edit_get(fl1, row)
+        word = text.split()[1]
+        hits = [h for h in mg.find_text(fl1, word) if h == row]
+        mg.replace_text(fl1, word, "WORD", hits)
+        self.assertIn("WORD", mg.edit_get(fl1, row))
+        self.assertIsInstance(mg.edit_get(fl1, row[:-1]), tuple)
+
+    def test_undo_puts_a_floor_back_exactly(self):
+        for case in self.CASES:
+            res = mg.generate(**case)
+            snap = mg.snapshot_floor(res.floor)
+            for path, node in self._nodes(res.floor):
+                text = next((f for f in mg.edit_fields(node, self._group(path))
+                             if not f.locked and f.kind == "text"), None)
+                if text:
+                    mg.edit_set(res.floor, list(path) + [text.key], "Scribbled over")
+                    break
+            back = mg.redraw_floor(mg.replace(res, floor=mg.restore_floor(snap)))
+            self.assertEqual(back.markdown, res.markdown, corpus.case_id(case))
+
+    def test_an_edit_is_kept_in_the_floor_file(self):
+        res = mg.generate(3, "small", 2)
+        region = next(i for i, c in enumerate(res.floor.cells) if isinstance(c, mg.Region))
+        mg.edit_set(res.floor, ["cells", region, "level_range"], (40, 44))
+        edited = mg.redraw_floor(res)
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "f" + mg.FLOOR_FILE_SUFFIX)
+            mg.save_floor_file(edited, path)
+            self.assertEqual(mg.open_floor_file(path).markdown, edited.markdown)
+        self.assertIn("40–44", edited.markdown)
+
+
 class WebPageTest(unittest.TestCase):
     """The mobile web page's Python side, run here on the desktop: web_api is what
     the page calls inside Pyodide, and build_site assembles what GitHub Pages

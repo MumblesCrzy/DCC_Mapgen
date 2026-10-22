@@ -71,6 +71,7 @@ class MapView(ttk.Frame):
 
         bar = ttk.Frame(self)
         bar.pack(fill="x", padx=PAD, pady=(PAD, 0))
+        self.bar = bar
         self.picker = ttk.Combobox(bar, state="readonly", width=32)
         self.picker.pack(side="left")
         self.picker.bind("<<ComboboxSelected>>", lambda e: self._on_pick())
@@ -120,6 +121,17 @@ class MapView(ttk.Frame):
             self.svg = None
             self.picker.set("")
             self._placeholder("This floor has no maps.")
+
+    def refresh(self, svgs):
+        """Show maps redrawn after an edit, staying on the same map at the same
+        zoom: an edit to one room should not throw the view back to the overview."""
+        if not self.maps or len(svgs) != len(self.maps) or self.zoom is None:
+            self.load(svgs)
+            return
+        i = max(self.picker.current(), 0)
+        self.maps = list(svgs)
+        self.svg = self.maps[i][1]
+        self._render()
 
     def _on_pick(self):
         i = self.picker.current()
@@ -1070,6 +1082,301 @@ class LootView(ttk.Frame):
         self.app._set_status("Opened boxes copied to the clipboard")
 
 
+class EditPanel(ttk.Frame):
+    """Edit the floor on show, beside its map.
+
+    The tree is the floor's parts -- neighborhoods and their bosses, mobs and
+    rooms; lines and their stations; quadrants and their castles -- read
+    straight from the floor's data, so it covers every floor alike. Pick one and
+    its values come up in a form; Apply redraws the write-up and every map with
+    the change, and Save output keeps it. A few values that hold the floor
+    together (a neighborhood's letter, a station's number) are shown but locked.
+
+    Renaming something offers to change the old name wherever else the floor
+    has it written, since some sentences were written with names in them when
+    the floor was generated. Undo steps back through every change."""
+
+    UNDO_LIMIT = 50
+
+    def __init__(self, master, app):
+        super().__init__(master, width=360)
+        self.app = app
+        self.res = None
+        self.undo = []           # snapshots of the floor before each change
+        self.paths = {}          # tree item -> path into the floor
+        self.items = {}          # path -> tree item
+        self.path = None         # the part on show in the form
+        self.form = []           # (EditField, read the widget) for it
+
+        head = ttk.Frame(self)
+        head.pack(fill="x", padx=PAD, pady=(PAD, 4))
+        ttk.Label(head, text="Edit this floor", font=("Segoe UI", 9, "bold")).pack(side="left")
+        self.undo_btn = ttk.Button(head, text="Undo", width=7, command=self.undo_last,
+                                   state="disabled")
+        self.undo_btn.pack(side="right")
+
+        split = ttk.Panedwindow(self, orient="vertical")
+        split.pack(fill="both", expand=True, padx=PAD)
+        treef = ttk.Frame(split)
+        self.tree = ttk.Treeview(treef, show="tree", selectmode="browse")
+        tsb = ttk.Scrollbar(treef, orient="vertical", command=self.tree.yview)
+        self.tree.configure(yscrollcommand=tsb.set)
+        tsb.pack(side="right", fill="y")
+        self.tree.pack(side="left", fill="both", expand=True)
+        split.add(treef, weight=1)
+        self.tree.bind("<<TreeviewOpen>>", lambda e: self._expand(self.tree.focus()))
+        self.tree.bind("<<TreeviewSelect>>", lambda e: self._select())
+
+        formf = ttk.Frame(split)
+        self.canvas = tk.Canvas(formf, highlightthickness=0, borderwidth=0)
+        fsb = ttk.Scrollbar(formf, orient="vertical", command=self.canvas.yview)
+        self.canvas.configure(yscrollcommand=fsb.set)
+        fsb.pack(side="right", fill="y")
+        self.canvas.pack(side="left", fill="both", expand=True)
+        self.inner = ttk.Frame(self.canvas)
+        self._win = self.canvas.create_window(0, 0, anchor="nw", window=self.inner)
+        self.inner.bind("<Configure>", lambda e: self.canvas.configure(
+            scrollregion=self.canvas.bbox("all")))
+        self.canvas.bind("<Configure>", lambda e: self.canvas.itemconfigure(
+            self._win, width=e.width))
+        split.add(formf, weight=2)
+
+        btns = ttk.Frame(self)
+        btns.pack(fill="x", padx=PAD, pady=PAD)
+        self.apply_btn = ttk.Button(btns, text="Apply", command=self.apply, state="disabled")
+        self.apply_btn.pack(side="left")
+        self.revert_btn = ttk.Button(btns, text="Revert", command=self._show_form,
+                                     state="disabled")
+        self.revert_btn.pack(side="left", padx=(4, 0))
+        ttk.Label(btns, text="Ctrl+Enter applies", foreground="#777").pack(side="right")
+        self._message("Generate or open a floor to edit it.")
+
+    # -- loading ---------------------------------------------------------------
+
+    def load(self, res):
+        """A new floor: a fresh tree, nothing to undo."""
+        self.res = res
+        self.undo.clear()
+        self.undo_btn.configure(state="disabled")
+        self.path = None
+        if not mg.is_dataclass(res.floor):
+            self.tree.delete(*self.tree.get_children())
+            self._message("This is one neighborhood's re-rolled rooms, not a whole floor. "
+                          "Generate or open a floor to edit it.")
+            return
+        self._rebuild()
+        self._message("Pick a part of the floor to edit it.")
+
+    def _rebuild(self, opened=(), select=None):
+        """Fill the tree again, as it was: the same parts open, the same one
+        picked. Names in it may have changed."""
+        self.tree.delete(*self.tree.get_children())
+        self.paths.clear()
+        self.items.clear()
+        self._add_children("", ())
+        for path in sorted(opened, key=len):
+            iid = self.items.get(path)
+            if iid:
+                self._expand(iid)
+                self.tree.item(iid, open=True)
+        if select is not None and select in self.items:
+            iid = self.items[select]
+            self.tree.selection_set(iid)
+            self.tree.see(iid)
+
+    def _add_children(self, parent, path):
+        node = mg.edit_get(self.res.floor, list(path))
+        for key, label in mg.edit_children(node):
+            child = path + (key,)
+            iid = self.tree.insert(parent, "end", text=label)
+            self.paths[iid], self.items[child] = child, iid
+            if mg.edit_children(mg.edit_get(self.res.floor, list(child))):
+                self.tree.insert(iid, "end", text="…", tags=("stub",))
+
+    def _expand(self, iid):
+        """Fill in a part's own parts the first time it is opened: a continent
+        holds four hundred neighborhoods, and their rooms."""
+        kids = self.tree.get_children(iid)
+        if len(kids) == 1 and "stub" in self.tree.item(kids[0], "tags"):
+            self.tree.delete(kids[0])
+            self._add_children(iid, self.paths[iid])
+
+    # -- the form --------------------------------------------------------------
+
+    def _message(self, text):
+        for w in self.inner.winfo_children():
+            w.destroy()
+        self.form = []
+        ttk.Label(self.inner, text=text, foreground="#666", wraplength=300,
+                  justify="left").pack(anchor="w", padx=4, pady=6)
+        self.apply_btn.configure(state="disabled")
+        self.revert_btn.configure(state="disabled")
+
+    def _select(self):
+        sel = self.tree.selection()
+        if sel and sel[0] in self.paths:
+            self.path = self.paths[sel[0]]
+            self._show_form()
+
+    def _show_form(self):
+        if self.path is None:
+            return
+        node = mg.edit_get(self.res.floor, list(self.path))
+        group = self.path[-2] if len(self.path) >= 2 and isinstance(self.path[-1], int) else None
+        fields = mg.edit_fields(node, group)
+        if not fields:
+            self._message("Nothing to type in here: open it in the tree to see what it holds.")
+            return
+        for w in self.inner.winfo_children():
+            w.destroy()
+        self.form = []
+        ttk.Label(self.inner, text=mg.edit_label(node, self.path[-1]), wraplength=300,
+                  font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=4, pady=(4, 6))
+        for f in fields:
+            box = ttk.Frame(self.inner)
+            box.pack(fill="x", padx=4, pady=(0, 6))
+            ttk.Label(box, text=f.label + (" (locked)" if f.locked else ""),
+                      foreground="#888" if f.locked else "#333").pack(anchor="w")
+            self.form.append((f, *self._widget(box, f)))
+        any_open = any(not f.locked for f, _, _ in self.form)
+        self.apply_btn.configure(state="normal" if any_open else "disabled")
+        self.revert_btn.configure(state="normal" if any_open else "disabled")
+
+    def _widget(self, box, f):
+        """A widget for one value, and how to read it back and to fill it in."""
+        shown = f.value
+        if f.locked:
+            text = ", ".join(map(str, shown)) if isinstance(shown, (list, tuple)) else str(shown)
+            ttk.Label(box, text=text or "(none)", foreground="#888", wraplength=300).pack(anchor="w")
+            return (lambda: f.value), (lambda v: None)
+        if f.kind == "bool":
+            var = tk.BooleanVar(value=bool(shown))
+            ttk.Checkbutton(box, variable=var).pack(anchor="w")
+            return var.get, var.set
+        if f.kind in ("long", "lines"):
+            lines = list(shown) if f.kind == "lines" else [shown or ""]
+            rows = min(8, max(3, len(lines) + (1 if f.kind == "lines" else 0)))
+            t = tk.Text(box, height=rows, wrap="word", font=("Segoe UI", 9), undo=True)
+            t.insert("1.0", "\n".join(lines))
+            t.pack(fill="x")
+            t.bind("<Control-Return>", lambda e: (self.apply(), "break")[1])
+
+            def fill(value):
+                t.delete("1.0", "end")
+                t.insert("1.0", value)
+            return (lambda: t.get("1.0", "end-1c")), fill
+        var = tk.StringVar(value="" if shown is None else
+                           (", ".join(map(str, shown)) if f.kind == "list" else str(shown)))
+        e = ttk.Entry(box, textvariable=var)
+        e.pack(fill="x")
+        e.bind("<Control-Return>", lambda ev: (self.apply(), "break")[1])
+        return var.get, var.set
+
+    def show(self, path):
+        """Pick a part by its path, opening the tree down to it."""
+        path = tuple(path)
+        for i in range(1, len(path)):
+            iid = self.items.get(path[:i])
+            if iid:
+                self._expand(iid)
+                self.tree.item(iid, open=True)
+        if path in self.items:
+            self.tree.selection_set(self.items[path])
+            self.tree.see(self.items[path])
+        self.path = path
+        self._show_form()
+
+    def type_in(self, key, value):
+        """Fill in one field of the form, as if typed."""
+        for f, _, fill in self.form:
+            if f.key == key:
+                fill(value)
+                return
+        raise KeyError(key)
+
+    # -- changing the floor ------------------------------------------------------
+
+    def apply(self):
+        if self.path is None or not self.form:
+            return
+        fl = self.res.floor
+        changes = []
+        try:
+            for f, read, _ in self.form:
+                if f.locked:
+                    continue
+                new = mg.parse_edit(f, read())
+                if new != f.value:
+                    changes.append((f, new))
+        except mg.MapgenError as e:
+            messagebox.showerror("Check that value", str(e), parent=self)
+            return
+        if not changes:
+            self.app._set_status("Nothing changed.")
+            return
+
+        snapshot = mg.snapshot_floor(fl)
+        # Renaming: is the old name written anywhere else on the floor? Asked
+        # before anything changes, so Cancel leaves the floor as it was.
+        also = []
+        typed = [list(self.path) + [f.key] for f, _ in changes]   # left as typed
+        for f, new in changes:
+            if f.kind in ("text", "long") and isinstance(f.value, str) and len(f.value) >= 3:
+                where = [w for w in mg.find_text(fl, f.value) if w not in typed]
+                if where and isinstance(new, str):
+                    also.append((f.value, new, where))
+        renames = []
+        for old, new, where in also:
+            listed = "\n".join("•  " + mg.describe_path(fl, w)[-110:] for w in where[:6])
+            more = f"\n…and {len(where) - 6} more" if len(where) > 6 else ""
+            answer = messagebox.askyesnocancel(
+                "Rename everywhere?",
+                f"“{old}” is also written in {len(where)} other place"
+                f"{'s' if len(where) != 1 else ''} on this floor:\n\n{listed}{more}\n\n"
+                f"Change it to “{new}” there too?", parent=self)
+            if answer is None:
+                return
+            if answer:
+                renames.append((old, new, where))
+        for f, new in changes:
+            mg.edit_set(fl, list(self.path) + [f.key], new)
+        for old, new, where in renames:
+            mg.replace_text(fl, old, new, where)
+        try:
+            res = mg.redraw_floor(self.res)
+        except mg.MapgenError as e:
+            self._restore(snapshot)
+            messagebox.showerror("That change can't be drawn", str(e), parent=self)
+            return
+        self.undo.append(snapshot)
+        del self.undo[:-self.UNDO_LIMIT]
+        self.undo_btn.configure(state="normal")
+        names = ", ".join(f.label for f, _ in changes)
+        extra = sum(len(w) for _, _, w in renames)
+        self._done(res, f"Changed {names}" + (f", and {extra} other mention"
+                                               f"{'s' if extra != 1 else ''}" if extra else "")
+                   + ". Save output (Ctrl+S) keeps it.")
+
+    def undo_last(self):
+        if not self.undo:
+            return
+        self._restore(self.undo.pop())
+        if not self.undo:
+            self.undo_btn.configure(state="disabled")
+        self._done(mg.redraw_floor(self.res), "Undone.")
+
+    def _restore(self, snapshot):
+        self.res = mg.replace(self.res, floor=mg.restore_floor(snapshot))
+
+    def _done(self, res, status):
+        """Show the redrawn floor everywhere, and the tree as it was."""
+        opened = [p for iid, p in self.paths.items() if self.tree.item(iid, "open")]
+        self.res = res
+        self._rebuild(opened, self.path)
+        self._show_form()
+        self.app._edited(res, status)
+
+
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -1079,6 +1386,7 @@ class App(tk.Tk):
         self.result = None
         self.roster = None            # the campaign being carried, when one is open
         self.campaign_path = None
+        self.floor_path = None        # the floor file on show, for Reload
         self._resting = "Ready"      # status line to fall back to once a render finishes
 
         # tkinter is not thread-safe, so worker threads never touch a widget: they
@@ -1098,8 +1406,14 @@ class App(tk.Tk):
         right = ttk.Notebook(outer)
         outer.add(right, weight=1)
 
-        self.view = MapView(right, self.status, self.post, lambda: self._resting)
-        right.add(self.view, text="Maps")
+        # The Maps tab: the map, and the edit panel to its right when it is open.
+        self.maps_pane = ttk.Panedwindow(right, orient="horizontal")
+        right.add(self.maps_pane, text="Maps")
+        self.view = MapView(self.maps_pane, self.status, self.post, lambda: self._resting)
+        self.maps_pane.add(self.view, weight=1)
+        self.editor = EditPanel(self.maps_pane, self)
+        self.edit_btn = ttk.Button(self.view.bar, text="Edit floor", command=self.toggle_editor)
+        self.edit_btn.pack(side="right", padx=(0, PAD))
 
         txt_tab = ttk.Frame(right)
         right.add(txt_tab, text="Text")
@@ -1173,13 +1487,26 @@ class App(tk.Tk):
         f.add_command(label="Generate", accelerator="Ctrl+G", command=self.generate)
         f.add_command(label="Save output...", accelerator="Ctrl+S", command=self.save)
         f.add_separator()
+        f.add_command(label="Open floor file...", accelerator="Ctrl+O", command=self.open_floor)
+        f.add_command(label="Reload floor file", accelerator="Ctrl+R", command=self.reload_floor)
+        f.add_separator()
         f.add_command(label="Re-roll rooms from a saved floor...", command=self.reroll_rooms)
         f.add_separator()
         f.add_command(label="Quit", command=self.destroy)
         m.add_cascade(label="File", menu=f)
+        e = tk.Menu(m, tearoff=0)
+        e.add_command(label="Edit this floor", accelerator="Ctrl+E", command=self.toggle_editor)
+        e.add_command(label="Undo edit", accelerator="Ctrl+Z", command=self._undo_edit)
+        m.add_cascade(label="Edit", menu=e)
         self.configure(menu=m)
+        self.bind("<Control-e>", lambda ev: self.toggle_editor())
+        # In a text box Ctrl+Z is the box's own undo; anywhere else, the floor's.
+        self.bind("<Control-z>", lambda ev: None if isinstance(ev.widget, (tk.Text, tk.Entry, ttk.Entry))
+                  else self._undo_edit())
         self.bind("<Control-g>", lambda e: self.generate())
         self.bind("<Control-s>", lambda e: self.save())
+        self.bind("<Control-o>", lambda e: self.open_floor())
+        self.bind("<Control-r>", lambda e: self.reload_floor())
 
     # -- controls -----------------------------------------------------------
 
@@ -1406,8 +1733,37 @@ class App(tk.Tk):
         self._resting = msg
         self.status.set(msg)
 
+    # -- the edit panel ---------------------------------------------------------
+
+    def toggle_editor(self):
+        """Show the edit panel to the right of the map, or put it away."""
+        if str(self.editor) in self.maps_pane.panes():
+            self.maps_pane.forget(self.editor)
+            self.edit_btn.configure(text="Edit floor")
+        else:
+            self.maps_pane.add(self.editor, weight=0)
+            self.edit_btn.configure(text="Close editor")
+            self.notebook.select(self.maps_pane)
+
+    def _undo_edit(self):
+        if self.editor.undo:
+            self.editor.undo_last()
+
+    def _edited(self, res, status):
+        """A change made in the edit panel: show the redrawn floor everywhere."""
+        self.result = res
+        top = self.text.yview()[0]
+        self.text.delete("1.0", "end")
+        self.text.insert("1.0", res.markdown)
+        self.text.yview_moveto(top)
+        self.view.refresh(res.svgs)
+        self.loot_tab.load_floor(res)
+        self._set_status(status)
+
     def _gen_done(self, res):
         self.result = res
+        self.floor_path = None
+        self.editor.load(res)
         self.gen_btn.configure(state="normal")
         self.save_btn.configure(state="normal")
         self.seed.set(str(res.seed))                       # so the same map can be re-rolled
@@ -1444,10 +1800,14 @@ class App(tk.Tk):
         base = os.path.join(folder, res.basename())
         md_path = base + ".md"
         img_path = base + "." + fmt
+        # The editable floor file goes alongside, for a whole floor; a re-rolled
+        # neighborhood's rooms are not one.
+        floor_path = base + mg.FLOOR_FILE_SUFFIX if mg.is_dataclass(res.floor) else None
         # Check the real target names, not just the base: floor 10 writes only
         # _heat1..n and never the bare base name, so checking that alone would have
         # let a re-save clobber a folder without asking.
         targets = [md_path] + [f"{base}{suffix}.{fmt}" for suffix, _ in res.svgs]
+        targets += [floor_path] if floor_path else []
         existing = [p for p in targets if os.path.exists(p)]
         if existing and not messagebox.askyesno(
                 "Overwrite?",
@@ -1465,14 +1825,69 @@ class App(tk.Tk):
                 with open(md_path, "w", encoding="utf-8") as f:
                     f.write(res.markdown)
                 paths = mg.save_svgs(res.svgs, img_path)
+                if floor_path:
+                    mg.save_floor_file(res, floor_path)
             except (mg.MapgenError, OSError) as e:
                 msg = str(e)
                 self.post(lambda: self._save_failed(msg))
             else:
-                n = 1 + len(paths)
+                n = 1 + len(paths) + (1 if floor_path else 0)
                 self.post(lambda: self._save_done(folder, n))
 
         threading.Thread(target=work, daemon=True).start()
+
+    # -- floor files ------------------------------------------------------------
+
+    def open_floor(self, path=None):
+        """Draw a floor file: one Save output wrote, edited by hand or not. It is
+        drawn as it stands -- it does not touch the campaign, and Generate still
+        makes a fresh floor from the controls."""
+        if path is None:
+            path = filedialog.askopenfilename(
+                parent=self, title="Open a floor file",
+                filetypes=[("DCC Mapgen floor", "*" + mg.FLOOR_FILE_SUFFIX),
+                           ("JSON", "*.json"), ("All files", "*.*")])
+        if not path:
+            return
+        self.status.set(f"Opening {os.path.basename(path)}...")
+
+        def work():
+            try:
+                res = mg.open_floor_file(path)
+            except mg.MapgenError as e:
+                msg = str(e)
+                self.post(lambda: self._floor_failed(msg))
+            except Exception:                              # noqa: BLE001
+                tb = traceback.format_exc()
+                self.post(lambda: self._floor_failed(tb))
+            else:
+                self.post(lambda: self._floor_opened(res, path))
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def reload_floor(self):
+        """Draw the open floor file again, after editing it in a text editor."""
+        if self.floor_path:
+            self.open_floor(self.floor_path)
+        else:
+            self._set_status("No floor file is open. File > Open floor file... opens one.")
+
+    def _floor_opened(self, res, path):
+        self.result = res
+        self.floor_path = path
+        self.editor.load(res)
+        self.save_btn.configure(state="normal")
+        self.text.delete("1.0", "end")
+        self.text.insert("1.0", res.markdown)
+        self.view.load(res.svgs)
+        self.loot_tab.load_floor(res)
+        self._set_status(f"{os.path.basename(path)} - floor {res.number}, {res.size}, "
+                         f"seed {res.seed} - {len(res.svgs)} map(s). Edit the file and "
+                         f"press Ctrl+R to redraw.")
+
+    def _floor_failed(self, msg):
+        self._set_status("Could not open the floor file")
+        messagebox.showerror("Could not open the floor file", msg, parent=self)
 
     def _save_done(self, folder, count):
         self.save_btn.configure(state="normal")
@@ -1508,6 +1923,8 @@ class App(tk.Tk):
             return
 
         self.result = res
+        self.floor_path = None
+        self.editor.load(res)
         self.save_btn.configure(state="normal")
         self.text.delete("1.0", "end")
         self.text.insert("1.0", res.markdown)
@@ -1819,6 +2236,105 @@ def selftest() -> int:
         webbrowser.open = real_open
     check(app.coffee.winfo_ismapped(), "the coffee button is on screen")
     check(opened == [COFFEE_URL], f"the coffee button opens {COFFEE_URL} (got {opened})")
+
+    # Floor files: Save output writes one beside the Markdown; Open draws it as it
+    # was; an edit made in a text editor shows after Reload; a broken one is
+    # reported rather than crashed on.
+    import json
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmp:
+        generated = app.result
+        real_ask = filedialog.askdirectory
+        filedialog.askdirectory = lambda **kw: tmp
+        try:
+            app.save()
+            pump(120, lambda: app.status.get().startswith(("Saved", "Save failed")))
+        finally:
+            filedialog.askdirectory = real_ask
+        path = os.path.join(tmp, generated.basename() + mg.FLOOR_FILE_SUFFIX)
+        check(os.path.exists(path), "Save output writes the floor file too")
+        app.open_floor(path)
+        pump(60, lambda: app.floor_path == path)
+        check(app.result is not generated and app.result.markdown == generated.markdown
+              and app.result.svgs == generated.svgs,
+              "a floor file opens to the same write-up and maps")
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+        old = data["data"]["neighborhoods"][0]["boss"]["name"]
+        data["data"]["neighborhoods"][0]["boss"]["name"] = "Mumbles the Unedited"
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f)
+        before = app.result
+        app.reload_floor()
+        pump(60, lambda: app.result is not before)
+        shown = app.text.get("1.0", "end")
+        check("Mumbles the Unedited" in shown and old not in shown,
+              "an edit to the floor file shows after Reload")
+        with open(path, "w", encoding="utf-8") as f:
+            f.write('{"format": "dcc-mapgen-floor", ')
+        errs_seen = []
+        real_err = messagebox.showerror
+        messagebox.showerror = lambda title, msg, **kw: errs_seen.append(msg)
+        try:
+            app.reload_floor()
+            pump(30, lambda: bool(errs_seen))
+        finally:
+            messagebox.showerror = real_err
+        check(bool(errs_seen) and "not valid JSON" in errs_seen[0],
+              "a broken floor file is reported, not crashed on")
+
+    # The edit panel: a renamed castle reaches the write-up, the map and the tree,
+    # and renaming offers to change the name wherever else it is written; a value
+    # of the wrong kind is refused and changes nothing; a layout value is locked;
+    # Undo puts it all back.
+    say("floor 5 / medium / seed 4242, edited")
+    app.floor.set(FLOOR_LABELS[5])
+    app._sync_floor()
+    app.size.set("medium")
+    app.seed.set("4242")
+    earlier = app.result
+    app.generate()
+    pump(timeout, lambda: app.result is not earlier)
+    original = app.result
+    app.toggle_editor()
+    app.update()
+    ed = app.editor
+    check([str(p) for p in app.maps_pane.panes()] == [str(app.view), str(ed)],
+          "the edit panel opens to the right of the map")
+    castle = ("quadrants", 0, "castle")
+    ed.show(castle)
+    old_name = original.floor.quadrants[0].castle.name
+    asked = []
+    real_ask = messagebox.askyesnocancel
+    messagebox.askyesnocancel = lambda *a, **kw: asked.append(a) or True
+    try:
+        ed.type_in("name", "Castle Mumbles")
+        ed.apply()
+    finally:
+        messagebox.askyesnocancel = real_ask
+    md = app.result.markdown
+    check(bool(asked) and "Castle Mumbles" in md and old_name not in md
+          and "Castle Mumbles" in app.result.svgs[0][1],
+          "a renamed castle reaches the write-up and the map, everywhere it was written")
+    check("Castle Mumbles" in ed.tree.item(ed.items[castle], "text"), "the tree shows the new name")
+    ed.show(castle + ("boss",))
+    shown, errs_seen = app.result, []
+    real_err = messagebox.showerror
+    messagebox.showerror = lambda title, msg, **kw: errs_seen.append(msg)
+    try:
+        ed.type_in("level", "lots")
+        ed.apply()
+    finally:
+        messagebox.showerror = real_err
+    check(errs_seen and "whole number" in errs_seen[0] and app.result is shown,
+          "a level of the wrong kind is refused and changes nothing")
+    ed.show(("quadrants", 0))
+    check(any(f.key == "name" and f.locked for f, _, _ in ed.form),
+          "a quadrant's name, which the map is laid out by, is locked")
+    app._undo_edit()
+    app.update()
+    check(app.result.markdown == original.markdown, "Undo puts the floor back as it was")
+    app.toggle_editor()
 
     # An option combination the generator must reject rather than crash on.
     errs = []

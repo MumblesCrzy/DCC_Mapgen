@@ -79,8 +79,8 @@ import random
 import re
 import sys
 import zlib
-from dataclasses import dataclass, field, replace
-from typing import Dict, List, Optional, Tuple
+from dataclasses import MISSING, dataclass, field, fields, is_dataclass, replace
+from typing import Dict, List, Optional, Tuple, Union, get_args, get_origin, get_type_hints
 
 
 class MapgenError(Exception):
@@ -5039,7 +5039,8 @@ def render5_svg(fl: Floor5) -> str:
         o.append(f'<rect x="{kx-9}" y="{ky-9}" width="18" height="18" fill="#222"/>')
         o.append(_stair_icon(kx - 7, ky - 32))
         if q.name == fl.suggested_start:
-            o.append(_text(tx, ty + 66, "suggested start (DM)", size=10, weight="bold", anchor="middle", fill="#c0392b"))
+            o.append(_text(tx, ty - 34 + len(lines) * 16 + 2, "suggested start (DM)", size=10,
+                           weight="bold", anchor="middle", fill="#c0392b"))
     o.append(f'<circle cx="{cx}" cy="{cy}" r="{R}" fill="none" stroke="#111" stroke-width="5"/>')
     o.append(f'<circle cx="{cx}" cy="{cy}" r="34" fill="#f6f2ea" stroke="#111" stroke-width="3"/>')
     o.append(_text(cx, cy + 5, str(fl.bubble), size=16, weight="bold", anchor="middle"))
@@ -7658,6 +7659,7 @@ class GenResult:
     markdown: str
     svgs: List[Tuple[str, str]]     # (filename suffix, SVG source); "" is the main map
     roster: Optional["CampaignRoster"] = None   # the campaign, updated by this floor
+    boss_stairs: bool = True        # floors 1-2: whether the map marks boss-chamber stairwells
 
     def basename(self) -> str:
         """The stem the CLI names saved files with."""
@@ -7729,7 +7731,7 @@ def generate(floor: int = 1, size: str = "medium", seed: Optional[int] = None, *
 
     svgs = floor_svgs(fl, boss_stairs) if images else []
     return GenResult(floor=fl, number=floor, size=size, seed=seed, markdown=text,
-                     svgs=svgs, roster=roster)
+                     svgs=svgs, roster=roster, boss_stairs=boss_stairs)
 
 
 def regenerate_rooms(path: str, label: Optional[str] = None, floor: int = 1, *,
@@ -7760,6 +7762,508 @@ def regenerate_rooms(path: str, label: Optional[str] = None, floor: int = 1, *,
                        markdown=render_rooms_only(nb),
                        svgs=[(f"_room_{nb.label}", render_room_svg(nb, fake_fl))])
     return nb, result
+
+
+# ===========================================================================
+# FLOOR FILES
+# A generated floor saved as data, so it can be edited and drawn again. The
+# Markdown and the maps are both drawn from the floor's dataclasses, so a floor
+# written out as JSON and read back draws exactly the same write-up and maps --
+# and an edited one draws its edits into both. This is the file to change, not
+# the Markdown: there is no reading a write-up back into a floor.
+# ===========================================================================
+
+FLOOR_FILE_FORMAT = "dcc-mapgen-floor"
+FLOOR_FILE_VERSION = 1
+FLOOR_FILE_SUFFIX = ".floor.json"
+# What a floor that cannot be drawn fails with: a hand edit that left a value of
+# the wrong kind, or took away something a renderer looks for (StopIteration).
+_DRAW_ERRORS = (TypeError, ValueError, KeyError, AttributeError, IndexError, StopIteration,
+                ZeroDivisionError)
+
+_HINTS: Dict[type, dict] = {}
+
+
+def _hints(cls: type) -> dict:
+    """A dataclass's field types, resolved once. A class whose annotations will
+    not resolve is read without them: its tuples are tagged, and nothing is
+    type-checked, but it still saves and loads."""
+    if cls not in _HINTS:
+        try:
+            _HINTS[cls] = get_type_hints(cls)
+        except (NameError, TypeError):
+            _HINTS[cls] = {}
+    return _HINTS[cls]
+
+
+def _bare(tp):
+    """Optional[X] is X."""
+    if get_origin(tp) is Union:
+        inner = [a for a in get_args(tp) if a is not type(None)]
+        if len(inner) == 1:
+            return inner[0]
+    return tp
+
+
+def _inner(tp, i: int = 0):
+    """The type of an element of a typed list, tuple or dict, where it says."""
+    tp = _bare(tp)
+    origin, args = get_origin(tp), get_args(tp)
+    if origin is list and args:
+        return args[0]
+    if origin is tuple and args:
+        if len(args) == 2 and args[1] is Ellipsis:
+            return args[0]
+        return args[i] if i < len(args) else None
+    if origin is dict and len(args) == 2:
+        return args[1]
+    return None
+
+
+def _says_tuple(tp) -> bool:
+    return get_origin(_bare(tp)) is tuple
+
+
+def _to_data(v, tp=None):
+    """A floor as plain JSON. Every object is tagged with its class, so a list
+    that mixes settlements and regions comes back as both. A tuple the class
+    declares as one is a plain list -- [25, 31], not {"__tuple__": [25, 31]} --
+    which keeps a hand-edited file readable; any other tuple says so."""
+    if is_dataclass(v) and not isinstance(v, type):
+        hints = _hints(type(v))
+        out = {"__type__": type(v).__name__}
+        for k, x in vars(v).items():     # fields, and anything set on it after
+            out[k] = _to_data(x, hints.get(k))
+        return out
+    if isinstance(v, tuple):
+        items = [_to_data(x, _inner(tp, i)) for i, x in enumerate(v)]
+        return items if _says_tuple(tp) else {"__tuple__": items}
+    if isinstance(v, list):
+        return [_to_data(x, _inner(tp)) for x in v]
+    if isinstance(v, dict):
+        if all(isinstance(k, str) and not k.startswith("__") for k in v):
+            return {k: _to_data(x, _inner(tp)) for k, x in v.items()}
+        return {"__dict__": [[_to_data(k), _to_data(x, _inner(tp))] for k, x in v.items()]}
+    if isinstance(v, (set, frozenset)):
+        return {"__set__": sorted((_to_data(x) for x in v), key=repr)}
+    if v is None or isinstance(v, (str, int, float, bool)):
+        return v
+    raise MapgenError(f"a floor holds a {type(v).__name__}, which a floor file cannot keep")
+
+
+_PLAIN = {int: "a whole number", float: "a number", str: "text", bool: "true or false"}
+
+
+def _from_data(v, tp=None, where: str = "data"):
+    """Read _to_data's JSON back. Only this module's dataclasses can be named, so
+    a file passed around online can build a floor and nothing else. A hand edit
+    that puts the wrong kind of value in a field says which field."""
+    want = _bare(tp)
+    if want in _PLAIN and v is not None:
+        ok = (isinstance(v, bool) if want is bool else
+              isinstance(v, (int, float)) and not isinstance(v, bool) if want is float else
+              isinstance(v, want) and not isinstance(v, bool))
+        if not ok:
+            raise MapgenError(f"{where} should be {_PLAIN[want]}, not {json.dumps(v)}")
+    if isinstance(v, list):
+        items = [_from_data(x, _inner(tp, i), f"{where}[{i}]") for i, x in enumerate(v)]
+        return tuple(items) if _says_tuple(tp) else items
+    if not isinstance(v, dict):
+        return v
+    if "__tuple__" in v:
+        return tuple(_from_data(x, None, f"{where}[{i}]") for i, x in enumerate(v["__tuple__"]))
+    if "__set__" in v:
+        return {_from_data(x, None, where) for x in v["__set__"]}
+    if "__dict__" in v:
+        return {_from_data(k, None, where): _from_data(x, _inner(tp), f"{where}[{k!r}]")
+                for k, x in v["__dict__"]}
+    if "__type__" not in v:
+        return {k: _from_data(x, _inner(tp), f"{where}.{k}") for k, x in v.items()}
+    name = v["__type__"]
+    cls = globals().get(name)
+    if not (isinstance(cls, type) and is_dataclass(cls) and cls.__module__ == __name__):
+        raise MapgenError(f"{where} is a {name!r}, which is not part of a floor")
+    hints, init = _hints(cls), {f.name for f in fields(cls) if f.init}
+    needed = [f.name for f in fields(cls) if f.init and f.default is MISSING
+              and f.default_factory is MISSING and f.name not in v]
+    if needed:
+        raise MapgenError(f"{where} (a {name}) needs " +
+                          ", ".join(json.dumps(n) for n in needed))
+    values = {k: _from_data(x, hints.get(k), f"{where}.{k}")
+              for k, x in v.items() if k != "__type__"}
+    obj = cls(**{k: x for k, x in values.items() if k in init})
+    for k, x in values.items():
+        if k not in init:
+            setattr(obj, k, x)
+    return obj
+
+
+def floor_file_data(res: GenResult) -> dict:
+    """A generated floor as a floor file's contents."""
+    return {
+        "format": FLOOR_FILE_FORMAT,
+        "version": FLOOR_FILE_VERSION,
+        "about": ("A DCC Mapgen floor. Change any value -- a name, a level, a "
+                  "description -- then open this file in the app, or run "
+                  "dcc_mapgen.py --from on it, to draw the write-up and maps again "
+                  "with your changes."),
+        "floor": res.number, "size": res.size, "seed": res.seed,
+        "boss_stairs": res.boss_stairs,
+        "data": _to_data(res.floor),
+    }
+
+
+def _floor_json(v, depth: int = 0) -> str:
+    """JSON laid out for editing by hand: one value a line, except that a short
+    list of plain values -- a level range, a pair of room ids -- stays on one."""
+    pad, inner = " " * depth, " " * (depth + 1)
+    if isinstance(v, dict):
+        if not v:
+            return "{}"
+        rows = [f"{inner}{json.dumps(k, ensure_ascii=False)}: {_floor_json(x, depth + 1)}"
+                for k, x in v.items()]
+        return "{\n" + ",\n".join(rows) + f"\n{pad}}}"
+    if isinstance(v, list):
+        if not v:
+            return "[]"
+        flat = json.dumps(v, ensure_ascii=False)
+        if not any(isinstance(x, (dict, list)) for x in v) and len(flat) <= 80:
+            return flat
+        return "[\n" + ",\n".join(f"{inner}{_floor_json(x, depth + 1)}" for x in v) + f"\n{pad}]"
+    return json.dumps(v, ensure_ascii=False)
+
+
+def save_floor_file(res: GenResult, path: str) -> None:
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(_floor_json(floor_file_data(res)) + "\n")
+
+
+def render_floor_data(data: dict, where: str = "the floor file") -> GenResult:
+    """Draw a floor file's contents: the write-up and every map, from the floor
+    as it stands in the file, edits and all."""
+    if not isinstance(data, dict) or data.get("format") != FLOOR_FILE_FORMAT:
+        raise MapgenError(f"{where} is not a DCC Mapgen floor file")
+    version = data.get("version")
+    if not isinstance(version, int) or version > FLOOR_FILE_VERSION:
+        raise MapgenError(f"{where} was made by a newer DCC Mapgen (floor file version "
+                          f"{version}); this one reads up to {FLOOR_FILE_VERSION}")
+    try:
+        number, size, seed = int(data["floor"]), str(data["size"]), int(data["seed"])
+        tree = data["data"]
+    except (KeyError, TypeError, ValueError) as e:
+        raise MapgenError(f"{where} is missing its floor, size, seed or data ({e})")
+    if number not in FLOORS:
+        raise MapgenError(f"{where} says floor {number}, which this generator does not make")
+    try:
+        fl = _from_data(tree)
+    except MapgenError as e:
+        raise MapgenError(f"{where}: {e}")
+    boss_stairs = bool(data.get("boss_stairs", True))
+    try:
+        text = _render_floor(fl, number)
+        svgs = floor_svgs(fl, boss_stairs)
+    except _DRAW_ERRORS as e:
+        raise MapgenError(f"{where} has a value the generator cannot draw ({type(e).__name__}: "
+                          f"{e}). Check anything you changed by hand.")
+    return GenResult(floor=fl, number=number, size=size, seed=seed, markdown=text,
+                     svgs=svgs, roster=None, boss_stairs=boss_stairs)
+
+
+def redraw_floor(res: GenResult) -> GenResult:
+    """Draw a floor again after it has been changed in place: the same result,
+    with the write-up and maps drawn from the floor as it stands now."""
+    try:
+        text = _render_floor(res.floor, res.number)
+        svgs = floor_svgs(res.floor, res.boss_stairs)
+    except _DRAW_ERRORS as e:
+        raise MapgenError(f"the generator cannot draw that ({type(e).__name__}: {e})")
+    return replace(res, markdown=text, svgs=svgs)
+
+
+# ===========================================================================
+# EDITING A FLOOR
+# What the desktop app's edit panel shows and changes, for every floor alike.
+# A part (a dataclass, or a dict of values) has fields -- its text, numbers,
+# switches and short lists -- and children: the parts and lists of parts it
+# holds. A list of plain rows (a quest's three columns, a corridor's two rooms)
+# is a group whose rows edit by position. Everything is reached by its path
+# from the floor, the same keys a floor file uses.
+# ===========================================================================
+
+# The campaign's record on this floor: edited in the Campaign and Leaderboard
+# tabs, where a change carries to the next floor.
+EDIT_HIDDEN = {"other_crawlers", "leaderboard", "board_news", "history"}
+# Shown but not editable: what ties a floor's parts together or lays out its map.
+# A neighborhood's letter is in every one of its rooms' ids; a station's number,
+# a line's colour and a quadrant's name are how the rest of the floor finds them.
+EDIT_LOCKED = {"idx", "row", "col", "label", "id", "connects_to", "number", "transfer_to",
+               "kind", "wedge", "ring", "slot", "seed", "size", "spawn", "distance",
+               "is_entry", "color", "hex", "region_label", "home", "tier", "grid",
+               "wedges", "deckmasters", "floor", "first_seen", "suggested_start",
+               "borough", "city", "roams_to", "zone"}
+EDIT_LOCKED_IN = {("Quadrant", "name"),
+                  # A line's yard letter is how it finds its yard; the thorn wall's
+                  # side, its schedule; a Floor 8 zone's stairwell, key and vending
+                  # machine are markers the floor looks for, one of each.
+                  ("RailLine", "yard"), ("Floor6", "thorn_side"),
+                  ("Zone8", "stairwell"), ("Zone8", "key"), ("Zone8", "vending"),
+                  # One team on Floor 9 is the party's, and one holds King's Point.
+                  ("Team", "is_party_team"), ("Team", "kings_point")}
+# Rows whose leading cells are links, by the group they are in: a corridor runs
+# between two rooms, a named train stops at a line and a station, a Floor 9
+# stairwell sits in a team's slot.
+EDIT_LOCKED_CELLS = {"corridor_encounters": {0, 1}, "stops": {0, 1}, "stairs": {0}}
+
+
+@dataclass
+class EditField:
+    """One editable value of a part, as the edit panel shows it."""
+    key: object              # the attribute, dict key or position it is under
+    label: str
+    kind: str                # text | long | int | float | bool | lines | list
+    value: object
+    locked: bool = False
+    optional: bool = False   # blank means none
+
+
+def _scalar(v) -> bool:
+    return v is None or isinstance(v, (str, int, float, bool))
+
+
+def _row(v) -> bool:
+    return isinstance(v, (list, tuple)) and all(_scalar(x) for x in v)
+
+
+def _part(v) -> bool:
+    return (is_dataclass(v) and not isinstance(v, type)) or isinstance(v, dict)
+
+
+def _edit_items(v):
+    if is_dataclass(v) and not isinstance(v, type):
+        return list(vars(v).items())
+    if isinstance(v, dict):
+        return list(v.items())
+    return list(enumerate(v))
+
+
+def _human(key) -> str:
+    if isinstance(key, int):
+        return str(key + 1)
+    return str(key).replace("_", " ").strip().capitalize()
+
+
+def _kind_name(v) -> str:
+    """ "RailLine" is "Rail line"; "Zone8" is "Zone"."""
+    words = re.findall(r"[A-Z][a-z]*", type(v).__name__)
+    return " ".join([words[0]] + [w.lower() for w in words[1:]]) if words else type(v).__name__
+
+
+def edit_label(v, key=None) -> str:
+    """What the edit panel calls a part, a group or a row."""
+    if is_dataclass(v) and not isinstance(v, type):
+        ids = [str(getattr(v, k)) for k in ("label", "id", "number", "slot")
+               if _scalar(getattr(v, k, None)) and getattr(v, k, None) is not None]
+        if isinstance(getattr(v, "adj", None), str) and isinstance(getattr(v, "noun", None), str):
+            name = f"{v.adj} {v.noun}"
+        else:
+            name = next((getattr(v, k) for k in ("name", "title", "leader", "theme", "color")
+                         if isinstance(getattr(v, k, None), str) and getattr(v, k)), "")
+        head = " ".join([_kind_name(v)] + ids[:1])
+        return f"{head} — {name[:48]}" if name else head
+    if isinstance(v, dict):
+        name = next((str(v[k]) for k in ("name", "title", "label") if _scalar(v.get(k))
+                     and v.get(k)), "")
+        num = v.get("number")
+        head = _human(key) if isinstance(key, str) else "Item"
+        if _scalar(num) and num is not None:
+            head = f"{head} {num}" if isinstance(key, str) else f"No. {num}"
+        return f"{head} — {name[:48]}" if name else head
+    if _row(v):
+        bits = [str(x)[:28] for x in v if x not in (None, "")][:2]
+        return f"{_human(key)}. " + " · ".join(bits) if isinstance(key, int) else _human(key)
+    return f"{_human(key)} ({len(v)})"
+
+
+def edit_children(v) -> list:
+    """(key, label) for what a part or group holds that is a node of its own."""
+    out = []
+    for key, x in _edit_items(v):
+        if key in EDIT_HIDDEN:
+            continue
+        if _part(x):
+            out.append((key, edit_label(x, key)))
+        elif isinstance(x, (list, tuple)) and x and not _row(x):
+            out.append((key, edit_label(x, key)))
+        elif not _part(v) and _row(x):               # a row in a group
+            out.append((key, edit_label(x, key)))
+    return out
+
+
+def _holds_parts(hint) -> bool:
+    """Whether a field's type says it holds a part, or parts: an empty one of
+    those is a part missing, not a blank to type into."""
+    hint = _bare(hint)
+    if isinstance(hint, type) and is_dataclass(hint):
+        return True
+    return get_origin(hint) in (list, tuple, dict) and not all(
+        a in (str, int, float, bool, type(None), Ellipsis) for a in get_args(hint))
+
+
+def edit_fields(v, group=None) -> List[EditField]:
+    """The values of a part, or the cells of a row, that the panel edits. For a
+    row, group is the key of the list it is in, which says which cells link."""
+    cls = type(v).__name__
+    hints = _hints(type(v)) if is_dataclass(v) else {}
+    out = []
+    for key, x in _edit_items(v):
+        if key in EDIT_HIDDEN:
+            continue
+        if not (_scalar(x) or (_part(v) and _row(x))):
+            continue
+        if isinstance(key, str) and _holds_parts(hints.get(key)):
+            continue
+        hint = _bare(hints.get(key)) if isinstance(key, str) else None
+        optional = x is None or (key in hints and get_origin(hints[key]) is Union)
+        locked = ((isinstance(key, str) and key in EDIT_LOCKED)
+                  or (cls, key) in EDIT_LOCKED_IN
+                  or (not _part(v) and key in EDIT_LOCKED_CELLS.get(group, ()))
+                  # A dict says nothing of what an empty value would hold: a Floor 4
+                  # ghoul station's "merged" is empty at four stations and a boss
+                  # at the fifth.
+                  or (isinstance(v, dict) and x is None))
+        label = str(key) if isinstance(v, dict) and isinstance(key, int) else _human(key)
+        if isinstance(x, bool) or hint is bool:
+            kind = "bool"
+        elif isinstance(x, int) or hint is int:
+            kind = "int"
+        elif isinstance(x, float) or hint is float:
+            kind = "float"
+        elif isinstance(x, str) or x is None:
+            kind = "long" if x and (len(x) > 70 or "\n" in x) else "text"
+        elif x and all(isinstance(i, str) for i in x):
+            kind = "lines"
+        else:
+            # Numbers ("3, 5"), or an empty list -- adding to it would add a part
+            # of the floor, which is layout, not content.
+            kind, locked = "list", locked or not x
+        out.append(EditField(key, label, kind, x, locked, optional))
+    return out
+
+
+def edit_get(root, path):
+    """What a path leads to from a floor."""
+    v = root
+    for k in path:
+        v = getattr(v, k) if is_dataclass(v) and not isinstance(v, type) else v[k]
+    return v
+
+
+def edit_set(root, path, value) -> None:
+    """Change what a path leads to. A tuple is rebuilt and put back."""
+    *head, last = path
+    parent = edit_get(root, head)
+    if isinstance(parent, tuple):
+        edit_set(root, head, parent[:last] + (value,) + parent[last + 1:])
+    elif is_dataclass(parent) and not isinstance(parent, type):
+        setattr(parent, last, value)
+    else:
+        parent[last] = value
+
+
+def parse_edit(f: EditField, raw):
+    """A value typed into the panel, as the floor holds it. Raises MapgenError,
+    naming the field, for one that can't be."""
+    if f.locked:
+        raise MapgenError(f"{f.label} can't be changed here: it holds the floor together")
+    if f.kind == "bool":
+        return bool(raw)
+    text = str(raw).strip()
+    if f.kind in ("text", "long"):
+        return None if (f.optional and f.value is None and not text) else text
+    if f.kind in ("int", "float"):
+        if not text and f.optional:
+            return None
+        try:
+            return int(text) if f.kind == "int" else float(text)
+        except ValueError:
+            word = "a whole number" if f.kind == "int" else "a number"
+            raise MapgenError(f"{f.label} should be {word}, not {text!r}")
+    if f.kind == "lines":
+        items = [line.strip() for line in str(raw).splitlines() if line.strip()]
+        return tuple(items) if isinstance(f.value, tuple) else items
+    # "list": the same number of values, each the kind it was.
+    parts = [p.strip() for p in text.split(",")] if text else []
+    if len(parts) != len(f.value):
+        raise MapgenError(f"{f.label} needs {len(f.value)} values, separated by commas")
+    values = []
+    for p, old in zip(parts, f.value):
+        try:
+            values.append(type(old)(p) if isinstance(old, (int, float)) and not
+                          isinstance(old, bool) else p)
+        except ValueError:
+            raise MapgenError(f"{f.label}: {p!r} should be a number")
+    if (len(values) == 2 and all(isinstance(x, (int, float)) for x in values)
+            and values[0] > values[1]):
+        raise MapgenError(f"{f.label}: the first value can't be above the second")
+    return tuple(values) if isinstance(f.value, tuple) else values
+
+
+def find_text(root, text: str, skip=None) -> list:
+    """Every place a piece of text is written in a floor, as paths: what
+    renaming something everywhere would change. Dict keys are left alone."""
+    hits = []
+    skip = list(skip) if skip is not None else None
+
+    def walk(v, path):
+        if isinstance(v, str):
+            if text in v and path != skip:
+                hits.append(path)
+        elif _part(v) or isinstance(v, (list, tuple)):
+            for k, x in _edit_items(v):
+                walk(x, path + [k])
+
+    if text:
+        walk(root, [])
+    return hits
+
+
+def replace_text(root, old: str, new: str, paths) -> int:
+    """Write new for old at each of the paths find_text gave."""
+    for p in paths:
+        edit_set(root, p, edit_get(root, p).replace(old, new))
+    return len(paths)
+
+
+def describe_path(root, path) -> str:
+    """Where a path leads, in the panel's own words: "Neighborhood A — The
+    Rusting Undercroft › Boss — Bernadette Peasgood › Name"."""
+    names, v = [], root
+    for k in path:
+        nxt = getattr(v, k) if is_dataclass(v) and not isinstance(v, type) else v[k]
+        names.append(edit_label(nxt, k) if not _scalar(nxt) else _human(k))
+        v = nxt
+    return " › ".join(names)
+
+
+def snapshot_floor(fl) -> dict:
+    """A floor as data, to put back with restore_floor: what undo keeps."""
+    return _to_data(fl)
+
+
+def restore_floor(data: dict):
+    return _from_data(data)
+
+
+def open_floor_file(path: str) -> GenResult:
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+    except OSError as e:
+        raise MapgenError(f"could not read {path}: {e}")
+    except ValueError as e:
+        raise MapgenError(f"{path} is not valid JSON ({e}). A hand edit may have left a "
+                          f"comma or a quote out.")
+    return render_floor_data(data, path)
 
 
 def main(argv=None):
@@ -7804,8 +8308,17 @@ def main(argv=None):
     p.add_argument("--image", type=str, default=None,
                    help="also write a map image to this path (.svg needs nothing; .png needs resvg-py)")
     p.add_argument("--save", nargs="?", const=".", default=None, metavar="DIR",
-                   help="write both floorN_size_seedS.md and .png (falls back to .svg without resvg-py) "
-                        "into DIR (default: current directory)")
+                   help="write floorN_size_seedS.md, its maps as .png (falls back to .svg "
+                        "without resvg-py) and its editable .floor.json into DIR (default: "
+                        "current directory)")
+    p.add_argument("--floor-file", type=str, default=None, metavar="PATH",
+                   help="also write the floor as an editable data file (.floor.json): change "
+                        "names, levels, descriptions and the rest, then draw it again with --from")
+    p.add_argument("--from", dest="from_file", type=str, default=None, metavar="FILE",
+                   help="skip generating and draw a floor file instead -- one written by "
+                        "--save or --floor-file, edited or not. The write-up and maps come "
+                        "out with every change in the file; --out, --image and --save work "
+                        "as usual")
     p.add_argument("--campaign", type=str, default=None, metavar="FILE",
                    help="carry other crawler teams between floors: teams still alive in FILE "
                         "come onto this floor with their name and standing intact and are dealt "
@@ -7905,28 +8418,39 @@ def _run(a) -> None:
     if a.standing and not a.campaign:
         raise MapgenError("--standing needs --campaign: there is nowhere to record a "
                           "standing without a campaign roster")
-    roster = load_roster(a.campaign) if a.campaign else None
-    for change in a.standing or []:
-        name, _, standing = change.partition("=")
-        if not standing:
-            raise MapgenError(f'--standing wants "NAME=STANDING", got {change!r}')
-        print(_set_standing(roster, name.strip(), standing.strip()), file=sys.stderr)
 
-    res = generate(a.floor, a.size, a.seed, scaling=a.scaling, days=a.days,
-                   boss_stairs=not a.no_boss_stairs, stair_chance=a.stair_chance,
-                   borough_boss_rate=a.borough_boss_rate, region=a.region,
-                   warlords=a.warlords, wildcard=a.wildcard, winner=a.winner,
-                   runner_up=a.runner_up, vehicle=a.vehicle, party=a.party,
-                   images=bool(a.image or a.save is not None), roster=roster)
+    if a.from_file:
+        # A floor file is drawn as it stands. A campaign would deal its teams a
+        # fresh fate, which is generating, not drawing.
+        if a.campaign:
+            raise MapgenError("--from draws a floor file as it stands, so it cannot "
+                              "continue a campaign; leave --campaign off")
+        res = open_floor_file(a.from_file)
+        print(f"drew {a.from_file}: floor {res.number}, {res.size}, seed {res.seed}",
+              file=sys.stderr)
+    else:
+        roster = load_roster(a.campaign) if a.campaign else None
+        for change in a.standing or []:
+            name, _, standing = change.partition("=")
+            if not standing:
+                raise MapgenError(f'--standing wants "NAME=STANDING", got {change!r}')
+            print(_set_standing(roster, name.strip(), standing.strip()), file=sys.stderr)
 
-    if a.campaign:
-        save_roster(res.roster, a.campaign)
-        alive = len(res.roster.active())
-        carried = sum(1 for t in res.floor.other_crawlers if t.first_seen != t.floor)
-        print(f"campaign {a.campaign}: {carried} team(s) carried in, "
-              f"{alive} alive of {len(res.roster.teams)} met so far", file=sys.stderr)
+        res = generate(a.floor, a.size, a.seed, scaling=a.scaling, days=a.days,
+                       boss_stairs=not a.no_boss_stairs, stair_chance=a.stair_chance,
+                       borough_boss_rate=a.borough_boss_rate, region=a.region,
+                       warlords=a.warlords, wildcard=a.wildcard, winner=a.winner,
+                       runner_up=a.runner_up, vehicle=a.vehicle, party=a.party,
+                       images=bool(a.image or a.save is not None), roster=roster)
 
-    out, image = a.out, a.image
+        if a.campaign:
+            save_roster(res.roster, a.campaign)
+            alive = len(res.roster.active())
+            carried = sum(1 for t in res.floor.other_crawlers if t.first_seen != t.floor)
+            print(f"campaign {a.campaign}: {carried} team(s) carried in, "
+                  f"{alive} alive of {len(res.roster.teams)} met so far", file=sys.stderr)
+
+    out, image, floor_file = a.out, a.image, a.floor_file
     if a.save is not None:
         os.makedirs(a.save, exist_ok=True)
         base = os.path.join(a.save, res.basename())
@@ -7937,10 +8461,15 @@ def _run(a) -> None:
             ext = ".svg"
         out = out or base + ".md"
         image = image or base + ext
+        floor_file = floor_file or base + FLOOR_FILE_SUFFIX
 
     if image:
         for pth in save_svgs(res.svgs, image):
             print(f"wrote {pth}", file=sys.stderr)
+
+    if floor_file:
+        save_floor_file(res, floor_file)
+        print(f"wrote {floor_file} (edit it, then draw it again with --from)", file=sys.stderr)
 
     if out:
         with open(out, "w", encoding="utf-8") as f:
