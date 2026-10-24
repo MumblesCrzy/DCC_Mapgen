@@ -2673,6 +2673,19 @@ def selftest() -> int:
     items[-1][1]()
     pump(timeout, lambda: view._shown is not None and view._shown[0] == "")
     check(view._suffix() == "", "and it goes back to the main map")
+
+    # A crossing's tag on a room map: double-clicked, it opens the room it comes
+    # out in next door, and that neighborhood's room map.
+    view.goto("_room_B")
+    pump(timeout, lambda: view._shown is not None and view._shown[0] == "_room_B")
+    tag = next(h for h in app._map_parts("_room_B") if h.path[1] != 1)
+    next_door = mg.part_map(app.result.floor, tag.path)
+    x, y = middle(tag)
+    for ev in ("<ButtonPress-1>", "<ButtonRelease-1>", "<ButtonPress-1>", "<ButtonRelease-1>"):
+        canvas.event_generate(ev, x=x, y=y)
+    pump(timeout, lambda: view._shown is not None and view._shown[0] == next_door)
+    check(view._suffix() == next_door and ed.path == tag.path,
+          f"a crossing's tag goes next door: {mg.map_title(next_door)}, {ed.path}")
     app.toggle_editor()
     check(not canvas.find_withtag("lit"), "closing the panel puts the light out")
 

@@ -6,7 +6,7 @@ A procedural floor/map generator in the style of the *Dungeon Crawler Carl* book
 
 ## Features
 
-- **Floors 1 & 2** — neighborhood/borough/city grid, from small up through large (1 City). Beyond that, huge/giant/massive/continent tile multiple Cities together — County (4 Cities), State (9), Country (16), Continent (25) — each City keeping its own City Boss, with one top-tier boss (County/State/Country/Continent) overseeing all of them. Bosses (with a word-bank uniqueness guard so names/forms don't collide), loot boxes, achievements, an Elite, other crawler teams, the tutorial guild, and a full connected **room graph** per neighborhood (safe rooms, hidden passages, guild hall, filler rooms, corridor encounters). `--stair-chance` and `--borough-boss-rate` tune how often neighborhood stairwells and borough bosses show up.
+- **Floors 1 & 2** — neighborhood/borough/city grid, from small up through large (1 City). Beyond that, huge/giant/massive/continent tile multiple Cities together — County (4 Cities), State (9), Country (16), Continent (25) — each City keeping its own City Boss, with one top-tier boss (County/State/Country/Continent) overseeing all of them. Bosses (with a word-bank uniqueness guard so names/forms don't collide), loot boxes, achievements, an Elite, other crawler teams, the tutorial guild, and a full connected **room graph** per neighborhood (safe rooms, hidden passages, guild hall, filler rooms, corridor encounters). Each neighborhood **crosses into the ones beside it** at a room on each side of their shared edge: its Entrance is the way in from the neighbor nearer the floor's entry, and the write-up and both room maps say where each crossing comes out. `--stair-chance` and `--borough-boss-rate` tune how often neighborhood stairwells and borough bosses show up.
 - **Floor 3** (The Over City) — settlements on a wilderness grid, roaming bosses, locked stairwells, a quest board per town, one Elite.
 - **Floor 4** (The Iron Tangle) — schematic rail/transit map, laid out the way the books lay it out, with its content from this project's own word banks rather than the books' plot:
   - **Stations:** every line has stairwells at 12, 24, 36, 48 and 72. A transfer has a safe room only if its number is prime, a Desperado Club if it ends in 1, and a Club Vanquisher if it ends in 9.
@@ -396,7 +396,9 @@ A panel opens to the right of the map:
   can pick:
   - **Floors 1 and 2:** a neighborhood, its boss or its mob, or a borough, city or
     top-tier boss, by its marker or its line in the key; on a room map, a room (by its
-    marker, its label or its line in the list) or a corridor encounter.
+    marker, its label or its line in the list) or a corridor encounter, and the tag of a
+    crossing into the neighborhood next door, which opens the room it comes out in
+    (double-click it to go to that neighborhood's room map).
   - **Floors 3 and 6:** a settlement or region, a region's mob, boss and stairwell, a
     settlement's quests, the Elite, each line of the stairwell list, and on Floor 6 a
     hunter party by its camp.
@@ -1104,8 +1106,9 @@ it lights up, that pointing names it, that a drag picks nothing, that a boss cli
 on the overview opens, that a room picked in the panel lights its neighborhood on the
 overview, that pointing at a neighborhood says a double-click goes to its rooms, that
 right-clicking it offers to edit it or open its room map, that a double-click does go
-there, that a room map's right-click menu goes back to the main map, and that closing
-the panel puts the light out. On Floor 5 it clicks a quadrant's slice and checks that
+there, that a room map's right-click menu goes back to the main map, that a crossing's
+tag, double-clicked, goes to the room it comes out in next door, and that closing the
+panel puts the light out. On Floor 5 it clicks a quadrant's slice and checks that
 it opens and its slice lights up.
 
 What's switched on and shops have their own groups, with the books' facts written into the tests rather than read back from the banks:
@@ -1140,6 +1143,21 @@ nothing on the page as it starts, with a map on show, the write-up and the loot 
 in both themes; the map says where it is told in words, and **Read this map as text**
 lands on that heading with focus; a section picked from the jump list gets focus; the
 tabs answer the arrow keys, Home and End; and picking a box moves focus to **Open**.
+
+Floors 1 and 2's crossings have their own group:
+- every edge two neighborhoods share has one crossing each way, the same two rooms from
+  either side, and none goes where it shouldn't: a safe room, the guild hall, a hidden
+  passage or the boss chamber;
+- a neighborhood's Entrance is its crossing from a neighbor nearer the floor's entry,
+  except in the entry neighborhood, and its other crossings are different rooms while
+  there are enough;
+- crossings are drawn from a stream of their own: take them away and the floor is the
+  one generated before they were kept;
+- the write-up says, in each room's line, which way it crosses and where it comes out;
+- each room map draws a tag for every crossing on its own side of the map, a click on
+  it picks the room it comes out in and a double-click goes to that room's map, and no
+  crossing's dashed way runs through any room but its own;
+- a floor file saved before crossings were kept still opens, and draws without them.
 
 If you add a floor, the suite fails until `tests/corpus.py` covers it.
 

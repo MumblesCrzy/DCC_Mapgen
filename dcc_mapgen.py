@@ -690,6 +690,25 @@ class Neighborhood:
     loot_tier: str = ""
     rooms: List[Room] = field(default_factory=list)
     corridor_encounters: List[Tuple[str, str, str]] = field(default_factory=list)
+    # Where it crosses into the neighborhoods beside it: (a room here, the room
+    # it comes out in next door), one for each neighbor.
+    crossings: List[Tuple[str, str]] = field(default_factory=list)
+
+# Rooms a crossing can't be in: somewhere to rest, the guild, the stairwell's
+# secret way, and the boss's lair, which sits deepest in on purpose.
+NO_CROSSING = {"Safe Room", "Guild Hall", "Hidden Passage", "Boss Chamber"}
+# Which way a neighbor lies, by (row, col) step.
+COMPASS4 = {(-1, 0): "north", (1, 0): "south", (0, -1): "west", (0, 1): "east"}
+
+
+def crossing_side(fl, here, there) -> Optional[str]:
+    """Which way a crossing from one room leads, by the neighborhoods the two
+    rooms are in: "north", "south", "east" or "west"."""
+    owner = {r.id: nb for nb in fl.neighborhoods for r in nb.rooms}
+    a, b = owner.get(here), owner.get(there)
+    if a is None or b is None:
+        return None
+    return COMPASS4.get((b.row - a.row, b.col - a.col))
 
 @dataclass
 class Floor:
@@ -881,6 +900,49 @@ class Generator:
 
         return rooms, corridor_encounters
 
+    def make_crossings(self, nbhds: List["Neighborhood"]) -> None:
+        """Where each neighborhood crosses into the ones beside it: a room on each
+        side of every edge two of them share. A neighborhood's Entrance is its
+        crossing from the neighbor nearer the floor's entry, the way crawlers
+        come in; the rest are its ordinary rooms, a different one for each
+        neighbor while there are enough.
+
+        Drawn from a stream of their own, so that a floor generated before
+        crossings were kept comes out the same, with its crossings added."""
+        rng = random.Random(f"floor{self.floor}|{self.seed}|crossings")
+        by_pos = {(nb.row, nb.col): nb for nb in nbhds}
+
+        def beside(nb):
+            return [by_pos[(nb.row + dr, nb.col + dc)] for dr, dc in COMPASS4
+                    if (nb.row + dr, nb.col + dc) in by_pos]
+
+        # The way in: the first neighbor, north, south, west, east, a step nearer
+        # the entry. The entry neighborhood's own Entrance is where the floor starts.
+        way_in = {nb.label: next((o.label for o in beside(nb) if o.distance < nb.distance), None)
+                  for nb in nbhds}
+        used = {nb.label: set() for nb in nbhds}
+
+        def door(nb, other):
+            if way_in[nb.label] == other.label:
+                return nb.rooms[0].id
+            plain = [r.id for r in nb.rooms if r.kind not in NO_CROSSING and r.kind != "Entrance"]
+            fresh = [rid for rid in plain if rid not in used[nb.label]]
+            rid = rng.choice(fresh or plain) if plain else nb.rooms[0].id
+            used[nb.label].add(rid)
+            return rid
+
+        for nb in nbhds:
+            for other in beside(nb):
+                if (other.row, other.col) > (nb.row, nb.col):     # each shared edge once
+                    here, there = door(nb, other), door(other, nb)
+                    nb.crossings.append((here, there))
+                    other.crossings.append((there, here))
+        for nb in nbhds:
+            # North, south, west, east, the order the write-up and the map give them.
+            order = {other.label: k for k, other in enumerate(beside(nb))}
+            owner = {r.id: o.label for o in beside(nb) for r in o.rooms}
+            nb.crossings.sort(key=lambda c: order[owner[c[1]]])
+
     # -- assembly ------------------------------------------------------------
 
     def build(self) -> Floor:
@@ -958,6 +1020,7 @@ class Generator:
 
         for nb in nbhds:
             nb.rooms, nb.corridor_encounters = self.make_rooms(nb, guildmaster_form)
+        self.make_crossings(nbhds)
 
         days = self.days_override or self.rng.randint(*self.cfg["days"])
         title = {"small": "Neighborhood", "medium": "Borough", "large": "City"}.get(
@@ -2470,6 +2533,7 @@ def render(fl: Floor) -> str:
 
     o.append("## Neighborhoods")
     o.append("")
+    owner = {r.id: n for n in fl.neighborhoods for r in n.rooms}
     for nb in fl.neighborhoods:
         pos = compass(nb.row, nb.col, fl.grid)
         adj = []
@@ -2497,7 +2561,12 @@ def render(fl: Floor) -> str:
         o.append(f"- **Rooms:** ({len(nb.rooms)})")
         for r in nb.rooms:
             conn = ", ".join(r.connects_to) if r.connects_to else "none"
-            o.append(f"  - **{r.id} {r.kind}:** {r.description} → connects to {conn}")
+            line = f"  - **{r.id} {r.kind}:** {r.description} → connects to {conn}"
+            # Where this room crosses into a neighborhood next door, and which way.
+            out = [f"{COMPASS4.get((owner[t].row - nb.row, owner[t].col - nb.col), 'over')} into "
+                   f"{t} ({owner[t].label}. {owner[t].name})"
+                   for h, t in nb.crossings if h == r.id and t in owner]
+            o.append(line + ("; crossing " + ", ".join(out) if out else ""))
         if nb.corridor_encounters:
             o.append("- **Corridor encounters:**")
             for a_id, b_id, text in nb.corridor_encounters:
@@ -2885,17 +2954,80 @@ def render_room_svg(nb: Neighborhood, fl: Floor) -> str:
         cols.setdefault(d, []).append(rid)
     max_depth = max(depth.values())
 
-    graph_top, graph_bottom = 130, 340
-    col_w = (W - 160) / max_depth
+    # Crossings into the neighborhoods beside this one, by the side each is on.
+    # Each gets a tag on that edge of the map, which makes room for it there.
+    owner = {r.id: n for n in getattr(fl, "neighborhoods", ()) for r in n.rooms}
+    sides = {}
+    for here, there in nb.crossings:
+        nxt = owner.get(there)
+        side = nxt and COMPASS4.get((nxt.row - nb.row, nxt.col - nb.col))
+        if side and here in graph:
+            sides[side] = (here, there, nxt)
+    TAG_W, TAG_H = 190, 22
+    x0 = 12 + TAG_W + 24 if "west" in sides else 80
+    x1 = W - 12 - TAG_W - 24 if "east" in sides else W - 80
+    graph_top = 130 + (40 if "north" in sides else 0)
+    graph_bottom = graph_top + 210
+    col_w = (x1 - x0) / max_depth
     pos = {}
     for d in sorted(cols):
         ids = cols[d]
-        x = 80 + d * col_w
+        x = x0 + d * col_w
         for i, rid in enumerate(ids):
             y = graph_top + (i + 1) * (graph_bottom - graph_top) / (len(ids) + 1)
             pos[rid] = (x, y)
 
-    list_top = 360
+    # How each crossing's way runs: out of its room into the gap beside the
+    # room's column, then up or down, to a tag above or below the rooms, or to a
+    # lane just over or under them that runs to a tag at the east or west edge.
+    # It never passes through another room, so it can't be taken for a corridor.
+    hop = min(col_w / 2, 36)
+    lanes = {"top": graph_top - 14, "bottom": graph_bottom + 14}
+    lane_use = {}                       # lane -> the stretch of it a way runs along
+    gaps = []                           # where ways already run up or down
+
+    def gap(x, step):
+        """A place in the gap beside a column for a way to run up or down,
+        clear of any other way there."""
+        gx = x + step
+        while any(abs(gx - g) < 6 for g in gaps):
+            gx += 10 if step > 0 else -10
+        gaps.append(gx)
+        return gx
+
+    routes = []
+    # East and west first: they take the lanes, and a south tag goes under a lane in use.
+    for side in ("west", "east", "north", "south"):
+        if side not in sides:
+            continue
+        here, there, nxt = sides[side]
+        x, y = pos[here]
+        if side in ("north", "south"):
+            gx = gap(x, hop if x + hop <= x1 else -hop)
+            tx = min(max(gx, 12 + TAG_W / 2), W - 12 - TAG_W / 2)
+            ty = 109 if side == "north" else graph_bottom + 36 + (26 if "bottom" in lane_use else 0)
+            up = -1 if side == "north" else 1
+            edge = ty - up * TAG_H / 2                  # the tag's side facing the rooms
+            way = [(x, y), (gx, y), (gx, edge)]
+            tip = [(tx, edge + up * (TAG_H + 9)), (tx - 6, edge + up * TAG_H), (tx + 6, edge + up * TAG_H)]
+        else:
+            gx = gap(x, -hop if side == "west" else hop)
+            tx = 12 + TAG_W / 2 if side == "west" else W - 12 - TAG_W / 2
+            out = -1 if side == "west" else 1
+            edge = tx - out * TAG_W / 2
+            stretch = (min(gx, edge), max(gx, edge))
+            lane = "top" if y - graph_top <= graph_bottom - y else "bottom"
+            busy = lane_use.get(lane)
+            if busy and busy[0] < stretch[1] and stretch[0] < busy[1]:
+                lane = "bottom" if lane == "top" else "top"
+            lane_use[lane] = stretch
+            ty = lanes[lane]
+            way = [(x, y), (gx, y), (gx, ty), (edge, ty)]
+            tip = [(tx + out * (TAG_W / 2 + 9), ty), (tx + out * TAG_W / 2, ty - 6), (tx + out * TAG_W / 2, ty + 6)]
+        routes.append((here, there, nxt, way, tx, ty, tip))
+
+    list_top = (graph_bottom + 20 + (46 if "south" in sides or "bottom" in lane_use else 0)
+                + (26 if "south" in sides and "bottom" in lane_use else 0))
     H = list_top + 80 + 18 * (len(nb.rooms) + len(nb.corridor_encounters) + 3)
 
     # Where this neighborhood is in its floor, for noting what is drawn where: a
@@ -2956,6 +3088,22 @@ def render_room_svg(nb: Neighborhood, fl: Floor) -> str:
                 o.append(_text(mx, my + 4, "!", size=12, weight="bold", anchor="middle", fill="#b8860b"))
                 hit(("corridor_encounters", encounter_at[key]), "circle", mx, my, 11)
 
+    # Crossings, along the ways worked out above: each a tag naming the
+    # neighborhood next door and the room it comes out in.
+    for here, there, nxt, way, tx, ty, tip in routes:
+        o.append('<polyline points="' + " ".join(f"{px},{py}" for px, py in way) + '" fill="none" '
+                 'stroke="#2e86c1" stroke-width="1.8" stroke-dasharray="5,4"/>')
+        o.append(f'<rect x="{tx - TAG_W / 2}" y="{ty - TAG_H / 2}" width="{TAG_W}" height="{TAG_H}" rx="4" '
+                 f'fill="#eaf2f8" stroke="#2e86c1" stroke-width="1.5"/>')
+        o.append('<polygon points="' + " ".join(f"{px},{py}" for px, py in tip) + '" fill="#2e86c1"/>')
+        o.append(_text(tx, ty + 4, f"To {nxt.label}. {_fit(nxt.name, 19)} ({there})", size=10,
+                       weight="bold", anchor="middle", fill="#1b4f72"))
+        if at is not None:
+            # A click opens the room it comes out in; a double-click, that room's map.
+            k = next(k for k, r in enumerate(nxt.rooms) if r.id == there)
+            j = next(j for j, n in enumerate(fl.neighborhoods) if n is nxt)
+            _hit(("neighborhoods", j, "rooms", k), "rect", tx - TAG_W / 2, ty - TAG_H / 2, TAG_W, TAG_H)
+
     for j, r in enumerate(nb.rooms):
         x, y = pos[r.id]
         hit(("rooms", j), "circle", x, y, 14)
@@ -2978,8 +3126,12 @@ def render_room_svg(nb: Neighborhood, fl: Floor) -> str:
     ly = list_top
     o.append(_text(30, ly, "Rooms:", size=13, weight="bold"))
     ly += 20
+    leads = {}
+    for side, (here, there, _) in sides.items():
+        leads.setdefault(here, []).append(f"{side} to {there}")
     for j, r in enumerate(nb.rooms):
         conn = ", ".join(r.connects_to) if r.connects_to else "none"
+        conn += "".join(f"; {w}" for w in leads.get(r.id, []))
         o.append(_text(30, ly, f"{r.id} {r.kind}: {_fit(r.description, 90)} (\u2192 {conn})", size=11))
         hit(("rooms", j), "rect", 30, ly - 12, W - 60, 16)
         ly += 18
@@ -8230,8 +8382,9 @@ EDIT_LOCKED_IN = {("Quadrant", "name"),
                   ("Team", "is_party_team"), ("Team", "kings_point")}
 # Rows whose leading cells are links, by the group they are in: a corridor runs
 # between two rooms, a named train stops at a line and a station, a Floor 9
-# stairwell sits in a team's slot.
-EDIT_LOCKED_CELLS = {"corridor_encounters": {0, 1}, "stops": {0, 1}, "stairs": {0}}
+# stairwell sits in a team's slot, a crossing joins a room to one next door.
+EDIT_LOCKED_CELLS = {"corridor_encounters": {0, 1}, "stops": {0, 1}, "stairs": {0},
+                     "crossings": {0, 1}}
 
 
 @dataclass
