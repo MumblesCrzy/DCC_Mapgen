@@ -1514,13 +1514,7 @@ class EditPanel(ttk.Frame):
         snapshot = mg.snapshot_floor(fl)
         # Renaming: is the old name written anywhere else on the floor? Asked
         # before anything changes, so Cancel leaves the floor as it was.
-        also = []
-        typed = [list(self.path) + [f.key] for f, _ in changes]   # left as typed
-        for f, new in changes:
-            if f.kind in ("text", "long") and isinstance(f.value, str) and len(f.value) >= 3:
-                where = [w for w in mg.find_text(fl, f.value) if w not in typed]
-                if where and isinstance(new, str):
-                    also.append((f.value, new, where))
+        also = mg.edit_mentions(fl, self.path, changes)
         renames = []
         for old, new, where in also:
             listed = "\n".join("•  " + mg.describe_path(fl, w)[-110:] for w in where[:6])

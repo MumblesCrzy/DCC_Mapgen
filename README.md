@@ -443,6 +443,9 @@ The campaign's record (other crawlers, the leaderboard, the board's news) isn't 
 panel: edit it in the **Campaign** and **Leaderboard** tabs, where a change carries to
 the next floor.
 
+The [web page](#web-page-phones) has the same editor in its **Edit** tab, and it works
+with a screen reader, which the desktop app doesn't.
+
 ### Floor files by hand
 
 - **Saving:** the desktop app's **Save output...** and the command line's `--save`
@@ -511,17 +514,25 @@ shows a screen reader nothing but the window's title.
   `.md` file and a letter. The new rooms keep the neighborhood's crossings and its ways
   into boss chambers, as the desktop app's re-roll does, and any that had to move are
   listed.
-- **A reload brings back what was on show**, a floor or re-rolled rooms, kept in that
-  browser on that device. A floor too big to keep there says so; Save floor file keeps
+- **Edit** (the fourth tab) is the desktop app's edit panel for a phone: a trail back to
+  the floor, the parts of the part you're on as buttons to step into, and its values as
+  a form. **Apply** (or Enter) draws the write-up and every map again with the change;
+  renaming something written elsewhere on the floor asks whether to change it there too;
+  **Undo** steps back through every change. Locked values, the ones the map is laid out
+  by, are shown but can't be changed. Save floor file keeps the edits, and so does a
+  reload. It works with a screen reader: stepping into a part moves to its name, and
+  what each change did is read out under the form.
+- **A reload brings back what was on show**, a floor (edits and all) or re-rolled rooms,
+  kept in that browser on that device. A floor too big to keep there says so; Save floor file keeps
   it anywhere.
 - **Same seed, same floor.** The page runs this repo's `dcc_mapgen.py` itself, in the
   browser, through [Pyodide](https://pyodide.org) (Python compiled to WebAssembly).
   There is no server, and nothing is sent anywhere.
 - The first visit downloads Python, a few megabytes, and takes a few seconds to start
   on a phone. After that it is cached.
-- It is the smaller version of the app. It has no campaigns or leaderboard, no edit
-  panel, no PNG export (the browser draws the SVG itself), and leaves the stairwell and
-  boss sliders and the Floor 9 and 10 options at their defaults. The Massive and Continent sizes
+- It is the smaller version of the app. It has no campaigns or leaderboard, no clicking
+  the map to edit, no PNG export (the browser draws the SVG itself), and leaves the
+  stairwell and boss sliders and the Floor 9 and 10 options at their defaults. The Massive and Continent sizes
   work, but make 257–401 maps, so they are slow on a phone.
 
 How it is built and checked:
@@ -1159,14 +1170,21 @@ lands on that heading with focus; a section picked from the jump list gets focus
 tabs answer the arrow keys, Home and End; and picking a box moves focus to **Open**. It
 also saves a floor file and opens it again to the same write-up, re-rolls a
 neighborhood's rooms from a write-up the page saved (crossings kept), and reloads to
-find the re-rolled rooms, then a floor, back where they were.
+find the re-rolled rooms, then a floor, back where they were. In the Edit tab it steps
+down to a castle (focus following), renames it with Enter and accepts changing the name
+everywhere, has a level of the wrong kind refused, finds nothing axe-core flags, undoes
+the rename, and reloads to find an edit kept.
 
 The page's Python side has its own tests in the main suite: a floor file saved on the
 page is the file the desktop app saves and opens to the same floor; a bad one (broken
 JSON, not a floor file, a newer version) says what is wrong; rooms re-roll exactly as
 `--rooms-for` does, taking the floor and its size from the write-up's title; and a
 write-up that can't be re-rolled (another floor, no such letter, not a write-up, a bad
-seed) says why.
+seed) says why. The Edit tab's side walks every part as the desktop panel lists it, and
+its values with the same kinds and locks; a rename asks first and changes nothing until
+answered, then reaches the write-up and the map (or, answered no, only the one place);
+an edit is kept in the floor file, and Undo steps back to the floor exactly as it was;
+and a value of the wrong kind, a locked value or a part that's gone changes nothing.
 
 Floors 1 and 2's crossings have their own group:
 - every edge two neighborhoods share has one crossing each way, the same two rooms from

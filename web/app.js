@@ -17,8 +17,9 @@ let panzoom = null;
 
 // -- small helpers ------------------------------------------------------------
 
-function setStatus(text, error = false) {
-  const s = $("status");
+// The page's status line, or the editor's own, beside what it is about.
+function setStatus(text, error = false, where = "status") {
+  const s = $(where);
   s.textContent = text;
   s.classList.toggle("error", error);
 }
@@ -198,7 +199,10 @@ async function generate() {
 
 // A floor (generated, or opened from a floor file) or a neighborhood's
 // re-rolled rooms: shown, and kept on this device so a reload brings it back.
-function show(res, words, { scroll = true, keep = true } = {}) {
+// An edit (editAt, the part being edited) redraws the same floor: the map on
+// show stays on show, and the editor stays where it was.
+function show(res, words, { scroll = true, keep = true, where = "status", editAt = null } = {}) {
+  const mapAt = +$("map-pick").value || 0;
   result = res;
   if (res.kind === "floor") {
     $("floor").value = String(res.floor);
@@ -208,9 +212,15 @@ function show(res, words, { scroll = true, keep = true } = {}) {
   }
   $("save-floor").disabled = res.kind !== "floor";
   showMaps();
+  if (editAt && mapAt > 0 && mapAt < res.maps.length) {
+    $("map-pick").value = String(mapAt);
+    showMap(mapAt);
+  }
   showWriteup();
   showSuggestions();
-  setStatus(words + (keep ? keepForReload(res) : ""));
+  setStatus(words + (keep ? keepForReload(res) : ""), false, where);
+  editing = editAt || [];
+  if (!$("panel-edit").hidden) editPart(editing, false);
   // On a phone the controls fill the first screen; bring the result up.
   if (scroll) document.querySelector(".tabs").scrollIntoView({ behavior: "smooth", block: "start" });
 }
@@ -470,6 +480,157 @@ function openBoxes() {
   setStatus(`Opened ${res.count} × ${res.label} for Floor ${res.floor}.`);
 }
 
+// -- the editor ---------------------------------------------------------------------
+// The desktop app's edit panel, for a phone and a screen reader alike: a trail
+// back to the floor, the parts of the part on show as buttons to step into,
+// and its values as a form. Apply draws the floor again with the change.
+
+let editing = [];          // the part on show in the editor, as a path from the floor
+let editFields = [];       // its values, as edit_part gave them
+
+function el(tag, props = {}, ...kids) {
+  const node = Object.assign(document.createElement(tag), props);
+  node.append(...kids);
+  return node;
+}
+
+function editPart(path, focus = true) {
+  const floor = result && result.kind === "floor";
+  $("edit-empty").hidden = floor;
+  $("edit-empty").textContent = !result ? "Generate or open a floor to edit it."
+    : "Re-rolled rooms aren't a whole floor. Generate or open a floor to edit it.";
+  for (const id of ["edit-trail", "edit-parts"]) $(id).replaceChildren();
+  $("edit-parts-head").hidden = true;
+  $("edit-form").hidden = true;
+  $("edit-undo").disabled = true;
+  if (!floor) {
+    $("edit-title").textContent = "Edit this floor";
+    return;
+  }
+  const part = call("edit_part", path);
+  if (part.error) {
+    setStatus(part.error, true, "edit-status");
+    return;
+  }
+  editing = part.path;
+  const last = part.trail.length - 1;
+  $("edit-trail").replaceChildren(...part.trail.map((t, i) => {
+    if (i !== last) {
+      return el("li", {}, el("button", { type: "button", textContent: t.label, onclick: () => editPart(t.path) }));
+    }
+    const here = el("li", { textContent: t.label });
+    here.setAttribute("aria-current", "location");
+    return here;
+  }));
+  $("edit-title").textContent = part.trail[last].label;
+  $("edit-parts").replaceChildren(...part.children.map((c) =>
+    el("li", {}, el("button", { type: "button", textContent: c.label, onclick: () => editPart(c.path) }))));
+  $("edit-parts-head").hidden = !part.children.length;
+  editFields = part.fields;
+  $("edit-fields").replaceChildren(...part.fields.map(fieldRow));
+  $("edit-form").hidden = !part.fields.length;
+  const open = part.fields.some((f) => !f.locked);
+  $("edit-apply").disabled = !open;
+  $("edit-revert").disabled = !open;
+  $("edit-undo").disabled = !part.undo;
+  // A screen reader hears where it has stepped to.
+  if (focus) $("edit-title").focus();
+}
+
+// One value: a box to type in, a tick box, or, locked, just the value.
+function fieldRow(f, i) {
+  const id = `ef${i}`;
+  const shown = f.value === null ? ""
+    : Array.isArray(f.value) ? f.value.join(f.kind === "lines" ? "\n" : ", ") : String(f.value);
+  if (f.locked) {
+    return el("div", { className: "field" },
+      el("span", { className: "label", textContent: `${f.label} (locked)` }),
+      el("p", { className: "locked", textContent: shown || "(none)" }));
+  }
+  if (f.kind === "bool") {
+    return el("div", { className: "field" },
+      el("label", { className: "check" }, el("input", { type: "checkbox", id, checked: Boolean(f.value) }),
+        ` ${f.label}`));
+  }
+  const multi = f.kind === "long" || f.kind === "lines";
+  // A line of text too long for a phone's width wraps in a box of two lines,
+  // where Enter still applies rather than starting a new line.
+  const wide = f.kind === "text" && shown.length > 28;
+  const input = multi
+    ? el("textarea", { id, rows: Math.min(8, Math.max(3, shown.split("\n").length + (f.kind === "lines" ? 1 : 0))) })
+    : wide ? el("textarea", { id, rows: 2, className: "one-line" })
+      : el("input", { id, autocomplete: "off" });
+  if (wide) {
+    input.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") {
+        ev.preventDefault();
+        $("edit-form").requestSubmit();
+      }
+    });
+  }
+  input.value = shown;
+  if (f.kind === "int") input.inputMode = "numeric";
+  if (f.kind === "float") input.inputMode = "decimal";
+  if (f.optional) input.placeholder = "none";
+  const box = el("div", { className: "field" }, el("label", { htmlFor: id, className: "label", textContent: f.label }), input);
+  const how = { lines: "One to a line.", list: "Separated by commas." }[f.kind];
+  if (how) {
+    box.append(el("small", { className: "hint", id: `${id}-how`, textContent: how }));
+    input.setAttribute("aria-describedby", `${id}-how`);
+  }
+  return box;
+}
+
+function editValues() {
+  return editFields.map((f, i) => [f, $(`ef${i}`)]).filter(([f, box]) => !f.locked && box)
+    .map(([f, box]) => [f.key, f.kind === "bool" ? box.checked : box.value]);
+}
+
+function renameQuestion(a) {
+  const more = a.count > a.where.length ? `\n…and ${a.count - a.where.length} more` : "";
+  return `"${a.old}" is also written in ${a.count} other place${a.count === 1 ? "" : "s"} on this floor:\n\n`
+    + a.where.map((w) => `• ${w}`).join("\n") + more
+    + `\n\nChange it to "${a.new}" there too? (OK: everywhere. Cancel: just here.)`;
+}
+
+async function applyEdit(e) {
+  if (e) e.preventDefault();
+  const values = editValues();
+  setStatus("Applying…", false, "edit-status");
+  await new Promise((r) => setTimeout(r, 30));
+  try {
+    let res = call("edit_apply", { path: editing, values, rename: null });
+    if (res.ask) {
+      // The old name is written elsewhere: ask, for each, whether to change it there too.
+      const rename = res.ask.map((a) => window.confirm(renameQuestion(a)));
+      res = call("edit_apply", { path: editing, values, rename });
+    }
+    if (res.error) {
+      setStatus(res.error, true, "edit-status");
+      return;
+    }
+    if (res.nothing) {
+      setStatus("Nothing changed.", false, "edit-status");
+      return;
+    }
+    show(res, `${res.status} Save floor file keeps it, and this browser keeps it for a reload.`,
+         { scroll: false, where: "edit-status", editAt: editing });
+  } catch (err) {
+    setStatus(`Something went wrong: ${err.message}`, true, "edit-status");
+    console.error(err);
+  }
+}
+
+function undoEdit() {
+  const res = call("edit_undo", "");
+  if (res.error) {
+    setStatus(res.error, true, "edit-status");
+    return;
+  }
+  show(res, res.undo ? `Undone. ${res.undo} more to undo.` : "Undone.",
+       { scroll: false, where: "edit-status", editAt: editing });
+}
+
 // -- tabs and wiring ----------------------------------------------------------------
 
 function selectTab(tab) {
@@ -480,6 +641,7 @@ function selectTab(tab) {
     $(t.getAttribute("aria-controls")).hidden = !on;
   }
   if (tab.id === "tab-map") fit();
+  if (tab.id === "tab-edit") editPart(editing, false);
   markScrollers();
 }
 
@@ -525,6 +687,12 @@ function wire() {
     $("reroll-go").disabled = !api || !$("reroll-file").files.length;
   });
   $("reroll-go").addEventListener("click", rerollRooms);
+  $("edit-form").addEventListener("submit", applyEdit);
+  $("edit-undo").addEventListener("click", undoEdit);
+  $("edit-revert").addEventListener("click", () => {
+    editPart(editing, false);
+    setStatus("Back to the values it has.", false, "edit-status");
+  });
   $("jump").addEventListener("keydown", (e) => {
     if (e.key !== "Escape" || !$("jump").open) return;
     $("jump").open = false;

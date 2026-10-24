@@ -8851,6 +8851,22 @@ def describe_path(root, path) -> str:
     return " › ".join(names)
 
 
+def edit_mentions(fl, path, changes) -> list:
+    """For a part's changed values, (field, new value) pairs: where else on the
+    floor each old text is written, as (old, new, paths) -- what renaming it
+    everywhere would change. Only texts long enough to look for (three letters
+    or more), and never the values being changed, which stay as typed."""
+    typed = [list(path) + [f.key] for f, _ in changes]
+    out = []
+    for f, new in changes:
+        if (f.kind in ("text", "long") and isinstance(f.value, str) and len(f.value) >= 3
+                and isinstance(new, str)):
+            where = [w for w in find_text(fl, f.value) if w not in typed]
+            if where:
+                out.append((f.value, new, where))
+    return out
+
+
 def snapshot_floor(fl) -> dict:
     """A floor as data, to put back with restore_floor: what undo keeps."""
     return _to_data(fl)

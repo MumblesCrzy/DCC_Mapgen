@@ -84,6 +84,8 @@ async function axeCheck(what) {
 const said = () => page.$eval("#status", (s) => s.textContent);
 const saying = (start) => page.waitForFunction(
   (w) => document.getElementById("status").textContent.startsWith(w), start, { timeout: 60_000 });
+const saying2 = (id, start) => page.waitForFunction(
+  ([i, w]) => document.getElementById(i).textContent.startsWith(w), [id, start], { timeout: 60_000 });
 const focused = () => page.evaluate(() => {
   const el = document.activeElement;
   return { id: el.id, tag: el.tagName, text: el.textContent.trim() };
@@ -147,7 +149,7 @@ try {
     await page.keyboard.press(key);
     keyed.push((await focused()).id);
   }
-  check(keyed.join() === "tab-loot,tab-map,tab-map,tab-loot,tab-text",
+  check(keyed.join() === "tab-loot,tab-edit,tab-map,tab-edit,tab-loot",
         `arrow keys, Home and End move along the tabs (${keyed.join(", ")})`);
 
   await page.selectOption("#floor", "4");
@@ -244,6 +246,55 @@ try {
   await saying("Back where you left off: Floor 1, medium, seed 4242.");
   check(await page.$eval("#writeup", (w) => w.textContent) === wrote
         && !(await page.$eval("#save-floor", (b) => b.disabled)), "a reload brings back a floor");
+
+  // The Edit tab: step down to a part, change it, rename it everywhere, undo.
+  await page.selectOption("#floor", "5");
+  await page.selectOption("#size", "medium");
+  await page.fill("#seed", "4242");
+  await page.click("#generate");
+  await generated("Floor 5, medium, seed 4242:");
+  await page.click("#tab-edit");
+  const top = await page.$eval("#edit-title", (h) => h.textContent);
+  check(top.startsWith("Floor 5 — Bubble") && await page.$eval("#edit-empty", (p) => p.hidden),
+        `the Edit tab opens on the floor ("${top}")`);
+  await page.click("#edit-parts button >> text=/^Quadrants/");
+  await page.click("#edit-parts button >> text=/^Quadrant — Air/");
+  await page.click("#edit-parts button >> text=/^Castle —/");
+  const trail = await page.$$eval("#edit-trail li", (l) => l.map((x) => x.textContent));
+  at = await focused();
+  check(trail.length === 4 && at.id === "edit-title" && at.text.startsWith("Castle —"),
+        `stepping into a part moves focus to its name (${trail.join(" › ")})`);
+  const castleName = at.text.replace("Castle — ", "");
+  const asked = [];
+  page.once("dialog", (d) => { asked.push(d.message()); d.accept(); });
+  await page.fill("#ef0", "Castle Mumbles");
+  await page.press("#ef0", "Enter");              // Enter applies, as Apply does
+  await saying2("edit-status", "Changed Name, and 1 other mention.");
+  const edited = await page.$eval("#writeup", (w) => w.textContent);
+  check(asked.length === 1 && asked[0].includes("Change it to \"Castle Mumbles\" there too?")
+        && edited.includes("Castle Mumbles") && !edited.includes(castleName)
+        && (await page.$eval("#edit-title", (h) => h.textContent)) === "Castle — Castle Mumbles",
+        "a rename asks to change the name everywhere, and the write-up and the editor show it");
+  await page.click("#edit-parts button >> text=/^Boss —/");
+  await page.fill("#ef2", "lots");
+  await page.click("#edit-apply");
+  await saying2("edit-status", "Level should be a whole number");
+  check(await page.$eval("#edit-status", (s) => s.classList.contains("error")), "a value of the wrong kind is refused");
+  await axeCheck("the Edit tab, a boss's values on show");
+  await page.click("#edit-undo");
+  await saying2("edit-status", "Undone.");
+  check((await page.$eval("#writeup", (w) => w.textContent)).includes(castleName)
+        && await page.$eval("#edit-undo", (b) => b.disabled), "Undo puts the old name back");
+  // An edit is kept for a reload.
+  await page.click("#edit-trail button >> text=/^Castle —/");
+  await page.fill("#ef0", "Keep of the Reload");
+  await page.click("#edit-apply");
+  await saying2("edit-status", "Changed Name");
+  await page.reload();
+  await page.waitForSelector("#generate:not([disabled])", { timeout: 180_000 });
+  await saying("Back where you left off: Floor 5, medium, seed 4242.");
+  check((await page.$eval("#writeup", (w) => w.textContent)).includes("Keep of the Reload"),
+        "a reload brings back the floor as edited");
 
   // A bad seed is reported, not crashed on.
   await page.fill("#seed", "abc");

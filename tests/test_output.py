@@ -519,6 +519,93 @@ class WebPageTest(unittest.TestCase):
             self.assertIn(words, err)
             self.assertNotIn("--rooms-for", err)
 
+    # -- the Edit tab: the desktop app's edit panel, on the page ----------------
+
+    def _part(self, path):
+        return json.loads(self.api.edit_part(json.dumps(path)))
+
+    def _apply(self, path, values, rename=None):
+        return self._call("edit_apply", {"path": path, "values": values, "rename": rename})
+
+    def test_the_edit_tab_walks_the_floor_as_the_desktop_panel_does(self):
+        for case in ({"floor": 1, "size": "medium", "seed": 4242}, {"floor": 4, "size": "small", "seed": 4242},
+                     {"floor": 10, "size": "small", "seed": 4242}):
+            page = self._call("generate", {k: str(v) for k, v in case.items()})
+            fl = mg.generate(**case).floor
+            root = self._part([])
+            self.assertEqual(root["trail"], [{"path": [], "label": page["markdown"].splitlines()[0][2:]}])
+            self.assertEqual([c["label"] for c in root["children"]], [l for _, l in mg.edit_children(fl)])
+            self.assertEqual([f["key"] for f in root["fields"]], [f.key for f in mg.edit_fields(fl)])
+            # Down to the first part with no parts of its own, the way a tap would go.
+            path = []
+            while True:
+                part = self._part(path)
+                self.assertEqual(part["path"], path)
+                self.assertEqual(len(part["trail"]), len(path) + 1, case)
+                node = mg.edit_get(fl, path)
+                group = path[-2] if len(path) >= 2 and isinstance(path[-1], int) else None
+                want = mg.edit_fields(node, group)
+                self.assertEqual([(f["key"], f["kind"], f["locked"]) for f in part["fields"]],
+                                 [(f.key, f.kind, f.locked) for f in want], f"{case} {path}")
+                if not part["children"]:
+                    break
+                path = part["children"][0]["path"]
+            self.assertEqual(self._part(["no such part"])["path"], [], "a part that's gone: the floor")
+        self._call("reroll", {"text": mg.generate(1, "medium", 4242).markdown, "label": "A"})
+        self.assertIn("Re-rolled rooms aren't a whole floor", self._part([])["error"])
+
+    def test_an_edit_on_the_page_is_drawn_kept_and_undone(self):
+        page = self._call("generate", {"floor": "5", "size": "medium", "seed": "4242"})
+        castle = ["quadrants", 0, "castle"]
+        old = mg.generate(5, "medium", 4242).floor.quadrants[0].castle.name
+        ask = self._apply(castle, [["name", "Castle Mumbles"]])
+        self.assertEqual(len(ask["ask"]), 1, "renaming asks first, and changes nothing yet")
+        self.assertIn("Boss —", ask["ask"][0]["where"][0])
+        self.assertEqual(json.loads(self.api.save_floor(""))["text"],
+                         mg._floor_json(mg.floor_file_data(mg.generate(5, "medium", 4242))) + "\n")
+        done = self._apply(castle, [["name", "Castle Mumbles"]], rename=[True])
+        self.assertEqual(done["status"], "Changed Name, and 1 other mention.")
+        self.assertNotIn(old, done["markdown"])
+        self.assertIn("Castle Mumbles", done["maps"][0]["svg"])
+        self.assertEqual(done["undo"], 1)
+        self.assertEqual(self._part(castle)["trail"][-1]["label"], "Castle — Castle Mumbles")
+        # Kept in the floor file, and so for a reload.
+        saved = json.loads(self.api.save_floor(""))["text"]
+        self.assertEqual(json.loads(self.api.open_floor(saved))["markdown"], done["markdown"])
+        self.assertIn("Nothing to undo", self._call("edit_undo", "")["error"], "a floor opened starts afresh")
+        # Two changes, then Undo twice: back to the floor as it was opened, exactly.
+        floor_file = lambda: json.loads(self.api.save_floor(""))["text"]
+        self.assertEqual(self._apply(castle + ["boss"], [["level", "99"]])["undo"], 1)
+        after_one = floor_file()
+        self.assertEqual(self._apply(castle, [["name", "The Second Keep"]], rename=[True])["undo"], 2)
+        self.assertNotEqual(floor_file(), after_one)
+        back = self._call("edit_undo", "")
+        self.assertEqual((back["status"], back["undo"]), ("Undone.", 1))
+        self.assertEqual(floor_file(), after_one)
+        self.assertEqual(self._call("edit_undo", "")["undo"], 0)
+        self.assertEqual(floor_file(), saved)
+
+    def test_an_edit_can_change_just_the_one_place(self):
+        self._call("generate", {"floor": "5", "size": "medium", "seed": "4242"})
+        castle = ["quadrants", 0, "castle"]
+        old = mg.generate(5, "medium", 4242).floor.quadrants[0].castle.name
+        done = self._apply(castle, [["name", "Castle Mumbles"]], rename=[False])
+        self.assertEqual(done["status"], "Changed Name.")
+        self.assertIn(old, done["markdown"], "the boss's name still has the old one in it")
+
+    def test_a_value_that_doesnt_fit_is_refused_and_changes_nothing(self):
+        page = self._call("generate", {"floor": "1", "size": "small", "seed": "4242"})
+        boss = ["neighborhoods", 0, "boss"]
+        bad = self._apply(boss, [["level", "lots"]])
+        self.assertEqual(bad["error"], "Level should be a whole number, not 'lots'")
+        self.assertEqual(self._apply(["neighborhoods", 0], [["label", "Z"]]), {"nothing": True},
+                         "a locked value isn't taken")
+        self.assertEqual(self._apply(boss, [["has_stairwell", True]]), {"nothing": True}, "nor one unchanged")
+        self.assertEqual(json.loads(self.api.save_floor(""))["text"],
+                         mg._floor_json(mg.floor_file_data(mg.generate(1, "small", 4242))) + "\n")
+        self.assertIn("isn't there any more", self._apply(["gone", 3], [["name", "x"]])["error"])
+        self.assertTrue(page["markdown"])
+
     def test_options_a_floor_does_not_take_are_left_out(self):
         page = self._call("generate", {"floor": "11", "size": "medium", "seed": "5", "days": "9"})
         self.assertEqual(page["markdown"], mg.generate(11, "medium", 5).markdown)

@@ -61,6 +61,7 @@ def generate(options: str) -> str:
         res = mg.generate(**kw)
     except mg.MapgenError as e:
         return json.dumps({"error": str(e)})
+    _undo.clear()                 # a new floor: nothing of the last one's to undo
     return json.dumps(_show(res))
 
 
@@ -108,6 +109,7 @@ def open_floor(text: str) -> str:
         res = mg.render_floor_data(data, "That file")
     except mg.MapgenError as e:
         return json.dumps({"error": str(e)})
+    _undo.clear()                 # a new floor: nothing of the last one's to undo
     return json.dumps(_show(res))
 
 
@@ -143,6 +145,7 @@ def reroll(options: str) -> str:
         # Reading a write-up back reports what it couldn't find by exiting.
         return json.dumps({"error": str(e).replace("--rooms-for: ", "").replace("the input file", "that write-up").replace("in the input file", "in that write-up")})
     _shown = None
+    _undo.clear()
     moved = res.markdown.count("\n  - The ")
     return json.dumps({
         "kind": "rooms", "seed": res.seed, "floor": floor, "size": size,
@@ -171,6 +174,112 @@ def _suggestions(res) -> list:
         out.append({"kind": "box", "tier": sg.tier, "type": sg.box_type,
                     "text": sg.label, "note": f"{sg.kind}: {sg.source}"})
     return out
+
+
+# -- editing ------------------------------------------------------------------
+# The page's Edit tab, as the desktop app's edit panel: the floor's parts, read
+# from its data, and their values, changed and drawn again. A value that holds
+# the floor together is shown but locked; renaming something offers to change
+# it wherever else it is written. Undo steps back through every change.
+
+_undo = []                # snapshots of the floor on show, before each change
+UNDO_LIMIT = 50
+
+
+def _editable():
+    return _shown.floor if _shown is not None and mg.is_dataclass(_shown.floor) else None
+
+
+def _group(path):
+    """The list a row is in, which says which of its cells are links."""
+    return path[-2] if len(path) >= 2 and isinstance(path[-1], int) else None
+
+
+def edit_part(path_json: str) -> str:
+    """One part of the floor on show: the way back to the floor from it, the
+    parts it holds, and its values."""
+    fl = _editable()
+    if fl is None:
+        return json.dumps({"error": "Generate or open a floor to edit it. Re-rolled rooms "
+                                    "aren't a whole floor."})
+    path = json.loads(path_json or "[]")
+    try:
+        node = mg.edit_get(fl, path)
+    except (KeyError, IndexError, AttributeError, TypeError):
+        path, node = [], fl          # gone, after an undo: back to the floor
+    trail = [{"path": [], "label": _shown.markdown.splitlines()[0].lstrip("# ")}]
+    for i in range(1, len(path) + 1):
+        sub = mg.edit_get(fl, path[:i])
+        trail.append({"path": path[:i], "label": mg._human(path[i - 1]) if mg._scalar(sub)
+                      else mg.edit_label(sub, path[i - 1])})
+    return json.dumps({
+        "path": path, "trail": trail, "undo": len(_undo),
+        "children": [{"path": path + [k], "label": label} for k, label in mg.edit_children(node)],
+        "fields": [{"key": f.key, "label": f.label, "kind": f.kind, "locked": f.locked,
+                    "optional": f.optional,
+                    "value": list(f.value) if isinstance(f.value, tuple) else f.value}
+                   for f in mg.edit_fields(node, _group(path))],
+    })
+
+
+def edit_apply(payload: str) -> str:
+    """Change a part's values: {"path", "values": [[key, as typed], ...],
+    "rename": null or [yes/no, ...]}. When a changed name is written elsewhere
+    on the floor and "rename" is null, nothing changes yet: the answer is
+    "ask", with where, for the page to ask whether to change it there too."""
+    global _shown
+    fl = _editable()
+    if fl is None:
+        return json.dumps({"error": "There's no floor to edit."})
+    o = json.loads(payload)
+    path = o.get("path") or []
+    typed = {json.dumps(k): v for k, v in o.get("values") or []}
+    try:
+        node = mg.edit_get(fl, path)
+        changes = []
+        for f in mg.edit_fields(node, _group(path)):
+            if f.locked or json.dumps(f.key) not in typed:
+                continue
+            new = mg.parse_edit(f, typed[json.dumps(f.key)])
+            if new != f.value:
+                changes.append((f, new))
+    except mg.MapgenError as e:
+        return json.dumps({"error": str(e)})
+    except (KeyError, IndexError, AttributeError, TypeError):
+        return json.dumps({"error": "That part of the floor isn't there any more."})
+    if not changes:
+        return json.dumps({"nothing": True})
+    also = mg.edit_mentions(fl, path, changes)
+    answers = o.get("rename")
+    if also and answers is None:
+        return json.dumps({"ask": [{"old": old, "new": new, "count": len(where),
+                                    "where": [mg.describe_path(fl, w) for w in where[:6]]}
+                                   for old, new, where in also]})
+    snapshot = mg.snapshot_floor(fl)
+    for f, new in changes:
+        mg.edit_set(fl, path + [f.key], new)
+    extra = sum(mg.replace_text(fl, old, new, where)
+                for (old, new, where), yes in zip(also, answers or []) if yes)
+    try:
+        res = mg.redraw_floor(_shown)
+    except mg.MapgenError as e:
+        _shown = mg.replace(_shown, floor=mg.restore_floor(snapshot))
+        return json.dumps({"error": f"That change can't be drawn: {e}"})
+    _undo.append(snapshot)
+    del _undo[:-UNDO_LIMIT]
+    names = ", ".join(f.label for f, _ in changes)
+    status = (f"Changed {names}" + (f", and {extra} other mention{'s' if extra != 1 else ''}"
+                                    if extra else "") + ".")
+    return json.dumps(_show(res, status=status, undo=len(_undo)))
+
+
+def edit_undo(_: str = "") -> str:
+    """Take back the last change."""
+    global _shown
+    if not _undo or _editable() is None:
+        return json.dumps({"error": "Nothing to undo."})
+    _shown = mg.replace(_shown, floor=mg.restore_floor(_undo.pop()))
+    return json.dumps(_show(mg.redraw_floor(_shown), status="Undone.", undo=len(_undo)))
 
 
 def open_boxes(options: str) -> str:

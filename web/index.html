@@ -88,6 +88,7 @@
       <button role="tab" id="tab-map" aria-controls="panel-map" aria-selected="true">Map</button>
       <button role="tab" id="tab-text" aria-controls="panel-text" aria-selected="false" tabindex="-1">Write-up</button>
       <button role="tab" id="tab-loot" aria-controls="panel-loot" aria-selected="false" tabindex="-1">Loot boxes</button>
+      <button role="tab" id="tab-edit" aria-controls="panel-edit" aria-selected="false" tabindex="-1">Edit</button>
     </nav>
 
     <section class="panel" id="panel-map" role="tabpanel" aria-labelledby="tab-map">
@@ -149,6 +150,28 @@
         <p class="hint" id="roller-seed"></p>
       </div>
       <div class="opened" id="opened"></div>
+    </section>
+
+    <section class="panel" id="panel-edit" role="tabpanel" aria-labelledby="tab-edit" hidden>
+      <div class="card editor">
+        <nav aria-label="Where this part is on the floor"><ol class="trail" id="edit-trail"></ol></nav>
+        <div class="edit-head">
+          <h2 id="edit-title" tabindex="-1">Edit this floor</h2>
+          <button id="edit-undo" type="button" disabled>Undo</button>
+        </div>
+        <p class="hint" id="edit-empty">Generate or open a floor to edit it.</p>
+        <h3 id="edit-parts-head" hidden>What it holds</h3>
+        <ul class="parts" id="edit-parts"></ul>
+        <form id="edit-form" hidden>
+          <h3>Its values</h3>
+          <div id="edit-fields"></div>
+          <div class="edit-actions">
+            <button type="submit" class="primary" id="edit-apply">Apply</button>
+            <button type="button" id="edit-revert">Revert</button>
+          </div>
+        </form>
+        <p class="status" id="edit-status" role="status"></p>
+      </div>
     </section>
   </main>
 
