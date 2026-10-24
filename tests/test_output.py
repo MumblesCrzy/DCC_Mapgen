@@ -29,6 +29,7 @@ import string
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 from unittest import mock
 
@@ -511,6 +512,149 @@ class WebPageTest(unittest.TestCase):
             manifest = json.load(open(os.path.join(out, "manifest.webmanifest"), encoding="utf-8"))
             for icon in manifest["icons"]:
                 self.assertTrue(os.path.exists(os.path.join(out, icon["src"])), icon["src"])
+
+
+class MapClickTest(unittest.TestCase):
+    """Where each map draws the floor's parts, for the desktop app to find the
+    part under a click. Checked against the drawing itself: a click on a label
+    the map writes picks the part the label belongs to."""
+
+    TEXT = re.compile(r'<text x="([\d.\-]+)" y="([\d.\-]+)" font-size="([\d.]+)"[^>]*>(.*?)</text>')
+
+    @classmethod
+    def _labels(cls, svg):
+        """(x, y, text) for every label, with x, y a point inside its letters."""
+        import html
+        out = []
+        for x, y, size, text in cls.TEXT.findall(svg):
+            middle = 'text-anchor="middle"' in svg[svg.find(f'<text x="{x}" y="{y}"'):][:200]
+            out.append((float(x) + (0 if middle else 3), float(y) - float(size) / 3, html.unescape(text)))
+        return out
+
+    def _in_tree(self, fl, path):
+        node = fl
+        for key in path:
+            self.assertIn(key, [k for k, _ in mg.edit_children(node)], path)
+            node = mg.edit_get(node, [key])
+
+    def test_drawing_the_areas_changes_no_map(self):
+        for case in corpus.CASES:
+            res = mg.generate(**case)
+            for suffix, _ in res.svgs:
+                mg.map_hits(res.floor, suffix, res.boss_stairs)
+            self.assertEqual(mg.floor_svgs(res.floor, res.boss_stairs), res.svgs, corpus.case_id(case))
+            self.assertIsNone(getattr(mg._HITS, "found", None), "noting is switched off again")
+            # Drawn while noting, a map is the map the app shows.
+            mg._HITS.found = []
+            try:
+                noted = mg.floor_svgs(res.floor, res.boss_stairs)
+            finally:
+                mg._HITS.found = None
+            self.assertEqual(noted, res.svgs, corpus.case_id(case))
+
+    def test_every_area_is_a_part_the_panel_lists_and_on_its_map(self):
+        for case in corpus.CASES:
+            res = mg.generate(**case)
+            for suffix, svg in res.svgs:
+                w, h = map(float, re.search(r'width="([\d.]+)" height="([\d.]+)"', svg).groups())
+                for a in mg.map_hits(res.floor, suffix, res.boss_stairs):
+                    where = f"{corpus.case_id(case)} {suffix} {a.path}"
+                    self._in_tree(res.floor, a.path)
+                    if a.shape == "circle":
+                        cx, cy, r = a.box
+                        box = (cx - r, cy - r, cx + r, cy + r)
+                    else:
+                        box = (a.box[0], a.box[1], a.box[0] + a.box[2], a.box[1] + a.box[3])
+                    self.assertTrue(0 <= box[0] and 0 <= box[1] and box[2] <= w and box[3] <= h, where)
+
+    def test_floors_1_and_2_overview(self):
+        for case in corpus.CASES:
+            if case["floor"] not in (1, 2):
+                continue
+            res = mg.generate(**case)
+            fl, where = res.floor, corpus.case_id(case)
+            hits = mg.map_hits(fl, "", res.boss_stairs)
+            pick = lambda x, y: (mg.hit_at(hits, x, y) or mg.HitArea((), "rect", ())).path
+            labels = self._labels(res.svgs[0][1])
+            for i, nb in enumerate(fl.neighborhoods):
+                # Its name, not its letter: a borough boss's marker sits on the
+                # corner four neighborhoods share, over one of their letters.
+                cell = next(a for a in hits if a.path == ("neighborhoods", i))
+                x, y = next((x, y) for x, y, t in labels
+                            if t == mg._fit(nb.name, 22) and cell.contains(x, y))
+                self.assertEqual(pick(x, y), ("neighborhoods", i), f"{where}: {nb.label}'s name")
+                x, y = next((x, y) for x, y, t in labels if t.startswith("Boss: ")
+                            and nb.boss.name.startswith(t[6:].rstrip("…")))
+                self.assertEqual(pick(x, y), ("neighborhoods", i, "boss"), f"{where}: {nb.label}'s boss")
+            bosses = ([(("top_boss",), fl.top_boss)] if fl.top_boss else []) + \
+                [(("city_bosses", k), b) for k, b in fl.city_bosses.items()] + \
+                [(("borough_bosses", k), b) for k, b in fl.borough_bosses.items()]
+            for path, b in bosses:
+                marker = next(a for a in hits if a.path == path and a.shape == "circle")
+                self.assertEqual(pick(*marker.box[:2]), path, f"{where}: {path} marker")
+                x, y = next((x, y) for x, y, t in labels if t.endswith(f"boss: {b.name} (L{b.level})"))
+                self.assertEqual(pick(x, y), path, f"{where}: {path} in the key")
+
+    def test_floors_1_and_2_room_maps(self):
+        for case in corpus.CASES:
+            if case["floor"] not in (1, 2):
+                continue
+            res = mg.generate(**case)
+            fl, where = res.floor, corpus.case_id(case)
+            for i, nb in enumerate(fl.neighborhoods):
+                suffix = f"_room_{nb.label}"
+                hits = mg.map_hits(fl, suffix)
+                pick = lambda x, y: (mg.hit_at(hits, x, y) or mg.HitArea((), "rect", ())).path
+                labels = self._labels(dict(res.svgs)[suffix])
+                for j, room in enumerate(nb.rooms):
+                    want = ("neighborhoods", i, "rooms", j)
+                    marker = next(a for a in hits if a.path == want and a.shape == "circle")
+                    self.assertEqual(pick(*marker.box[:2]), want, f"{where}: {room.id}'s marker")
+                    x, y = next((x, y) for x, y, t in labels if t == room.id)
+                    self.assertEqual(pick(x, y), want, f"{where}: {room.id}'s label")
+                    x, y = next((x, y) for x, y, t in labels if t.startswith(f"{room.id} {room.kind}:"))
+                    self.assertEqual(pick(x, y), want, f"{where}: {room.id} in the list")
+                for k, (a_id, b_id, _) in enumerate(nb.corridor_encounters):
+                    want = ("neighborhoods", i, "corridor_encounters", k)
+                    x, y = next((x, y) for x, y, t in labels if t.startswith(f"{a_id} ↔ {b_id}:"))
+                    self.assertEqual(pick(x, y), want, f"{where}: {a_id}–{b_id} in the list")
+                    self.assertTrue(any(a.path == want and a.shape == "circle" for a in hits), where)
+                x, y = next((x, y) for x, y, t in labels if t.startswith(f"Floor {fl.number} — {nb.label}."))
+                self.assertEqual(pick(x, y), ("neighborhoods", i), f"{where}: the map's title")
+
+    def test_a_click_finds_what_is_on_top(self):
+        under = mg.HitArea(("neighborhoods", 0), "rect", (0, 0, 100, 100))
+        over = mg.HitArea(("neighborhoods", 0, "boss"), "circle", (50, 50, 10))
+        self.assertEqual(mg.hit_at([under, over], 52, 52), over)
+        self.assertEqual(mg.hit_at([under, over], 5, 5), under)
+        self.assertIsNone(mg.hit_at([under, over], 150, 5))
+        self.assertTrue(over.contains(60, 50) and not over.contains(60.5, 51))
+        self.assertFalse(over.contains(58, 58), "a marker is round: its box's corner is not on it")
+
+    def test_noting_in_one_thread_takes_nothing_from_another(self):
+        """The desktop app draws floors in a worker thread while it asks where a
+        map's parts are on its own: neither sees the other's."""
+        fl = mg.generate(1, "medium", 4242).floor
+        alone = len(mg.map_hits(fl, ""))
+        stop, other = threading.Event(), mg.generate(1, "large", 4242).floor
+
+        def draw():
+            while not stop.is_set():
+                mg.floor_svgs(other)
+
+        # Threads take turns far more often than usual, so the two are drawing
+        # at the same time.
+        switch = sys.getswitchinterval()
+        sys.setswitchinterval(1e-6)
+        t = threading.Thread(target=draw)
+        t.start()
+        try:
+            counts = {len(mg.map_hits(fl, "")) for _ in range(40)}
+        finally:
+            stop.set()
+            t.join()
+            sys.setswitchinterval(switch)
+        self.assertEqual(counts, {alone})
 
 
 class ScreenReaderTest(unittest.TestCase):

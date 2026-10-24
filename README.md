@@ -353,7 +353,8 @@ Using a screen reader? The desktop app can't be read by one; the
   (50% is `0.5`).
 - **Edit floor** (above the map, or **Edit → Edit this floor**, Ctrl+E) opens a panel
   to the right of the map where you can change anything on the floor and see it
-  redrawn. See [Editing in the app](#editing-in-the-app).
+  redrawn. On Floors 1 and 2 you can also click a part of the map to edit it. See
+  [Editing in the app](#editing-in-the-app).
 - **File → Re-roll rooms from a saved floor** is `--rooms-for` in the GUI: point it at a
   floor 1–2 Markdown file this app wrote and re-roll one neighborhood's rooms.
 - The **Loot Boxes** tab lists every box the current floor names; pick one, change its
@@ -390,6 +391,14 @@ A panel opens to the right of the map:
 - **The tree** lists the floor's parts, as the write-up names them: neighborhoods and
   their bosses, rooms and mobs; stations and trains; quadrants, castles and quests; and
   so on for each floor. Open a part to see what it holds.
+- **Click the map** to pick a part there instead (Floors 1 and 2 so far). Pointing at
+  a part names it; a click opens the panel on it. On the overview that is a
+  neighborhood, its boss or its mob, or a borough, city or top-tier boss, by its
+  marker or its line in the key. On a room map it is a room, by its marker, its label
+  or its line in the list, or a corridor encounter. Dragging still moves the map.
+- **The part you picked lights up on the map**, wherever you picked it. If the map on
+  show doesn't draw it, what holds it lights up instead: a room's neighborhood on the
+  overview. A part off the screen is scrolled into view.
 - **The form** below it has the part's values: names and descriptions as text, levels
   and counts as numbers, yes/no values as tick boxes, lists one item a line. Change
   what you like and click **Apply** (Ctrl+Enter). The write-up, every map and the
@@ -1048,6 +1057,24 @@ that reaches code the plain sizes don't:
 `python dcc_mapgen_gui.py --self-test` also opens the panel on a Floor 5, renames a
 castle everywhere, is refused a level of the wrong kind, finds a quadrant's name locked,
 and undoes it all.
+
+Clicking the map has its own group:
+- every area any map marks as a part is a part the edit panel lists, and lies on its
+  map;
+- marking the areas changes no map, and is off again afterwards;
+- on every pinned Floor 1 and 2, a click picks what the map draws there: each
+  neighborhood by its name, its boss by its line, every borough, city and top-tier
+  boss by its marker and its line in the key; each room by its marker, its label and
+  its line in the list, each corridor encounter by its line, and the room map's title
+  its neighborhood;
+- where two are drawn one over the other, the one on top wins, and a round marker's
+  corners are not on it;
+- a map's areas worked out in one thread take nothing from a floor drawn in another.
+
+The self-test then clicks a room on its map and checks that the panel opens on it and
+it lights up, that pointing names it, that a drag picks nothing, that a boss clicked
+on the overview opens, that a room picked in the panel lights its neighborhood on the
+overview, and that closing the panel puts the light out.
 
 What's switched on and shops have their own groups, with the books' facts written into the tests rather than read back from the banks:
 - each system arrives on the DCC Database's floor, and each floor's list of new, gone and still-on systems is checked against those floors;

@@ -78,6 +78,7 @@ import math
 import random
 import re
 import sys
+import threading
 import zlib
 from dataclasses import MISSING, dataclass, field, fields, is_dataclass, replace
 from typing import Dict, List, Optional, Tuple, Union, get_args, get_origin, get_type_hints
@@ -2635,6 +2636,43 @@ def _legend_layout(entries, avail: float):
     return rows, height
 
 
+# ---------------------------------------------------------------------------
+# Where a map draws each part of its floor, for the desktop app to find the
+# part under a click. A map drawer notes each part as it draws it; nothing is
+# noted (and nothing changes in the SVG) unless map_hits asked for it.
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class HitArea:
+    """Where a map shows one part of its floor."""
+    path: tuple              # from the floor, as the edit panel finds parts
+    shape: str               # "rect" (x, y, w, h) or "circle" (cx, cy, r)
+    box: tuple
+
+    def contains(self, x: float, y: float) -> bool:
+        if self.shape == "circle":
+            cx, cy, r = self.box
+            return (x - cx) ** 2 + (y - cy) ** 2 <= r * r
+        bx, by, w, h = self.box
+        return bx <= x <= bx + w and by <= y <= by + h
+
+
+_HITS = threading.local()
+
+
+def _hit(path, shape: str, *box) -> None:
+    """Note that a part of the floor is drawn here, if anyone asked."""
+    hits = getattr(_HITS, "found", None)
+    if hits is not None:
+        hits.append(HitArea(tuple(path), shape, tuple(float(b) for b in box)))
+
+
+def hit_at(hits: List[HitArea], x: float, y: float) -> Optional[HitArea]:
+    """The part on top at a point of a map: the last drawn there, so a boss's
+    line inside its neighborhood's square wins over the square."""
+    return next((h for h in reversed(hits) if h.contains(x, y)), None)
+
+
 def _boss_marker(cx, cy, tier, label):
     r = BOSS_R[tier]
     color = {"neighborhood": "#cd7f32", "borough": "#a8a9ad", "city": "#d4af37", "top": "#7a1f7a"}[tier]
@@ -2665,23 +2703,27 @@ def render_svg(fl: Floor, boss_stairs: bool) -> str:
     ox, oy = (W - CELL * n) // 2, HEADER + PAD
 
     # Neighborhood cells
-    for nb in fl.neighborhoods:
+    for i, nb in enumerate(fl.neighborhoods):
         x = ox + nb.col * CELL
         y = oy + nb.row * CELL
         color = MOB_PALETTE[nb.idx % len(MOB_PALETTE)]
         o.append(f'<rect x="{x}" y="{y}" width="{CELL}" height="{CELL}" fill="{color}" '
                  f'stroke="#555" stroke-width="1.5"/>')
+        _hit(("neighborhoods", i), "rect", x, y, CELL, CELL)
         o.append(_text(x + 10, y + 26, nb.label, size=24, weight="bold"))
         o.append(_text(x + 42, y + 24, _fit(nb.name, 22), size=13, weight="bold"))
         o.append(_text(x + 10, y + 48, _fit(nb.mob.name, 30), size=12))
+        _hit(("neighborhoods", i, "mob"), "rect", x + 6, y + 36, CELL - 12, 16)
         o.append(_text(x + 10, y + 64, f"Level {nb.level_range[0]}–{nb.level_range[1]}", size=12))
         o.append(_text(x + 10, y + 84, "Boss: " + _fit(nb.boss.name, 24), size=11, fill="#444"))
         o.append(_text(x + 10, y + 99, f"L{nb.boss.level}  •  {nb.safe_rooms} safe room"
                        + ("s" if nb.safe_rooms != 1 else "")
                        + ("  •  guild" if nb.tutorial_guild else ""), size=11, fill="#444"))
+        _hit(("neighborhoods", i, "boss"), "rect", x + 6, y + 72, CELL - 12, 32)
         # neighborhood boss chamber, bottom-right corner
         bx, by = x + CELL - 30, y + CELL - 30
         o.extend(_boss_marker(bx, by, "neighborhood", ""))
+        _hit(("neighborhoods", i, "boss"), "circle", bx, by, BOSS_R["neighborhood"] + 2)
         if nb.boss.has_stairwell:
             o.append(_stair_icon(bx - 32, by - 7))
         # hidden stairs, bottom-left
@@ -2707,6 +2749,7 @@ def render_svg(fl: Floor, boss_stairs: bool) -> str:
             b = fl.borough_bosses.get(bname)
             if b:
                 o.extend(_boss_marker(x + CELL, y + CELL, "borough", ""))
+                _hit(("borough_bosses", bname), "circle", x + CELL, y + CELL, BOSS_R["borough"] + 2)
                 if boss_stairs and b.has_stairwell:
                     o.append(_stair_icon(x + CELL + 26, y + CELL - 28))
 
@@ -2722,6 +2765,7 @@ def render_svg(fl: Floor, boss_stairs: bool) -> str:
             b = fl.city_bosses.get(cname)
             if b:
                 o.extend(_boss_marker(x + CELL * 2, y + CELL * 2, "city", ""))
+                _hit(("city_bosses", cname), "circle", x + CELL * 2, y + CELL * 2, BOSS_R["city"] + 2)
                 if boss_stairs and b.has_stairwell:
                     o.append(_stair_icon(x + CELL * 2 + 40, y + CELL * 2 - 42))
 
@@ -2730,6 +2774,7 @@ def render_svg(fl: Floor, boss_stairs: bool) -> str:
     if fl.top_boss:
         cx, cy = ox + n * CELL / 2, oy + n * CELL / 2
         o.extend(_boss_marker(cx, cy, "top", ""))
+        _hit(("top_boss",), "circle", cx, cy, BOSS_R["top"] + 2)
         if boss_stairs and fl.top_boss.has_stairwell:
             o.append(_stair_icon(cx + 44, cy - 46))
 
@@ -2762,14 +2807,17 @@ def render_svg(fl: Floor, boss_stairs: bool) -> str:
     if fl.top_boss:
         o.append(_text(lx, ky, f"{fl.top_tier_name} boss: {fl.top_boss.name} (L{fl.top_boss.level})",
                        size=12, weight="bold"))
+        _hit(("top_boss",), "rect", lx, ky - 13, W - 2 * lx, 17)
         ky += 18
     for cname, b in fl.city_bosses.items():
         tag = "City" if n == 4 else f"City {cname}"
         o.append(_text(lx, ky, f"{tag} boss: {b.name} (L{b.level})", size=12, weight="bold"))
+        _hit(("city_bosses", cname), "rect", lx, ky - 13, W - 2 * lx, 17)
         ky += 18
     for bname, b in fl.borough_bosses.items():
         tag = "Borough" if n == 2 else f"Borough {bname}"
         o.append(_text(lx, ky, f"{tag} boss: {b.name} (L{b.level})", size=12))
+        _hit(("borough_bosses", bname), "rect", lx, ky - 13, W - 2 * lx, 17)
         ky += 18
 
     o.append("</svg>")
@@ -2808,10 +2856,20 @@ def render_room_svg(nb: Neighborhood, fl: Floor) -> str:
     list_top = 360
     H = list_top + 80 + 18 * (len(nb.rooms) + len(nb.corridor_encounters) + 3)
 
+    # Where this neighborhood is in its floor, for noting what is drawn where: a
+    # neighborhood whose rooms were re-rolled on their own has no floor to be in.
+    at = next((("neighborhoods", i) for i, n in enumerate(getattr(fl, "neighborhoods", ()))
+               if n is nb), None)
+
+    def hit(rest, shape, *box):
+        if at is not None:
+            _hit(at + rest, shape, *box)
+
     o = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" '
          f'font-family="Helvetica, Arial, sans-serif">',
          f'<rect width="{W}" height="{H}" fill="#f6f2ea"/>']
     o.append(_text(30, 32, f"Floor {fl.number} \u2014 {nb.label}. {nb.name}", size=20, weight="bold"))
+    hit((), "rect", 30, 12, W - 60, 26)
     o.append(_text(30, 54, f"{nb.mob.name} L{nb.level_range[0]}\u2013{nb.level_range[1]}  \u2022  "
                    f"boss: {nb.boss.name} L{nb.boss.level}  \u2022  {len(nb.rooms)} rooms  \u2022  "
                    f"seed {fl.seed}", size=12, fill="#555"))
@@ -2837,6 +2895,7 @@ def render_room_svg(nb: Neighborhood, fl: Floor) -> str:
     o.append(_text(lx + 14, ly_leg + 4, "Other room (Den/Junction/Cache/Overlook/Shrine)", size=10))
 
     encounter_edges = {tuple(sorted((a, b))): text for a, b, text in nb.corridor_encounters}
+    encounter_at = {tuple(sorted((a, b))): k for k, (a, b, _) in enumerate(nb.corridor_encounters)}
     drawn = set()
     for r in nb.rooms:
         for other in r.connects_to:
@@ -2853,9 +2912,12 @@ def render_room_svg(nb: Neighborhood, fl: Floor) -> str:
                 mx, my = (x1 + x2) / 2, (y1 + y2) / 2
                 o.append(f'<circle cx="{mx}" cy="{my}" r="9" fill="#fff" stroke="#b8860b" stroke-width="2"/>')
                 o.append(_text(mx, my + 4, "!", size=12, weight="bold", anchor="middle", fill="#b8860b"))
+                hit(("corridor_encounters", encounter_at[key]), "circle", mx, my, 11)
 
-    for r in nb.rooms:
+    for j, r in enumerate(nb.rooms):
         x, y = pos[r.id]
+        hit(("rooms", j), "circle", x, y, 14)
+        hit(("rooms", j), "rect", x - 16, y - 29, 32, 15)        # its id, above
         if r.kind == "Boss Chamber":
             o.extend(_boss_marker(x, y, "neighborhood", ""))
         elif r.kind == "Hidden Passage":
@@ -2874,16 +2936,18 @@ def render_room_svg(nb: Neighborhood, fl: Floor) -> str:
     ly = list_top
     o.append(_text(30, ly, "Rooms:", size=13, weight="bold"))
     ly += 20
-    for r in nb.rooms:
+    for j, r in enumerate(nb.rooms):
         conn = ", ".join(r.connects_to) if r.connects_to else "none"
         o.append(_text(30, ly, f"{r.id} {r.kind}: {_fit(r.description, 90)} (\u2192 {conn})", size=11))
+        hit(("rooms", j), "rect", 30, ly - 12, W - 60, 16)
         ly += 18
     if nb.corridor_encounters:
         ly += 8
         o.append(_text(30, ly, "Corridor encounters:", size=13, weight="bold"))
         ly += 20
-        for a_id, b_id, text in nb.corridor_encounters:
+        for k, (a_id, b_id, text) in enumerate(nb.corridor_encounters):
             o.append(_text(30, ly, f"{a_id} \u2194 {b_id}: {_fit(text, 100)}", size=11))
+            hit(("corridor_encounters", k), "rect", 30, ly - 12, W - 60, 16)
             ly += 18
 
     o.append("</svg>")
@@ -2918,6 +2982,29 @@ def floor_svgs(fl, boss_stairs: bool = True) -> List[Tuple[str, str]]:
     if isinstance(fl, Floor):
         out += [(f"_room_{nb.label}", render_room_svg(nb, fl)) for nb in fl.neighborhoods]
     return out
+
+
+def map_hits(fl, suffix: str, boss_stairs: bool = True) -> List[HitArea]:
+    """Where one of a floor's maps (named by its suffix, as floor_svgs names
+    them) shows each part of the floor, in the order drawn: the map is drawn
+    again, noting each part as it goes. Floors whose maps don't note their parts
+    yet give none."""
+    _HITS.found = []
+    try:
+        if suffix.startswith("_room_") and isinstance(fl, Floor):
+            label = suffix[len("_room_"):]
+            nb = next((n for n in fl.neighborhoods if n.label == label), None)
+            if nb is not None:
+                render_room_svg(nb, fl)
+        elif suffix.startswith("_heat") and isinstance(fl, Floor10):
+            heat = next((h for h in fl.heats if f"_heat{h.number}" == suffix), None)
+            if heat is not None:
+                render10_heat_svg(fl, heat)
+        elif not suffix:
+            floor_svg(fl, boss_stairs)
+        return _HITS.found
+    finally:
+        _HITS.found = None
 
 def _write_svg(svg: str, path: str) -> None:
     if path.lower().endswith(".png"):

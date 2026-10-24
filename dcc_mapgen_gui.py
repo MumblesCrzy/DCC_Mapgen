@@ -68,6 +68,15 @@ class MapView(ttk.Frame):
         self.zoom = None          # None until the first fit
         self._photo = None        # Tk drops an image that nothing references
         self._token = 0
+        # Clicking a part of the map to edit it. The app says where each map
+        # draws the floor's parts (none for a floor it can't edit), what to call
+        # a part, and what a click on one does.
+        self.parts = lambda suffix: []
+        self.name_part = lambda path: ""
+        self.on_part = lambda path: None
+        self._shown = None        # (suffix, zoom) of the picture on the canvas
+        self._press = None        # where the button went down, and whether it dragged since
+        self._lit = None          # the part lit up on the map
 
         bar = ttk.Frame(self)
         bar.pack(fill="x", padx=PAD, pady=(PAD, 0))
@@ -99,7 +108,9 @@ class MapView(ttk.Frame):
 
         self.canvas.bind("<ButtonPress-1>", self._grab)
         self.canvas.bind("<B1-Motion>", self._pan)
-        self.canvas.bind("<ButtonRelease-1>", lambda e: self.canvas.configure(cursor=""))
+        self.canvas.bind("<ButtonRelease-1>", self._release)
+        self.canvas.bind("<Motion>", self._hover)
+        self.canvas.bind("<Leave>", lambda e: self._tip(None))
         self.canvas.bind("<MouseWheel>", self._wheel)
         self.canvas.bind("<Control-MouseWheel>", self._wheel_zoom)
 
@@ -172,16 +183,127 @@ class MapView(ttk.Frame):
         self._step(1 if event.delta > 0 else -1)
         return "break"
 
+    # A press that doesn't move is a click on whatever part is under it; one
+    # that moves more than a few pixels pans instead.
+    DRAG = 4
+
     def _grab(self, event):
-        self.canvas.configure(cursor="fleur")
+        self._press = [event.x, event.y, False]
         self.canvas.scan_mark(event.x, event.y)
 
     def _pan(self, event):
+        p = self._press
+        if p and not p[2] and abs(event.x - p[0]) + abs(event.y - p[1]) > self.DRAG:
+            p[2] = True
+            self._tip(None)
+            self.canvas.configure(cursor="fleur")
         self.canvas.scan_dragto(event.x, event.y, gain=1)
+
+    def _release(self, event):
+        p, self._press = self._press, None
+        if p and not p[2]:
+            part = self._part_at(event)
+            if part is not None:
+                self.on_part(part.path)
+        self._hover(event)
+
+    # -- the parts of the floor on the map --------------------------------------
+
+    def _suffix(self):
+        i = self.picker.current()
+        return self.maps[i][0] if 0 <= i < len(self.maps) else None
+
+    def _part_at(self, event):
+        """The part of the floor under the pointer, if the picture on show says."""
+        if self._shown is None:
+            return None
+        suffix, zoom = self._shown
+        x = self.canvas.canvasx(event.x) / zoom
+        y = self.canvas.canvasy(event.y) / zoom
+        return mg.hit_at(self.parts(suffix), x, y)
+
+    def _hover(self, event):
+        if self._press and self._press[2]:
+            return
+        part = self._part_at(event)
+        self.canvas.configure(cursor="hand2" if part else "")
+        self._tip((event, self.name_part(part.path)) if part else None)
+
+    def _tip(self, at):
+        """A label by the pointer naming the part under it."""
+        self.canvas.delete("tip")
+        if not at:
+            return
+        event, name = at
+        px, py = self.canvas.canvasx(event.x), self.canvas.canvasy(event.y)
+        text = self.canvas.create_text(px + 20, py + 22, anchor="nw", tags="tip",
+                                       text=f"{name}  (click to edit)",
+                                       font=("Segoe UI", 9), fill="#222")
+        # Kept on the screen: to the pointer's left near the right edge, above it
+        # near the bottom.
+        x0, y0, x1, y1 = self.canvas.bbox(text)
+        right = self.canvas.canvasx(0) + self.canvas.winfo_width() - 8
+        bottom = self.canvas.canvasy(0) + self.canvas.winfo_height() - 8
+        dx = (px - 20 - (x1 - x0)) - x0 if x1 + 6 > right else 0
+        dy = (py - 12 - (y1 - y0)) - y0 if y1 + 4 > bottom else 0
+        self.canvas.move(text, max(dx, self.canvas.canvasx(0) + 8 - x0) if dx else 0, dy)
+        x0, y0, x1, y1 = self.canvas.bbox(text)
+        box = self.canvas.create_rectangle(x0 - 6, y0 - 4, x1 + 6, y1 + 4, tags="tip",
+                                           fill="#fffbe6", outline="#b8a35a")
+        self.canvas.tag_lower(box, text)
+
+    def light(self, path, see=True):
+        """Light up a part of the floor on the map: where it is drawn, or, if
+        this map doesn't show it, the part of the map that holds it (a room's
+        neighborhood on the overview). None puts the light out."""
+        self._lit = tuple(path) if path is not None else None
+        self._draw_lit(see)
+
+    def _draw_lit(self, see=False):
+        self.canvas.delete("lit")
+        if self._lit is None or self._shown is None:
+            return
+        suffix, zoom = self._shown
+        hits = self.parts(suffix)
+        holders = [h.path for h in hits if self._lit[:len(h.path)] == h.path]
+        if not holders:
+            return
+        best = max(holders, key=len)
+        lit = [h for h in hits if h.path == best]
+        for h in lit:
+            if h.shape == "circle":
+                cx, cy, r = h.box
+                box = ((cx - r) * zoom, (cy - r) * zoom, (cx + r) * zoom, (cy + r) * zoom)
+                self.canvas.create_oval(*box, outline="#e67e22", width=3, tags="lit")
+            else:
+                x, y, w, hh = h.box
+                box = (x * zoom, y * zoom, (x + w) * zoom, (y + hh) * zoom)
+                self.canvas.create_rectangle(*box, outline="#e67e22", width=3, tags="lit")
+        self.canvas.tag_raise("tip")
+        if see:
+            self._see(lit[0], zoom)
+
+    def _see(self, h, zoom):
+        """Scroll a lit part into view if it is off the screen."""
+        if self._photo is None:
+            return
+        if h.shape == "circle":
+            cx, cy = h.box[0], h.box[1]
+        else:
+            cx, cy = h.box[0] + h.box[2] / 2, h.box[1] + h.box[3] / 2
+        cx, cy = cx * zoom, cy * zoom
+        left, top = self.canvas.canvasx(0), self.canvas.canvasy(0)
+        cw, ch = self.canvas.winfo_width(), self.canvas.winfo_height()
+        if left <= cx <= left + cw and top <= cy <= top + ch:
+            return
+        iw, ih = self._photo.width(), self._photo.height()
+        self.canvas.xview_moveto(max(0.0, (cx - cw / 2) / iw))
+        self.canvas.yview_moveto(max(0.0, (cy - ch / 2) / ih))
 
     # -- rendering ----------------------------------------------------------
 
     def _placeholder(self, msg):
+        self._shown = None
         self.canvas.delete("all")
         self.canvas.create_text(20, 20, anchor="nw", text=msg, fill="#666",
                                 font=("Segoe UI", 10), width=520, tags="ph")
@@ -201,7 +323,7 @@ class MapView(ttk.Frame):
 
         self._token += 1
         token = self._token
-        svg, zoom = self.svg, self.zoom
+        svg, zoom, suffix = self.svg, self.zoom, self._suffix()
         self.status.set("Rendering map...")
 
         def work():
@@ -211,17 +333,19 @@ class MapView(ttk.Frame):
             except Exception as e:                        # noqa: BLE001 - shown to the user
                 self.post(lambda: self._failed(token, e))
                 return
-            self.post(lambda: self._done(token, data))
+            self.post(lambda: self._done(token, data, suffix, zoom))
 
         threading.Thread(target=work, daemon=True).start()
 
-    def _done(self, token, data):
+    def _done(self, token, data, suffix=None, zoom=None):
         if token != self._token:
             return                                        # a newer zoom already won
         self._photo = tk.PhotoImage(data=data)
         self.canvas.delete("all")
         self.canvas.create_image(0, 0, anchor="nw", image=self._photo)
         self.canvas.configure(scrollregion=(0, 0, self._photo.width(), self._photo.height()))
+        self._shown = (suffix, zoom) if zoom else None
+        self._draw_lit()
         self.status.set(self.idle())
 
     def _failed(self, token, err):
@@ -1106,6 +1230,7 @@ class EditPanel(ttk.Frame):
         self.paths = {}          # tree item -> path into the floor
         self.items = {}          # path -> tree item
         self.path = None         # the part on show in the form
+        self.on_pick = lambda path: None    # told which part is picked, to light it on the map
         self.form = []           # (EditField, read the widget) for it
 
         head = ttk.Frame(self)
@@ -1159,6 +1284,7 @@ class EditPanel(ttk.Frame):
         self.undo.clear()
         self.undo_btn.configure(state="disabled")
         self.path = None
+        self.on_pick(None)
         if not mg.is_dataclass(res.floor):
             self.tree.delete(*self.tree.get_children())
             self._message("This is one neighborhood's re-rolled rooms, not a whole floor. "
@@ -1216,6 +1342,7 @@ class EditPanel(ttk.Frame):
         sel = self.tree.selection()
         if sel and sel[0] in self.paths:
             self.path = self.paths[sel[0]]
+            self.on_pick(self.path)
             self._show_form()
 
     def _show_form(self):
@@ -1284,6 +1411,7 @@ class EditPanel(ttk.Frame):
             self.tree.selection_set(self.items[path])
             self.tree.see(self.items[path])
         self.path = path
+        self.on_pick(path)
         self._show_form()
 
     def type_in(self, key, value):
@@ -1414,6 +1542,13 @@ class App(tk.Tk):
         self.editor = EditPanel(self.maps_pane, self)
         self.edit_btn = ttk.Button(self.view.bar, text="Edit floor", command=self.toggle_editor)
         self.edit_btn.pack(side="right", padx=(0, PAD))
+        # A click on a part of the map opens it in the edit panel, and the part
+        # picked in the panel lights up on the map.
+        self._parts = (None, {})
+        self.view.parts = self._map_parts
+        self.view.name_part = self._part_name
+        self.view.on_part = self._part_clicked
+        self.editor.on_pick = self._part_picked
 
         txt_tab = ttk.Frame(right)
         right.add(txt_tab, text="Text")
@@ -1737,13 +1872,49 @@ class App(tk.Tk):
 
     def toggle_editor(self):
         """Show the edit panel to the right of the map, or put it away."""
-        if str(self.editor) in self.maps_pane.panes():
+        if self._editing():
             self.maps_pane.forget(self.editor)
             self.edit_btn.configure(text="Edit floor")
+            self.view.light(None)
         else:
             self.maps_pane.add(self.editor, weight=0)
             self.edit_btn.configure(text="Close editor")
             self.notebook.select(self.maps_pane)
+            self.view.light(self.editor.path, see=False)
+
+    def _editing(self):
+        return str(self.editor) in self.maps_pane.panes()
+
+    # -- the map's parts ----------------------------------------------------------
+
+    def _map_parts(self, suffix):
+        """Where a map of the floor on show draws each of its parts, worked out
+        once per map; none for what the edit panel can't take (re-rolled rooms)."""
+        res = self.result
+        if res is None or not mg.is_dataclass(res.floor) or suffix is None:
+            return []
+        if self._parts[0] is not res:
+            self._parts = (res, {})
+        found = self._parts[1]
+        if suffix not in found:
+            found[suffix] = mg.map_hits(res.floor, suffix, res.boss_stairs)
+        return found[suffix]
+
+    def _part_name(self, path):
+        names = mg.describe_path(self.result.floor, path).split(" › ")
+        # A row says little on its own ("1. A1 · A4"): say what it is a row of.
+        node = mg.edit_get(self.result.floor, list(path))
+        return " › ".join(names[-2:]) if isinstance(node, (list, tuple)) else names[-1]
+
+    def _part_clicked(self, path):
+        """A part clicked on the map: open it in the edit panel."""
+        if not self._editing():
+            self.toggle_editor()
+        self.editor.show(path)
+
+    def _part_picked(self, path):
+        if self._editing():
+            self.view.light(path)
 
     def _undo_edit(self):
         if self.editor.undo:
@@ -2335,6 +2506,76 @@ def selftest() -> int:
     app.update()
     check(app.result.markdown == original.markdown, "Undo puts the floor back as it was")
     app.toggle_editor()
+
+    # Clicking the map: a part clicked opens in the edit panel, the pointer names
+    # what is under it, a drag pans and picks nothing, and the part picked in the
+    # panel lights up on the map -- or the part of the map that holds it.
+    say("floor 1 / medium / seed 4242, clicked")
+    app.floor.set(FLOOR_LABELS[1])
+    app._sync_floor()
+    app.size.set("medium")
+    app.seed.set("4242")
+    earlier = app.result
+    app.generate()
+    pump(timeout, lambda: app.result is not earlier)
+    view, canvas = app.view, app.view.canvas
+
+    def show_map(i, suffix):
+        view.picker.current(i)
+        view._on_pick()
+        pump(timeout, lambda: view._shown is not None and view._shown[0] == suffix)
+
+    def middle(h):
+        """Where a part's middle is on the canvas widget, as a click would be."""
+        zoom = view._shown[1]
+        if h.shape == "circle":
+            x, y = h.box[0], h.box[1]
+        else:
+            x, y = h.box[0] + h.box[2] / 2, h.box[1] + h.box[3] / 2
+        return round(x * zoom - canvas.canvasx(0)), round(y * zoom - canvas.canvasy(0))
+
+    def click(h, then=lambda: None):
+        x, y = middle(h)
+        canvas.event_generate("<ButtonPress-1>", x=x, y=y)
+        then()
+        canvas.event_generate("<ButtonRelease-1>", x=x, y=y)
+        app.update()
+
+    show_map(1, "_room_A")
+    rooms = [h for h in app._map_parts("_room_A") if h.shape == "circle" and "rooms" in h.path]
+    click(rooms[2])
+    want = ("neighborhoods", 0, "rooms", 2)
+    check(app._editing() and ed.path == want, f"a room clicked on its map opens in the edit panel {ed.path}")
+    pump(1, lambda: bool(canvas.find_withtag("lit")))
+    lit = [canvas.coords(i) for i in canvas.find_withtag("lit")]
+    z = view._shown[1]
+    cx, cy, r = rooms[2].box
+    check(len(lit) >= 1 and any(abs(c[0] - (cx - r) * z) < 2 and abs(c[1] - (cy - r) * z) < 2 for c in lit),
+          "and lights up on the map")
+    x, y = middle(rooms[0])
+    # Handled at once: read straight after, with no update for a real pointer
+    # over the window to move the tooltip on.
+    canvas.event_generate("<Motion>", x=x, y=y)
+    tip = " ".join(canvas.itemcget(i, "text") for i in canvas.find_withtag("tip")
+                   if canvas.type(i) == "text")
+    check("Room A1" in tip and canvas.cget("cursor") == "hand2",
+          f"the pointer names the part under it ({tip!r})")
+    click(rooms[0], then=lambda: canvas.event_generate("<B1-Motion>", x=x + 40, y=y + 30))
+    check(ed.path == want, "a drag pans and picks nothing")
+
+    show_map(0, "")
+    boss = next(h for h in app._map_parts("") if h.path == ("neighborhoods", 1, "boss"))
+    click(boss)
+    check(ed.path == ("neighborhoods", 1, "boss"), "a boss clicked on the overview opens in the edit panel")
+    ed.show(("neighborhoods", 2, "rooms", 0))
+    app.update()
+    cell = next(h for h in app._map_parts("") if h.path == ("neighborhoods", 2))
+    lit = [canvas.coords(i) for i in canvas.find_withtag("lit")]
+    z = view._shown[1]
+    check(any(abs(c[0] - cell.box[0] * z) < 2 and abs(c[1] - cell.box[1] * z) < 2 for c in lit),
+          "a room picked in the panel lights its neighborhood on the overview")
+    app.toggle_editor()
+    check(not canvas.find_withtag("lit"), "closing the panel puts the light out")
 
     # An option combination the generator must reject rather than crash on.
     errs = []
