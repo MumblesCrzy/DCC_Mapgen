@@ -693,12 +693,71 @@ class Neighborhood:
     # Where it crosses into the neighborhoods beside it: (a room here, the room
     # it comes out in next door), one for each neighbor.
     crossings: List[Tuple[str, str]] = field(default_factory=list)
+    # Its ways into the boss chambers at its corners, where a borough's boss, a
+    # city's or the whole floor's sits between four neighborhoods: (a room here,
+    # "borough" | "city" | "top", the corner it is at, e.g. "southeast").
+    chamber_ways: List[Tuple[str, str, str]] = field(default_factory=list)
 
 # Rooms a crossing can't be in: somewhere to rest, the guild, the stairwell's
 # secret way, and the boss's lair, which sits deepest in on purpose.
 NO_CROSSING = {"Safe Room", "Guild Hall", "Hidden Passage", "Boss Chamber"}
 # Which way a neighbor lies, by (row, col) step.
 COMPASS4 = {(-1, 0): "north", (1, 0): "south", (0, -1): "west", (0, 1): "east"}
+CORNERS = ("northwest", "northeast", "southwest", "southeast")
+
+
+def chamber_corners(nb, grid: int, borough_bosses, city_bosses, top_boss) -> List[Tuple[str, str]]:
+    """The boss chambers at a neighborhood's corners, as (tier, corner): its
+    borough's, at the corner the borough's four neighborhoods share; its city's,
+    where the city's four boroughs meet; the top boss's, at the floor's middle.
+    Only chambers with a boss in them."""
+    out = []
+    ns = lambda south: "south" if south else "north"
+    ew = lambda east: "east" if east else "west"
+    if nb.borough in borough_bosses:
+        out.append(("borough", ns(nb.row % 2 == 0) + ew(nb.col % 2 == 0)))
+    if grid >= 4 and nb.city in city_bosses and nb.row % 4 in (1, 2) and nb.col % 4 in (1, 2):
+        out.append(("city", ns(nb.row % 4 == 1) + ew(nb.col % 4 == 1)))
+    mid = grid // 2
+    if top_boss is not None and nb.row in (mid - 1, mid) and nb.col in (mid - 1, mid):
+        out.append(("top", ns(nb.row == mid - 1) + ew(nb.col == mid - 1)))
+    return out
+
+
+def chamber_boss(fl, nb, tier):
+    """The boss in a chamber a neighborhood has a way into, and its path from
+    the floor: (boss, path), or (None, None) if there is none."""
+    if tier == "borough":
+        b = getattr(fl, "borough_bosses", {}).get(nb.borough)
+        return (b, ("borough_bosses", nb.borough)) if b else (None, None)
+    if tier == "city":
+        b = getattr(fl, "city_bosses", {}).get(nb.city)
+        return (b, ("city_bosses", nb.city)) if b else (None, None)
+    b = getattr(fl, "top_boss", None)
+    return (b, ("top_boss",)) if b else (None, None)
+
+
+def chamber_word(fl, tier) -> str:
+    """What the write-up calls a chamber's tier: "borough", "city", "county"..."""
+    if tier == "top":
+        return (getattr(fl, "top_tier_name", "") or "top-tier").lower()
+    return tier
+
+
+def room_ways(fl, nb, rid, owner) -> str:
+    """The rest of a room's line after its corridors: where it crosses into a
+    neighborhood next door, and where it leads into a boss chamber."""
+    out = []
+    cross = [f"{COMPASS4.get((owner[t].row - nb.row, owner[t].col - nb.col), 'over')} into "
+             f"{t} ({owner[t].label}. {owner[t].name})"
+             for h, t in nb.crossings if h == rid and t in owner]
+    if cross:
+        out.append("crossing " + ", ".join(cross))
+    for h, tier, corner in nb.chamber_ways:
+        boss, _ = chamber_boss(fl, nb, tier)
+        if h == rid and boss is not None:
+            out.append(f"way {corner} into the {chamber_word(fl, tier)} boss chamber ({boss.name})")
+    return "".join(f"; {x}" for x in out)
 
 
 def crossing_side(fl, here, there) -> Optional[str]:
@@ -872,7 +931,8 @@ class Generator:
         # Fold the neighborhood's notable feature into a random filler room (else the entrance).
         fillers = [r for r in rooms if r.kind in filler_kinds]
         feat_room = self.rng.choice(fillers) if fillers else entrance
-        feat_room.description += " " + nb.feature
+        if nb.feature:              # re-rolled rooms may have none to fold in
+            feat_room.description += " " + nb.feature
 
         # Boss chamber attaches to whichever room is deepest from the entrance.
         graph = {r.id: r.connects_to for r in rooms}
@@ -942,6 +1002,20 @@ class Generator:
             order = {other.label: k for k, other in enumerate(beside(nb))}
             owner = {r.id: o.label for o in beside(nb) for r in o.rooms}
             nb.crossings.sort(key=lambda c: order[owner[c[1]]])
+
+    def make_chamber_ways(self, nbhds, borough_bosses, city_bosses, top_boss) -> None:
+        """Each neighborhood's way into the boss chambers at its corners: one of
+        its ordinary rooms, another than its crossings while there are enough.
+        A stream of their own again, so nothing else on the floor moves."""
+        rng = random.Random(f"floor{self.floor}|{self.seed}|chambers")
+        for nb in nbhds:
+            taken = {h for h, _ in nb.crossings}
+            plain = [r.id for r in nb.rooms if r.kind not in NO_CROSSING and r.kind != "Entrance"]
+            for tier, corner in chamber_corners(nb, self.grid, borough_bosses, city_bosses, top_boss):
+                fresh = [rid for rid in plain if rid not in taken]
+                rid = rng.choice(fresh or plain) if plain else nb.rooms[0].id
+                taken.add(rid)
+                nb.chamber_ways.append((rid, tier, corner))
 
     # -- assembly ------------------------------------------------------------
 
@@ -1021,6 +1095,7 @@ class Generator:
         for nb in nbhds:
             nb.rooms, nb.corridor_encounters = self.make_rooms(nb, guildmaster_form)
         self.make_crossings(nbhds)
+        self.make_chamber_ways(nbhds, borough_bosses, city_bosses, top_boss)
 
         days = self.days_override or self.rng.randint(*self.cfg["days"])
         title = {"small": "Neighborhood", "medium": "Borough", "large": "City"}.get(
@@ -2497,16 +2572,24 @@ def render(fl: Floor) -> str:
         o.append("A single neighborhood. The boss chamber is at the far end from the entry.")
     o.append("")
 
+    def reached(tier, place=None):
+        """The rooms with a way into a chamber, from the neighborhoods around it."""
+        rooms = [h for nb in fl.neighborhoods for h, t, _ in nb.chamber_ways
+                 if t == tier and (place is None or {"borough": nb.borough, "city": nb.city}[tier] == place)]
+        return [f"- **Reached from:** {', '.join(rooms)}"] if rooms else []
+
     if fl.top_boss:
         o.append(f"## {fl.top_tier_name} Boss")
         o.append("")
         o.extend(boss_block(fl.top_boss, fl.number, label=fl.top_tier_name))
+        o.extend(reached("top"))
         o.append("")
 
     if len(fl.city_bosses) == 1:
         o.append("## City Boss")
         o.append("")
         o.extend(boss_block(next(iter(fl.city_bosses.values())), fl.number))
+        o.extend(reached("city"))
         o.append("")
     elif fl.city_bosses:
         o.append("## City Bosses")
@@ -2518,6 +2601,7 @@ def render(fl: Floor) -> str:
                      f"boroughs {', '.join(city_boroughs)})")
             o.append("")
             o.extend(boss_block(b, fl.number))
+            o.extend(reached("city", cname))
             o.append("")
 
     if fl.borough_bosses:
@@ -2529,6 +2613,7 @@ def render(fl: Floor) -> str:
             o.append(f"### {head} (neighborhoods {', '.join(members)})")
             o.append("")
             o.extend(boss_block(b, fl.number))
+            o.extend(reached("borough", bname))
             o.append("")
 
     o.append("## Neighborhoods")
@@ -2561,12 +2646,8 @@ def render(fl: Floor) -> str:
         o.append(f"- **Rooms:** ({len(nb.rooms)})")
         for r in nb.rooms:
             conn = ", ".join(r.connects_to) if r.connects_to else "none"
-            line = f"  - **{r.id} {r.kind}:** {r.description} → connects to {conn}"
-            # Where this room crosses into a neighborhood next door, and which way.
-            out = [f"{COMPASS4.get((owner[t].row - nb.row, owner[t].col - nb.col), 'over')} into "
-                   f"{t} ({owner[t].label}. {owner[t].name})"
-                   for h, t in nb.crossings if h == r.id and t in owner]
-            o.append(line + ("; crossing " + ", ".join(out) if out else ""))
+            o.append(f"  - **{r.id} {r.kind}:** {r.description} → connects to {conn}"
+                     + room_ways(fl, nb, r.id, owner))
         if nb.corridor_encounters:
             o.append("- **Corridor encounters:**")
             for a_id, b_id, text in nb.corridor_encounters:
@@ -2954,8 +3035,10 @@ def render_room_svg(nb: Neighborhood, fl: Floor) -> str:
         cols.setdefault(d, []).append(rid)
     max_depth = max(depth.values())
 
-    # Crossings into the neighborhoods beside this one, by the side each is on.
-    # Each gets a tag on that edge of the map, which makes room for it there.
+    # Ways out of this neighborhood that aren't its own corridors: crossings into
+    # the neighborhoods beside it, each on the side it leads out of, and ways
+    # into the boss chambers at its corners. Each gets a tag on its own edge or
+    # corner of the map, which makes room for it there.
     owner = {r.id: n for n in getattr(fl, "neighborhoods", ()) for r in n.rooms}
     sides = {}
     for here, there in nb.crossings:
@@ -2963,10 +3046,18 @@ def render_room_svg(nb: Neighborhood, fl: Floor) -> str:
         side = nxt and COMPASS4.get((nxt.row - nb.row, nxt.col - nb.col))
         if side and here in graph:
             sides[side] = (here, there, nxt)
+    corners = {}
+    for here, tier, corner in nb.chamber_ways:
+        boss, path = chamber_boss(fl, nb, tier)
+        if boss is not None and here in graph and corner in CORNERS:
+            corners[corner] = (here, tier, boss, path)
+    band_n = "north" in sides or any(c.startswith("north") for c in corners)
+    band_s = "south" in sides or any(c.startswith("south") for c in corners)
     TAG_W, TAG_H = 190, 22
+    CORNER_W = 240                      # a chamber's tag: its boss's marker, tier and name
     x0 = 12 + TAG_W + 24 if "west" in sides else 80
     x1 = W - 12 - TAG_W - 24 if "east" in sides else W - 80
-    graph_top = 130 + (40 if "north" in sides else 0)
+    graph_top = 130 + (40 if band_n else 0)
     graph_bottom = graph_top + 210
     col_w = (x1 - x0) / max_depth
     pos = {}
@@ -2977,57 +3068,89 @@ def render_room_svg(nb: Neighborhood, fl: Floor) -> str:
             y = graph_top + (i + 1) * (graph_bottom - graph_top) / (len(ids) + 1)
             pos[rid] = (x, y)
 
-    # How each crossing's way runs: out of its room into the gap beside the
-    # room's column, then up or down, to a tag above or below the rooms, or to a
-    # lane just over or under them that runs to a tag at the east or west edge.
-    # It never passes through another room, so it can't be taken for a corridor.
+    # How each way runs: out of its room into the gap beside the room's column,
+    # then up or down, to a tag above or below the rooms, or along a lane over or
+    # under them to a tag at an edge or a corner. It never passes through another
+    # room, so it can't be taken for a corridor.
     hop = min(col_w / 2, 36)
     lanes = {"top": graph_top - 14, "bottom": graph_bottom + 14}
     lane_use = {}                       # lane -> the stretch of it a way runs along
     gaps = []                           # where ways already run up or down
 
+    open_lo = 12 + TAG_W + 6 if "west" in sides else 6        # clear of the side tags
+    open_hi = W - 12 - TAG_W - 6 if "east" in sides else W - 6
+
     def gap(x, step):
         """A place in the gap beside a column for a way to run up or down,
-        clear of any other way there."""
+        clear of any other way there, and of the tags at the sides."""
+        if not open_lo <= x + step <= open_hi:
+            step = -step
         gx = x + step
         while any(abs(gx - g) < 6 for g in gaps):
             gx += 10 if step > 0 else -10
         gaps.append(gx)
         return gx
 
-    routes = []
-    # East and west first: they take the lanes, and a south tag goes under a lane in use.
-    for side in ("west", "east", "north", "south"):
+    routes = []                         # (way, tag x, tag y, arrow or None, kind, what)
+    # East and west first: they take the lanes, and the south band goes under a lane in use.
+    for side in ("west", "east"):
         if side not in sides:
             continue
         here, there, nxt = sides[side]
         x, y = pos[here]
-        if side in ("north", "south"):
-            gx = gap(x, hop if x + hop <= x1 else -hop)
-            tx = min(max(gx, 12 + TAG_W / 2), W - 12 - TAG_W / 2)
-            ty = 109 if side == "north" else graph_bottom + 36 + (26 if "bottom" in lane_use else 0)
-            up = -1 if side == "north" else 1
-            edge = ty - up * TAG_H / 2                  # the tag's side facing the rooms
-            way = [(x, y), (gx, y), (gx, edge)]
-            tip = [(tx, edge + up * (TAG_H + 9)), (tx - 6, edge + up * TAG_H), (tx + 6, edge + up * TAG_H)]
-        else:
-            gx = gap(x, -hop if side == "west" else hop)
-            tx = 12 + TAG_W / 2 if side == "west" else W - 12 - TAG_W / 2
-            out = -1 if side == "west" else 1
-            edge = tx - out * TAG_W / 2
-            stretch = (min(gx, edge), max(gx, edge))
-            lane = "top" if y - graph_top <= graph_bottom - y else "bottom"
-            busy = lane_use.get(lane)
-            if busy and busy[0] < stretch[1] and stretch[0] < busy[1]:
-                lane = "bottom" if lane == "top" else "top"
-            lane_use[lane] = stretch
-            ty = lanes[lane]
-            way = [(x, y), (gx, y), (gx, ty), (edge, ty)]
-            tip = [(tx + out * (TAG_W / 2 + 9), ty), (tx + out * TAG_W / 2, ty - 6), (tx + out * TAG_W / 2, ty + 6)]
-        routes.append((here, there, nxt, way, tx, ty, tip))
+        gx = gap(x, -hop if side == "west" else hop)
+        tx = 12 + TAG_W / 2 if side == "west" else W - 12 - TAG_W / 2
+        out = -1 if side == "west" else 1
+        edge = tx - out * TAG_W / 2
+        stretch = (min(gx, edge), max(gx, edge))
+        lane = "top" if y - graph_top <= graph_bottom - y else "bottom"
+        busy = lane_use.get(lane)
+        if busy and busy[0] < stretch[1] and stretch[0] < busy[1]:
+            lane = "bottom" if lane == "top" else "top"
+        lane_use[lane] = stretch
+        ty = lanes[lane]
+        tip = [(tx + out * (TAG_W / 2 + 9), ty), (tx + out * TAG_W / 2, ty - 6), (tx + out * TAG_W / 2, ty + 6)]
+        routes.append(([(x, y), (gx, y), (gx, ty), (edge, ty)], tx, ty, tip, "crossing", (there, nxt)))
 
-    list_top = (graph_bottom + 20 + (46 if "south" in sides or "bottom" in lane_use else 0)
-                + (26 if "south" in sides and "bottom" in lane_use else 0))
+    corner_s = any(c.startswith("south") for c in corners)
+    band_y = {"north": 109,
+              "south": graph_bottom + 36 + (26 if "bottom" in lane_use else 0) + (14 if corner_s else 0)}
+    for side in ("north", "south"):
+        if side not in sides:
+            continue
+        here, there, nxt = sides[side]
+        x, y = pos[here]
+        # Clear of a corner's tag at either end of the band.
+        lo = 12 + TAG_W / 2 + (CORNER_W + 10 if side + "west" in corners else 0)
+        hi = W - 12 - TAG_W / 2 - (CORNER_W + 10 if side + "east" in corners else 0)
+        gx = gap(x, hop if x + hop <= x1 else -hop)
+        tx = min(max(gx, lo), hi)
+        ty = band_y[side]
+        up = -1 if side == "north" else 1
+        edge = ty - up * TAG_H / 2                  # the tag's side facing the rooms
+        tip = [(tx, edge + up * (TAG_H + 9)), (tx - 6, edge + up * TAG_H), (tx + 6, edge + up * TAG_H)]
+        if not lo - TAG_W / 2 <= gx <= hi + TAG_W / 2:
+            way = [(x, y), (gx, y), (gx, (edge + y) / 2), (tx, (edge + y) / 2), (tx, edge)]
+        else:
+            way = [(x, y), (gx, y), (gx, edge)]
+        routes.append((way, tx, ty, tip, "crossing", (there, nxt)))
+    for corner in CORNERS:
+        if corner not in corners:
+            continue
+        here, tier, boss, path = corners[corner]
+        x, y = pos[here]
+        north, east = corner.startswith("north"), corner.endswith("east")
+        gx = gap(x, hop if east else -hop)
+        tx = W - 12 - CORNER_W / 2 if east else 12 + CORNER_W / 2
+        ty = band_y["north" if north else "south"]
+        edge = ty + TAG_H / 2 if north else ty - TAG_H / 2
+        lane_y = edge + 8 if north else edge - 8     # just inside the band, clear of its tags
+        way = [(x, y), (gx, y), (gx, lane_y), (tx, lane_y), (tx, edge)]
+        routes.append((way, tx, ty, None, tier, (boss, path, east)))
+
+    low = band_s or "bottom" in lane_use
+    list_top = (graph_bottom + 20 + (46 if low else 0) + (26 if band_s and "bottom" in lane_use else 0)
+                + (14 if corner_s else 0))
     H = list_top + 80 + 18 * (len(nb.rooms) + len(nb.corridor_encounters) + 3)
 
     # Where this neighborhood is in its floor, for noting what is drawn where: a
@@ -3088,21 +3211,38 @@ def render_room_svg(nb: Neighborhood, fl: Floor) -> str:
                 o.append(_text(mx, my + 4, "!", size=12, weight="bold", anchor="middle", fill="#b8860b"))
                 hit(("corridor_encounters", encounter_at[key]), "circle", mx, my, 11)
 
-    # Crossings, along the ways worked out above: each a tag naming the
-    # neighborhood next door and the room it comes out in.
-    for here, there, nxt, way, tx, ty, tip in routes:
+    # The ways out, along the routes worked out above: a crossing's tag names the
+    # neighborhood next door and the room it comes out in; a chamber's, its boss.
+    for way, tx, ty, tip, kind, what in routes:
+        ink = "#2e86c1" if kind == "crossing" else "#9a6b1f"
         o.append('<polyline points="' + " ".join(f"{px},{py}" for px, py in way) + '" fill="none" '
-                 'stroke="#2e86c1" stroke-width="1.8" stroke-dasharray="5,4"/>')
-        o.append(f'<rect x="{tx - TAG_W / 2}" y="{ty - TAG_H / 2}" width="{TAG_W}" height="{TAG_H}" rx="4" '
-                 f'fill="#eaf2f8" stroke="#2e86c1" stroke-width="1.5"/>')
-        o.append('<polygon points="' + " ".join(f"{px},{py}" for px, py in tip) + '" fill="#2e86c1"/>')
-        o.append(_text(tx, ty + 4, f"To {nxt.label}. {_fit(nxt.name, 19)} ({there})", size=10,
-                       weight="bold", anchor="middle", fill="#1b4f72"))
-        if at is not None:
-            # A click opens the room it comes out in; a double-click, that room's map.
-            k = next(k for k, r in enumerate(nxt.rooms) if r.id == there)
-            j = next(j for j, n in enumerate(fl.neighborhoods) if n is nxt)
-            _hit(("neighborhoods", j, "rooms", k), "rect", tx - TAG_W / 2, ty - TAG_H / 2, TAG_W, TAG_H)
+                 f'stroke="{ink}" stroke-width="1.8" stroke-dasharray="5,4"/>')
+        tw = TAG_W if kind == "crossing" else CORNER_W
+        o.append(f'<rect x="{tx - tw / 2}" y="{ty - TAG_H / 2}" width="{tw}" height="{TAG_H}" rx="4" '
+                 f'fill="{"#eaf2f8" if kind == "crossing" else "#f6ecd9"}" stroke="{ink}" stroke-width="1.5"/>')
+        if kind == "crossing":
+            there, nxt = what
+            o.append('<polygon points="' + " ".join(f"{px},{py}" for px, py in tip) + f'" fill="{ink}"/>')
+            o.append(_text(tx, ty + 4, f"To {nxt.label}. {_fit(nxt.name, 19)} ({there})", size=10,
+                           weight="bold", anchor="middle", fill="#1b4f72"))
+            if at is not None:
+                # A click opens the room it comes out in; a double-click, that room's map.
+                k = next(k for k, r in enumerate(nxt.rooms) if r.id == there)
+                j = next(j for j, n in enumerate(fl.neighborhoods) if n is nxt)
+                _hit(("neighborhoods", j, "rooms", k), "rect", tx - TAG_W / 2, ty - TAG_H / 2, TAG_W, TAG_H)
+        else:
+            boss, path, east = what
+            # The boss's marker at the tag's outer end, as the overview draws it.
+            mx = tx + (CORNER_W / 2 - 13 if east else -(CORNER_W / 2 - 13))
+            fill = {"borough": "#a8a9ad", "city": "#d4af37", "top": "#7a1f7a"}[kind]
+            glyph = {"borough": "B", "city": "C", "top": "★"}[kind]
+            o.append(f'<circle cx="{mx}" cy="{ty}" r="8" fill="{fill}" stroke="#222" stroke-width="1.5"/>')
+            o.append(_text(mx, ty + 3.5, glyph, size=9, weight="bold", anchor="middle"))
+            tier = chamber_word(fl, kind).capitalize()
+            o.append(_text(tx + (-9 if east else 9), ty + 4, f"{tier} boss: {_fit(boss.name, 21)}", size=10,
+                           weight="bold", anchor="middle", fill="#5a3d0c"))
+            if at is not None:
+                _hit(path, "rect", tx - CORNER_W / 2, ty - TAG_H / 2, CORNER_W, TAG_H)
 
     for j, r in enumerate(nb.rooms):
         x, y = pos[r.id]
@@ -3129,6 +3269,8 @@ def render_room_svg(nb: Neighborhood, fl: Floor) -> str:
     leads = {}
     for side, (here, there, _) in sides.items():
         leads.setdefault(here, []).append(f"{side} to {there}")
+    for corner, (here, tier, _, _) in corners.items():
+        leads.setdefault(here, []).append(f"{corner} to the {chamber_word(fl, tier)} boss")
     for j, r in enumerate(nb.rooms):
         conn = ", ".join(r.connects_to) if r.connects_to else "none"
         conn += "".join(f"; {w}" for w in leads.get(r.id, []))
@@ -6927,6 +7069,9 @@ def parse_neighborhood_block(block: str) -> Neighborhood:
         r"\s*-\s*Form:\s*(?P<form>.+?)\s*\n"
         r"\s*-\s*Chamber:\s*(?P<chamber>.+?)\s*\n"
         r"\s*-\s*Mechanic:\s*(?P<mechanic>.+?)\s*\n"
+        # Lines a later version put in between, such as what it drops: a write-up
+        # with them is still one this script wrote.
+        r"(?:[ \t]*-[ \t]*(?!Stairwell)[^\n]*\n)*"
         r"\s*-\s*Stairwell in chamber:\s*(?P<stair>yes|no)", block)
     if not boss_m:
         raise SystemExit("--rooms-for: couldn't find a '- **Neighborhood Boss:** ... (Level N)' block "
@@ -6953,16 +7098,102 @@ def parse_neighborhood_block(block: str) -> Neighborhood:
         tutorial_guild=tutorial_guild, feature=feature, hidden_stairs=hidden_stairs,
     )
 
-def render_rooms_only(nb: Neighborhood) -> str:
+def render_rooms_only(nb: Neighborhood, fl=None, moved=()) -> str:
+    """One neighborhood's rooms, re-rolled: each room's line as the floor's
+    write-up gives it, its crossings and chamber ways included, and which of
+    those ways had to move to another room."""
+    owner = {r.id: n for n in getattr(fl, "neighborhoods", ()) for r in n.rooms}
     o = [f"### {nb.label}. {nb.name} \u2014 Room Detail", "", f"- **Rooms:** ({len(nb.rooms)})"]
     for r in nb.rooms:
         conn = ", ".join(r.connects_to) if r.connects_to else "none"
-        o.append(f"  - **{r.id} {r.kind}:** {r.description} \u2192 connects to {conn}")
+        o.append(f"  - **{r.id} {r.kind}:** {r.description} \u2192 connects to {conn}"
+                 + room_ways(fl, nb, r.id, owner))
     if nb.corridor_encounters:
         o.append("- **Corridor encounters:**")
         for a_id, b_id, text in nb.corridor_encounters:
             o.append(f"  - **{a_id} \u2194 {b_id}:** {text}")
+    if moved:
+        o.append("- **Ways out that moved** (the rest of the floor's write-up still names the rooms "
+                 "they were in):")
+        o.extend(f"  - {m}" for m in moved)
     return "\n".join(o)
+
+
+_WAY_SIDE = re.compile(r"(north|south|east|west) into ([A-Za-z]+\d+) \(([A-Za-z]+)\. (.+?)\)"
+                       r"(?=, (?:north|south|east|west) into |$)")
+
+
+def parse_room_ways(block: str):
+    """The ways out of a neighborhood that its write-up gives in its rooms'
+    lines: crossings, as (room, its kind, side, the room next door, that
+    neighborhood's label, its name), and chamber ways, as (room, the chamber's
+    tier as written, corner, its boss's name)."""
+    crossings, chambers = [], []
+    for m in re.finditer(r"^\s*- \*\*([A-Za-z]+\d+) ([^:*]+):\*\* .*\u2192 connects to (.*)$", block, re.M):
+        rid, kind = m.group(1), m.group(2)
+        for part in m.group(3).split("; ")[1:]:
+            if part.startswith("crossing "):
+                crossings += [(rid, kind) + c.groups() for c in _WAY_SIDE.finditer(part[len("crossing "):])]
+            else:
+                w = re.fullmatch(r"way (\w+) into the (.+?) boss chamber \((.+)\)", part)
+                if w:
+                    chambers.append((rid, w.group(2), w.group(1), w.group(3)))
+    return crossings, chambers
+
+
+def keep_ways(nb: Neighborhood, crossings, chambers, rng):
+    """Give re-rolled rooms the ways out the old ones had, and a floor to draw
+    them on: the neighborhoods next door and the bosses' chambers, as much of
+    them as the write-up gives. The Entrance is still the way in; any other way
+    stays in the room it was in while that room is still one it can be in, so
+    the rest of the floor's write-up is still right. Returns the stand-in floor
+    and what moved."""
+    import types
+    plain = [r.id for r in nb.rooms if r.kind not in NO_CROSSING and r.kind != "Entrance"]
+    taken, moved = set(), []
+
+    def place(old, entrance):
+        if entrance:
+            rid = nb.rooms[0].id
+        elif old in plain and old not in taken:
+            rid = old
+        else:
+            fresh = [r for r in plain if r not in taken]
+            rid = rng.choice(fresh or plain) if plain else nb.rooms[0].id
+        taken.add(rid)
+        return rid
+
+    nb.row = nb.col = 1
+    step = {side: rc for rc, side in COMPASS4.items()}
+    beside = []
+    nb.crossings = []
+    # North, south, west, east, as the floor gives them.
+    for old, kind, side, there, label, name in sorted(crossings, key=lambda c: list(step).index(c[2])):
+        here = place(old, kind == "Entrance")
+        dr, dc = step[side]
+        beside.append(types.SimpleNamespace(label=label, name=name, row=1 + dr, col=1 + dc,
+                                            rooms=[types.SimpleNamespace(id=there)]))
+        nb.crossings.append((here, there))
+        if here != old:
+            moved.append(f"The crossing {side} into {there} ({label}. {name}) is from {here} now, not {old}.")
+    fl = types.SimpleNamespace(neighborhoods=[nb] + beside, borough_bosses={}, city_bosses={},
+                               top_boss=None, top_tier_name="")
+    nb.borough, nb.city = "here", "here"
+    nb.chamber_ways = []
+    # Borough, city, top, as the floor gives them.
+    rank = {"borough": 0, "city": 1}
+    for old, word, corner, boss in sorted(chambers, key=lambda c: rank.get(c[1], 2)):
+        tier = word if word in ("borough", "city") else "top"
+        stand_in = types.SimpleNamespace(name=boss)
+        if tier == "top":
+            fl.top_boss, fl.top_tier_name = stand_in, word.capitalize()
+        else:
+            getattr(fl, f"{tier}_bosses")["here"] = stand_in
+        here = place(old, False)
+        nb.chamber_ways.append((here, tier, corner))
+        if here != old:
+            moved.append(f"The way {corner} into the {word} boss chamber is from {here} now, not {old}.")
+    return fl, moved
 
 
 # ---------------------------------------------------------------------------
@@ -8124,13 +8355,15 @@ def regenerate_rooms(path: str, label: Optional[str] = None, floor: int = 1, *,
 
     block = _extract_neighborhood_block(raw, label)
     nb = parse_neighborhood_block(block)
+    crossings, chambers = parse_room_ways(block)
     gen = Generator(floor, size, scaling, seed, days, boss_stairs)
     nb.rooms, nb.corridor_encounters = gen.make_rooms(nb, MORDECAI_FORMS.get(str(floor), "a local guildmaster"))
-
-    import types
-    fake_fl = types.SimpleNamespace(number=floor, seed=seed)
+    # The ways out the old rooms had, kept: placed from a stream of their own.
+    fake_fl, moved = keep_ways(nb, crossings, chambers,
+                               random.Random(f"floor{floor}|{seed}|ways|{nb.label}"))
+    fake_fl.number, fake_fl.seed = floor, seed
     result = GenResult(floor=fake_fl, number=floor, size=size, seed=seed,
-                       markdown=render_rooms_only(nb),
+                       markdown=render_rooms_only(nb, fake_fl, moved),
                        svgs=[(f"_room_{nb.label}", render_room_svg(nb, fake_fl))])
     return nb, result
 
@@ -8382,9 +8615,10 @@ EDIT_LOCKED_IN = {("Quadrant", "name"),
                   ("Team", "is_party_team"), ("Team", "kings_point")}
 # Rows whose leading cells are links, by the group they are in: a corridor runs
 # between two rooms, a named train stops at a line and a station, a Floor 9
-# stairwell sits in a team's slot, a crossing joins a room to one next door.
+# stairwell sits in a team's slot, a crossing joins a room to one next door, and
+# a chamber way leads from a room to a boss's chamber at one of its corners.
 EDIT_LOCKED_CELLS = {"corridor_encounters": {0, 1}, "stops": {0, 1}, "stairs": {0},
-                     "crossings": {0, 1}}
+                     "crossings": {0, 1}, "chamber_ways": {0, 1, 2}}
 
 
 @dataclass

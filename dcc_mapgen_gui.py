@@ -2689,6 +2689,28 @@ def selftest() -> int:
     app.toggle_editor()
     check(not canvas.find_withtag("lit"), "closing the panel puts the light out")
 
+    # File → Re-roll rooms: new rooms for one neighborhood of a saved write-up,
+    # keeping its crossings and its way into the borough boss's chamber.
+    import tempfile
+    md = os.path.join(tempfile.mkdtemp(prefix="dcc_selftest_"), "floor1.md")
+    with open(md, "w", encoding="utf-8") as f:
+        f.write(app.result.markdown)
+    real_open, real_label, real_err = filedialog.askopenfilename, globals()["_ask_label"], messagebox.showerror
+    errs_seen = []
+    filedialog.askopenfilename = lambda **kw: md
+    globals()["_ask_label"] = lambda parent: "B"
+    messagebox.showerror = lambda title, msg, **kw: errs_seen.append(msg)
+    try:
+        app.reroll_rooms()
+        app.update()
+    finally:
+        filedialog.askopenfilename, messagebox.showerror = real_open, real_err
+        globals()["_ask_label"] = real_label
+    rerolled = app.result.markdown
+    check(not errs_seen and rerolled.startswith("### B.") and "crossing west into A1" in rerolled
+          and "boss chamber (" in rerolled and "<polyline" in app.result.svgs[0][1],
+          f"re-rolled rooms keep their crossings and their way into the boss's chamber {errs_seen[:1]}")
+
     # A round map: Floor 5's quadrants are slices of a circle.
     say("floor 5 / medium / seed 4242, clicked")
     app.floor.set(FLOOR_LABELS[5])

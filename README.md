@@ -6,7 +6,7 @@ A procedural floor/map generator in the style of the *Dungeon Crawler Carl* book
 
 ## Features
 
-- **Floors 1 & 2** — neighborhood/borough/city grid, from small up through large (1 City). Beyond that, huge/giant/massive/continent tile multiple Cities together — County (4 Cities), State (9), Country (16), Continent (25) — each City keeping its own City Boss, with one top-tier boss (County/State/Country/Continent) overseeing all of them. Bosses (with a word-bank uniqueness guard so names/forms don't collide), loot boxes, achievements, an Elite, other crawler teams, the tutorial guild, and a full connected **room graph** per neighborhood (safe rooms, hidden passages, guild hall, filler rooms, corridor encounters). Each neighborhood **crosses into the ones beside it** at a room on each side of their shared edge: its Entrance is the way in from the neighbor nearer the floor's entry, and the write-up and both room maps say where each crossing comes out. `--stair-chance` and `--borough-boss-rate` tune how often neighborhood stairwells and borough bosses show up.
+- **Floors 1 & 2** — neighborhood/borough/city grid, from small up through large (1 City). Beyond that, huge/giant/massive/continent tile multiple Cities together — County (4 Cities), State (9), Country (16), Continent (25) — each City keeping its own City Boss, with one top-tier boss (County/State/Country/Continent) overseeing all of them. Bosses (with a word-bank uniqueness guard so names/forms don't collide), loot boxes, achievements, an Elite, other crawler teams, the tutorial guild, and a full connected **room graph** per neighborhood (safe rooms, hidden passages, guild hall, filler rooms, corridor encounters). Each neighborhood **crosses into the ones beside it** at a room on each side of their shared edge: its Entrance is the way in from the neighbor nearer the floor's entry, and the write-up and both room maps say where each crossing comes out. Each borough's boss chamber sits at the corner its four neighborhoods share, the city's where its boroughs meet and a top-tier boss's at the floor's middle: every neighborhood around one has a way in from one of its rooms, given in that room's line, under the boss ("Reached from") and as a tag in that corner of the room map. `--stair-chance` and `--borough-boss-rate` tune how often neighborhood stairwells and borough bosses show up.
 - **Floor 3** (The Over City) — settlements on a wilderness grid, roaming bosses, locked stairwells, a quest board per town, one Elite.
 - **Floor 4** (The Iron Tangle) — schematic rail/transit map, laid out the way the books lay it out, with its content from this project's own word banks rather than the books' plot:
   - **Stations:** every line has stairwells at 12, 24, 36, 48 and 72. A transfer has a safe room only if its number is prime, a Desperado Club if it ends in 1, and a Club Vanquisher if it ends in 9.
@@ -43,7 +43,7 @@ A procedural floor/map generator in the style of the *Dungeon Crawler Carl* book
 - A **desktop app** (`dcc_mapgen_gui.py`) wrapping all of the above: pick a floor and size, generate, and read the write-up and browse every map without leaving the window. See [Desktop app](#desktop-app).
 - **Make a floor your own** — rename a boss, raise a level, rewrite a description or a quest in the app's edit panel and watch the write-up and maps redraw, or save the floor as a **floor file** and edit it in any text editor. See [Floor files](#floor-files-make-a-floor-your-own).
 - Every floor supports `--seed` for reproducible maps — byte-for-byte, and [tested](#tests) as such — and `--image`/`--save` for SVG or PNG output (PNG needs the optional `resvg-py` package). The seed is per floor: one seed carried across a whole campaign gives a different dungeon on each floor.
-- `--rooms-for` can (re)generate just the room-level detail for one neighborhood from a floor you already generated and are playing, without touching the rest of the data.
+- `--rooms-for` can (re)generate just the room-level detail for one neighborhood from a floor you already generated and are playing, without touching the rest of the data. The new rooms keep the old ones' crossings and chamber ways: the Entrance is still the way in, a way stays in the room it was in while that room can still have it, and any that had to move are listed, since the rest of the write-up still names the old rooms.
 
 Word banks (names, mobs, bosses, loot, room flavor, etc.) live in `data/*.json` — edit those to add or reskin content without touching the code.
 
@@ -356,7 +356,8 @@ Using a screen reader? The desktop app can't be read by one; the
   redrawn. You can also click a part of the map to edit it. See
   [Editing in the app](#editing-in-the-app).
 - **File → Re-roll rooms from a saved floor** is `--rooms-for` in the GUI: point it at a
-  floor 1–2 Markdown file this app wrote and re-roll one neighborhood's rooms.
+  floor 1–2 Markdown file this app wrote and re-roll one neighborhood's rooms. They keep
+  the neighborhood's crossings and its ways into boss chambers, and say which moved.
 - The **Loot Boxes** tab lists every box the current floor names; pick one, change its
   tier or type if you like, and open it. See [Loot boxes](#loot-boxes).
 - The **Campaign** tab carries crawler teams between floors. It is where you change
@@ -398,7 +399,8 @@ A panel opens to the right of the map:
     top-tier boss, by its marker or its line in the key; on a room map, a room (by its
     marker, its label or its line in the list) or a corridor encounter, and the tag of a
     crossing into the neighborhood next door, which opens the room it comes out in
-    (double-click it to go to that neighborhood's room map).
+    (double-click it to go to that neighborhood's room map), or of a way into a boss
+    chamber, which opens that boss.
   - **Floors 3 and 6:** a settlement or region, a region's mob, boss and stairwell, a
     settlement's quests, the Elite, each line of the stairwell list, and on Floor 6 a
     hunter party by its camp.
@@ -1107,8 +1109,9 @@ on the overview opens, that a room picked in the panel lights its neighborhood o
 overview, that pointing at a neighborhood says a double-click goes to its rooms, that
 right-clicking it offers to edit it or open its room map, that a double-click does go
 there, that a room map's right-click menu goes back to the main map, that a crossing's
-tag, double-clicked, goes to the room it comes out in next door, and that closing the
-panel puts the light out. On Floor 5 it clicks a quadrant's slice and checks that
+tag, double-clicked, goes to the room it comes out in next door, that closing the panel
+puts the light out, and that File → Re-roll rooms keeps a neighborhood's crossings and
+its way into the borough boss's chamber. On Floor 5 it clicks a quadrant's slice and checks that
 it opens and its slice lights up.
 
 What's switched on and shops have their own groups, with the books' facts written into the tests rather than read back from the banks:
@@ -1157,7 +1160,29 @@ Floors 1 and 2's crossings have their own group:
 - each room map draws a tag for every crossing on its own side of the map, a click on
   it picks the room it comes out in and a double-click goes to that room's map, and no
   crossing's dashed way runs through any room but its own;
-- a floor file saved before crossings were kept still opens, and draws without them.
+- a floor file saved before crossings and chamber ways were kept still opens, and draws
+  without them;
+- every borough boss's chamber has a way in from each of its four neighborhoods, at the
+  corner they share; a city's from the four around its middle, and a top-tier boss's
+  from the four at the floor's middle; none into a borough with no boss; and each from
+  an ordinary room, another than the neighborhood's crossings while there are enough;
+- chamber ways are drawn from a stream of their own too, and leave the crossings as
+  they were;
+- the write-up says, in each room's line, where it leads into a chamber, and each boss
+  lists the rooms it is reached from;
+- each room map puts each chamber's tag in its own corner, a click on it picks the boss,
+  no two tags overlap, and none sits on the room list.
+
+Re-rolling one neighborhood's rooms has its own group:
+- it reads every neighborhood of a write-up this version saves: the boss's "Drops" line,
+  added in a later version, had left it unable to read any;
+- the new rooms keep every crossing (the same room next door, the same way round), the
+  Entrance as the way in, every chamber way (the same chamber, the same corner), and
+  each in the room it was in while that room can still have it;
+- what had to move is listed, and nothing else;
+- the rooms' lines and the room map show them all;
+- a write-up from before ways out were kept still re-rolls, without them;
+- `--rooms-for` on the command line does the same.
 
 If you add a floor, the suite fails until `tests/corpus.py` covers it.
 

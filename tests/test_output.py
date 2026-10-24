@@ -336,6 +336,8 @@ class FloorEditTest(unittest.TestCase):
                          "a corridor's two rooms are links; what happens in it is not")
         cells = mg.edit_fields(nb.crossings[0], "crossings")
         self.assertEqual([c.locked for c in cells], [True, True], "a crossing is two rooms' link")
+        cells = mg.edit_fields(nb.chamber_ways[0], "chamber_ways")
+        self.assertEqual([c.locked for c in cells], [True, True, True], "so is a way into a chamber")
         fl4 = mg.generate(4, "medium", 4242).floor
         line = fl4.lines[0]
         self.assertTrue(self._field(line, "color").locked and self._field(line, "yard").locked)
@@ -886,13 +888,20 @@ class CrossingTest(unittest.TestCase):
         """Drawn from a stream of their own: the floor is the one generated
         before crossings were kept, with its crossings added."""
         for case in ({"floor": 1, "size": "large", "seed": 4242}, {"floor": 2, "size": "huge", "seed": 77}):
-            with mock.patch.object(mg.Generator, "make_crossings", lambda self, nbhds: None):
+            with mock.patch.object(mg.Generator, "make_crossings", lambda self, nbhds: None), \
+                 mock.patch.object(mg.Generator, "make_chamber_ways", lambda self, *a: None):
                 without = mg.generate(**case).floor
             fl = mg.generate(**case).floor
             self.assertTrue(any(nb.crossings for nb in fl.neighborhoods))
+            self.assertTrue(any(nb.chamber_ways for nb in fl.neighborhoods))
             for nb in fl.neighborhoods:
-                nb.crossings = []
+                nb.crossings, nb.chamber_ways = [], []
             self.assertEqual(mg.snapshot_floor(fl), mg.snapshot_floor(without), case)
+            # And chamber ways, drawn after, leave the crossings as they were.
+            with mock.patch.object(mg.Generator, "make_chamber_ways", lambda self, *a: None):
+                crossed = mg.generate(**case).floor
+            self.assertEqual([nb.crossings for nb in crossed.neighborhoods],
+                             [nb.crossings for nb in mg.generate(**case).floor.neighborhoods], case)
 
     def test_the_write_up_says_where_each_room_crosses(self):
         for where, res in self._floors():
@@ -917,7 +926,7 @@ class CrossingTest(unittest.TestCase):
                 rooms = {a.path[3]: a.box for a in hits if a.shape == "circle" and a.path[:3] == ("neighborhoods", i, "rooms")}
                 xs = [b[0] for b in rooms.values()]
                 ys = [b[1] for b in rooms.values()]
-                tags = [a for a in hits if a.path[1] != i]
+                tags = [a for a in hits if a.path[0] == "neighborhoods" and a.path[1] != i]
                 self.assertEqual(len(tags), len(nb.crossings), f"{where} {nb.label}")
                 owner = {r.id: (j, k, o) for j, o in enumerate(fl.neighborhoods) for k, r in enumerate(o.rooms)}
                 for here, there in nb.crossings:
@@ -932,13 +941,21 @@ class CrossingTest(unittest.TestCase):
                     # A double-click on it goes to the room map it comes out in.
                     self.assertEqual(mg.part_map(fl, tag.path), f"_room_{o.label}", where)
                     self.assertIn(f"({there})</text>", svg, where)
-                # No way runs through a room but its own.
-                ways = re.findall(r'<polyline points="([^"]+)" fill="none" stroke="#2e86c1"', svg)
-                self.assertEqual(len(ways), len(nb.crossings), where)
+                # No way runs through a room but its own: the crossings' and the
+                # chamber ways' alike.
+                ways = re.findall(r'<polyline points="([^"]+)" fill="none" stroke="#[0-9a-f]+"', svg)
+                self.assertEqual(len(ways), len(nb.crossings) + len(nb.chamber_ways), where)
+                # No two tags sit on each other, and none is on the room list.
+                boxes = [a.bounds() for a in hits if a.path[0] != "neighborhoods" or a.path[1] != i]
+                for k, b1 in enumerate(boxes):
+                    for b2 in boxes[k + 1:]:
+                        self.assertFalse(b1[0] < b2[2] and b2[0] < b1[2] and b1[1] < b2[3] and b2[1] < b1[3],
+                                         f"{where} {nb.label}: two tags overlap")
                 # The list of rooms starts below every tag.
                 listed = float(re.search(r'<text x="30" y="([\d.]+)"[^>]*>Rooms:</text>', svg).group(1))
-                for a in tags:
-                    self.assertLess(a.box[1] + a.box[3], listed - 14, f"{where} {nb.label}: a tag on the room list")
+                for a in hits:
+                    if a.path[0] != "neighborhoods" or a.path[1] != i:       # every tag, corners too
+                        self.assertLess(a.bounds()[3], listed - 14, f"{where} {nb.label}: a tag on the room list")
                 # No two ways run up or down together.
                 runs = []
                 for way in ways:
@@ -962,7 +979,8 @@ class CrossingTest(unittest.TestCase):
                             self.assertGreater(near, 12, f"{where} {nb.label}: a way through the room at {cx, cy}")
 
     def test_a_floor_without_crossings_still_opens(self):
-        """A floor file saved before crossings were kept has none, and draws."""
+        """A floor file saved before crossings and chamber ways were kept has
+        none, and draws."""
         res = mg.generate(1, "medium", 4242)
         with tempfile.TemporaryDirectory() as d:
             path = os.path.join(d, "old" + mg.FLOOR_FILE_SUFFIX)
@@ -970,13 +988,170 @@ class CrossingTest(unittest.TestCase):
             with open(path, encoding="utf-8") as f:
                 data = json.load(f)
             for nb in data["data"]["neighborhoods"]:
-                del nb["crossings"]
+                del nb["crossings"], nb["chamber_ways"]
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(data, f)
             old = mg.open_floor_file(path)
-        self.assertTrue(all(not nb.crossings for nb in old.floor.neighborhoods))
+        self.assertTrue(all(not nb.crossings and not nb.chamber_ways for nb in old.floor.neighborhoods))
         self.assertNotIn("crossing", old.markdown)
-        self.assertNotIn("#2e86c1", dict(old.svgs)["_room_A"])
+        self.assertNotIn("boss chamber (", old.markdown)
+        self.assertNotIn("Reached from", old.markdown)
+        self.assertNotIn("<polyline", dict(old.svgs)["_room_A"])
+
+    # -- the boss chambers at the corners ---------------------------------------
+
+    def test_each_chamber_has_a_way_in_from_each_neighborhood_around_it(self):
+        """A borough's chamber from its four neighborhoods, at the corner they
+        share; a city's from the four around its middle; the top boss's from the
+        four at the floor's middle. None into a borough with no boss."""
+        for where, res in self._floors():
+            fl, n = res.floor, res.floor.grid
+            for nb in fl.neighborhoods:
+                want = {}
+                if nb.borough in fl.borough_bosses:
+                    mates = [o for o in fl.neighborhoods if o.borough == nb.borough]
+                    want["borough"] = self._toward(nb, mates)
+                if n >= 4:
+                    mates = [o for o in fl.neighborhoods if o.city == nb.city]
+                    rows = sorted({o.row for o in mates})
+                    cols = sorted({o.col for o in mates})
+                    middle = [o for o in mates if o.row in rows[1:3] and o.col in cols[1:3]]
+                    if nb in middle:
+                        want["city"] = self._toward(nb, middle)
+                if fl.top_boss is not None and nb.row in (n // 2 - 1, n // 2) and nb.col in (n // 2 - 1, n // 2):
+                    want["top"] = self._toward(nb, [o for o in fl.neighborhoods if o.row in (n // 2 - 1, n // 2)
+                                                    and o.col in (n // 2 - 1, n // 2)])
+                got = {tier: corner for _, tier, corner in nb.chamber_ways}
+                self.assertEqual(got, want, f"{where} {nb.label}")
+                kinds = {r.id: r.kind for r in nb.rooms}
+                for here, _, _ in nb.chamber_ways:
+                    self.assertNotIn(kinds[here], mg.NO_CROSSING | {"Entrance"}, f"{where} {here}")
+                plain = [r for r in nb.rooms if r.kind not in mg.NO_CROSSING and r.kind != "Entrance"]
+                used = [h for h, _ in nb.crossings if h != nb.rooms[0].id] + [h for h, _, _ in nb.chamber_ways]
+                if len(plain) >= len(used):
+                    self.assertEqual(len(set(used)), len(used), f"{where} {nb.label}: a room each")
+
+    @staticmethod
+    def _toward(nb, around):
+        """Which corner of a neighborhood the middle of a group of them is at."""
+        r = sum(o.row for o in around) / len(around)
+        c = sum(o.col for o in around) / len(around)
+        return ("south" if r > nb.row else "north") + ("east" if c > nb.col else "west")
+
+    def test_the_write_up_says_which_rooms_lead_into_each_chamber(self):
+        for where, res in self._floors():
+            fl = res.floor
+            for nb in fl.neighborhoods:
+                for here, tier, corner in nb.chamber_ways:
+                    boss = mg.chamber_boss(fl, nb, tier)[0]
+                    line = next(l for l in res.markdown.splitlines() if l.startswith(f"  - **{here} "))
+                    self.assertIn(f"way {corner} into the {mg.chamber_word(fl, tier)} boss chamber ({boss.name})",
+                                  line, where)
+            # Each boss's section lists the rooms with a way in.
+            for bname, b in fl.borough_bosses.items():
+                rooms = [h for nb in fl.neighborhoods if nb.borough == bname
+                         for h, t, _ in nb.chamber_ways if t == "borough"]
+                self.assertEqual(len(rooms), 4, where)
+                self.assertIn(f"- **Reached from:** {', '.join(rooms)}", res.markdown, where)
+
+    def test_room_maps_put_each_chamber_in_its_corner(self):
+        for where, res in self._floors():
+            fl = res.floor
+            for i, nb in enumerate(fl.neighborhoods):
+                suffix = f"_room_{nb.label}"
+                hits = mg.map_hits(fl, suffix)
+                rooms = [a.box for a in hits if a.shape == "circle" and a.path[:3] == ("neighborhoods", i, "rooms")]
+                for here, tier, corner in nb.chamber_ways:
+                    path = mg.chamber_boss(fl, nb, tier)[1]
+                    tag = next(a for a in hits if a.path == path)
+                    x0, y0, x1, y1 = tag.bounds()
+                    north = y1 < min(r[1] for r in rooms)
+                    south = y0 > max(r[1] for r in rooms)
+                    west = x1 < min(r[0] for r in rooms) + 160
+                    east = x0 > max(r[0] for r in rooms) - 160
+                    self.assertTrue((north if corner.startswith("north") else south)
+                                    and (east if corner.endswith("east") else west),
+                                    f"{where} {nb.label}: the {tier} chamber in its {corner} corner")
+                    self.assertEqual(mg.hit_at(hits, *tag.middle()).path, path, where)
+                    self.assertIn(mg.chamber_boss(fl, nb, tier)[0].name[:12], dict(res.svgs)[suffix])
+
+
+class ReRollTest(unittest.TestCase):
+    """File → Re-roll rooms (--rooms-for): new rooms for one neighborhood of a
+    write-up this script saved, keeping the ways out its old rooms had."""
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.res = mg.generate(1, "large", 4242)
+        self.path = os.path.join(self.tmp.name, "floor.md")
+        with open(self.path, "w", encoding="utf-8") as f:
+            f.write(self.res.markdown)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_it_reads_a_write_up_this_version_saves(self):
+        for nb in self.res.floor.neighborhoods:
+            new, rr = mg.regenerate_rooms(self.path, nb.label, 1, size="large", seed=99)
+            self.assertEqual((new.name, new.boss.name, new.boss.has_stairwell),
+                             (nb.name, nb.boss.name, nb.boss.has_stairwell), nb.label)
+            self.assertTrue(rr.markdown.startswith(f"### {nb.label}. {nb.name}"))
+
+    def test_the_ways_out_are_kept(self):
+        for old in self.res.floor.neighborhoods:
+            new, rr = mg.regenerate_rooms(self.path, old.label, 1, size="large", seed=99)
+            ids = {r.id for r in new.rooms}
+            plain = {r.id for r in new.rooms if r.kind not in mg.NO_CROSSING and r.kind != "Entrance"}
+            # The same rooms next door, each the same way round, in the same order.
+            self.assertEqual([t for _, t in new.crossings], [t for _, t in old.crossings], old.label)
+            moved = []
+            for (h0, t), (h1, _) in zip(old.crossings, new.crossings):
+                self.assertIn(h1, ids)
+                if h0 == old.rooms[0].id:
+                    self.assertEqual(h1, new.rooms[0].id, f"{old.label}: the Entrance is still the way in")
+                elif h0 in plain:
+                    self.assertEqual(h1, h0, f"{old.label}: {t} still comes out in {h0}")
+                else:
+                    self.assertIn(h1, plain)
+                    moved.append(f"is from {h1} now, not {h0}.")
+            self.assertEqual([(tier, c) for _, tier, c in new.chamber_ways],
+                             [(tier, c) for _, tier, c in old.chamber_ways], old.label)
+            for (h0, _, _), (h1, _, _) in zip(old.chamber_ways, new.chamber_ways):
+                if h1 != h0:
+                    moved.append(f"is from {h1} now, not {h0}.")
+            # What moved is said; nothing else is.
+            listed = [l for l in rr.markdown.splitlines() if l.startswith("  - The ")]
+            self.assertEqual(len(listed), len(moved), old.label)
+            for m in moved:
+                self.assertTrue(any(l.endswith(m) for l in listed), f"{old.label}: {m}")
+            # The rooms' lines and the room map say where each goes.
+            fl = rr.floor
+            owner = {r.id: n for n in fl.neighborhoods for r in n.rooms}
+            for r in new.rooms:
+                self.assertIn(mg.room_ways(fl, new, r.id, owner), rr.markdown)
+            svg = rr.svgs[0][1]
+            for _, t in new.crossings:
+                self.assertIn(f"({t})</text>", svg, old.label)
+            for _, tier, _ in old.chamber_ways:
+                boss = mg.chamber_boss(self.res.floor, old, tier)[0]
+                self.assertIn(mg._fit(boss.name, 21).replace("&", "&amp;").replace('"', "&quot;")[:12], svg)
+
+    def test_a_write_up_from_before_ways_out_still_re_rolls(self):
+        with open(self.path, encoding="utf-8") as f:
+            text = f.read()
+        with open(self.path, "w", encoding="utf-8") as f:
+            f.write(re.sub(r"; (crossing|way) [^\n]*", "", text))
+        new, rr = mg.regenerate_rooms(self.path, "F", 1, size="large", seed=99)
+        self.assertEqual((new.crossings, new.chamber_ways), ([], []))
+        self.assertNotIn("<polyline", rr.svgs[0][1])
+
+    def test_the_command_line_re_rolls_too(self):
+        r = subprocess.run([sys.executable, os.path.join(ROOT, "dcc_mapgen.py"), "--rooms-for", self.path,
+                            "--rooms-for-label", "F", "--seed", "99"],
+                           capture_output=True, text=True, encoding="utf-8",
+                           env=dict(os.environ, PYTHONIOENCODING="utf-8"))
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("crossing north into B1", r.stdout)
 
 
 class ScreenReaderTest(unittest.TestCase):
