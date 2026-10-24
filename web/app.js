@@ -366,7 +366,10 @@ function showMap(i) {
   $("map-empty").hidden = true;
   drawMap(m, true);
   if (!panzoom) {
-    panzoom = Panzoom(img, { maxScale: 8, minScale: 0.05, origin: "0 0", step: 0.25 });
+    // Scaled about its middle, Panzoom's own way: its zooming toward the
+    // pointer (the wheel, and a pinch) works that out from the middle, and with
+    // any other origin the map slides away from under the pointer as it zooms.
+    panzoom = Panzoom(img, { maxScale: 8, minScale: 0.05, step: 0.25 });
     $("viewer").addEventListener("wheel", panzoom.zoomWithWheel, { passive: false });
   }
 }
@@ -377,12 +380,20 @@ function fit() {
   const view = $("viewer");
   const scale = Math.min(view.clientWidth / img.width, view.clientHeight / img.height);
   panzoom.zoom(scale, { animate: false, force: true });
-  // With the origin at the top left, centre the map across and keep it at the
-  // top: a wide map fitted to a phone is a strip, and a strip in the middle of
-  // the box reads as nothing there.
+  // Centre the map across and keep it at the top: a wide map fitted to a phone
+  // is a strip, and a strip in the middle of the box reads as nothing there.
+  // The map is scaled about its middle, and a pan is in its scaled units.
   setTimeout(() => panzoom.pan(
-    (view.clientWidth - img.width * scale) / 2 / scale, 0,
+    (view.clientWidth - img.width) / 2 / scale, -(img.height * (1 - scale)) / 2 / scale,
     { animate: false, force: true }), 0);
+}
+
+// The + and - buttons zoom about the middle of what is on show, not the map's.
+function zoomStep(direction) {
+  if (!panzoom) return;
+  const view = $("viewer").getBoundingClientRect();
+  panzoom.zoomToPoint(panzoom.getScale() * Math.exp(0.25 * direction),
+                      { clientX: view.left + view.width / 2, clientY: view.top + view.height / 2 });
 }
 
 // -- the write-up -------------------------------------------------------------------
@@ -854,8 +865,12 @@ function wire() {
   $("floor").addEventListener("change", syncFloor);
   $("generate").addEventListener("click", generate);
   $("map-pick").addEventListener("change", (e) => showMap(+e.target.value));
-  $("zoom-in").addEventListener("click", () => panzoom && panzoom.zoomIn());
-  $("zoom-out").addEventListener("click", () => panzoom && panzoom.zoomOut());
+  $("zoom-in").addEventListener("click", () => zoomStep(1));
+  $("zoom-out").addEventListener("click", () => zoomStep(-1));
+  // The picture is the map, not something to drag out of the page: a browser
+  // that ignores -webkit-user-drag (Firefox) would start dragging it instead of
+  // panning.
+  $("viewer").addEventListener("dragstart", (e) => e.preventDefault());
   $("zoom-fit").addEventListener("click", fit);
   window.addEventListener("resize", () => {
     if (!$("panel-map").hidden) fit();

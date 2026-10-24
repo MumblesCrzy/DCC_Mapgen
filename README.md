@@ -481,7 +481,8 @@ Bestiary stats it at the new level. What changes, and what doesn't:
 **https://mumblescrzy.github.io/DCC_Mapgen/**
 
 For phones and tablets, or any browser: pick a floor, size and seed, and the page
-shows the map (pinch or the buttons to zoom), the write-up (with a list to jump
+shows the map (pinch, the mouse wheel or the buttons to zoom, about where you point;
+drag to move it), the write-up (with a list to jump
 between sections), and a Loot Boxes tab like the desktop app's. **Save** downloads the
 Markdown, or the map on show as SVG.
 
@@ -1188,7 +1189,9 @@ the rename, and reloads to find an edit kept. On the map it taps a Floor 5 quadr
 slice (its menu open, axe-core finds nothing; Escape puts it away), taps a Floor 1
 neighborhood and opens its rooms, finds that a drag opens nothing and that a mouse
 pointing names a room, taps the room and edits it (focus following), finds it outlined
-on its map, and goes back to the main map.
+on its map, and goes back to the main map. Zooming keeps the map where you point: the
+wheel zooms about the pointer, + about the middle, a drag moves the map as far as the
+pointer moved, and Fit shows the whole map, centred, at the top.
 
 The page's Python side has its own tests in the main suite: a floor file saved on the
 page is the file the desktop app saves and opens to the same floor; a bad one (broken

@@ -368,6 +368,53 @@ try {
   await page.waitForTimeout(800);
   check(await page.$eval("#map-pick", (p) => p.value) === "0", "Back to the main map goes back");
 
+  // Zooming keeps the map where you point: the wheel zooms about the pointer,
+  // + and - about the middle, Fit puts the whole map in the box, and a drag
+  // moves the map as far as the pointer moved.
+  const view = await page.$eval("#viewer", (v) => { const r = v.getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; });
+  const mapAt = (x, y) => page.evaluate(([px, py]) => {
+    const img = document.getElementById("map-img");
+    const r = img.getBoundingClientRect();
+    return [((px - r.left) / r.width) * img.width, ((py - r.top) / r.height) * img.height, r.width / img.width];
+  }, [x, y]);
+  const pointer = [view[0] + view[2] * 0.3, view[1] + view[3] * 0.4];
+  await page.mouse.move(...pointer);
+  const wheel0 = await mapAt(...pointer);
+  for (let k = 0; k < 3; k++) await page.mouse.wheel(0, -100);
+  await page.waitForTimeout(300);
+  const wheel1 = await mapAt(...pointer);
+  check(wheel1[2] > wheel0[2] * 1.2 && Math.hypot(wheel1[0] - wheel0[0], wheel1[1] - wheel0[1]) < 2,
+        `the wheel zooms in where the pointer is (x${(wheel1[2] / wheel0[2]).toFixed(2)}, the map under it `
+        + `moved ${Math.hypot(wheel1[0] - wheel0[0], wheel1[1] - wheel0[1]).toFixed(1)})`);
+  // The middle of the map's box, measured afresh: clicking a button can
+  // scroll the page, and the box with it.
+  const middleNow = () => page.$eval("#viewer", (v) => {
+    const r = v.getBoundingClientRect();
+    return [r.left + r.width / 2, r.top + r.height / 2];
+  });
+  const plus0 = await mapAt(...await middleNow());
+  await page.click("#zoom-in");
+  await page.waitForTimeout(300);            // the zoom lands on the next frame
+  const middle = await middleNow();
+  const plus1 = await mapAt(...middle);
+  check(Math.hypot(plus1[0] - plus0[0], plus1[1] - plus0[1]) < 2 && plus1[2] > plus0[2], "+ zooms about the middle");
+  const left0 = await page.$eval("#map-img", (i) => i.getBoundingClientRect().left);
+  await page.mouse.move(...middle);
+  await page.mouse.down();
+  await page.mouse.move(middle[0] + 120, middle[1] + 40, { steps: 8 });
+  await page.mouse.up();
+  const moved = (await page.$eval("#map-img", (i) => i.getBoundingClientRect().left)) - left0;
+  check(Math.abs(moved - 120) < 1 && await menuSays() === "", `a drag moves the map with the pointer (${moved.toFixed(1)} px)`);
+  await page.click("#zoom-fit");
+  await page.waitForTimeout(300);
+  const fitted = await page.evaluate(() => {
+    const v = document.getElementById("viewer").getBoundingClientRect();
+    const r = document.getElementById("map-img").getBoundingClientRect();
+    return { across: Math.abs((r.left - v.left) - (v.right - r.right)), top: r.top - v.top,
+             inside: r.left >= v.left - 1 && r.right <= v.right + 1 && r.bottom <= v.bottom + 1 };
+  });
+  check(fitted.across < 2 && fitted.top < 3 && fitted.inside, `Fit shows the whole map, centred, at the top (${JSON.stringify(fitted)})`);
+
   // A bad seed is reported, not crashed on.
   await page.fill("#seed", "abc");
   await page.click("#generate");
