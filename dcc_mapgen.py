@@ -2984,6 +2984,19 @@ def floor_svgs(fl, boss_stairs: bool = True) -> List[Tuple[str, str]]:
     return out
 
 
+def part_map(fl, path) -> Optional[str]:
+    """The map that shows a part of the floor up close, by its suffix as
+    floor_svgs names maps: a neighborhood's room map for the neighborhood or
+    anything in it, a heat's map for the heat. None for a part with no map of
+    its own."""
+    path = tuple(path)
+    if isinstance(fl, Floor) and len(path) >= 2 and path[0] == "neighborhoods":
+        return f"_room_{fl.neighborhoods[path[1]].label}"
+    if isinstance(fl, Floor10) and len(path) >= 2 and path[0] == "heats":
+        return f"_heat{fl.heats[path[1]].number}"
+    return None
+
+
 def map_hits(fl, suffix: str, boss_stairs: bool = True) -> List[HitArea]:
     """Where one of a floor's maps (named by its suffix, as floor_svgs names
     them) shows each part of the floor, in the order drawn: the map is drawn

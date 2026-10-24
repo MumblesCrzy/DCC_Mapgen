@@ -622,6 +622,30 @@ class MapClickTest(unittest.TestCase):
                 x, y = next((x, y) for x, y, t in labels if t.startswith(f"Floor {fl.number} — {nb.label}."))
                 self.assertEqual(pick(x, y), ("neighborhoods", i), f"{where}: the map's title")
 
+    def test_a_part_names_the_map_that_shows_it_up_close(self):
+        """What a double-click on the map goes to: a neighborhood's room map
+        for the neighborhood or anything in it, a heat's map for the heat."""
+        for case in corpus.CASES:
+            res = mg.generate(**case)
+            fl, where = res.floor, corpus.case_id(case)
+            maps = [s for s, _ in res.svgs]
+            if isinstance(fl, mg.Floor):
+                for i, nb in enumerate(fl.neighborhoods):
+                    for path in (("neighborhoods", i), ("neighborhoods", i, "boss"),
+                                 ("neighborhoods", i, "rooms", len(nb.rooms) - 1)):
+                        self.assertEqual(mg.part_map(fl, path), f"_room_{nb.label}", f"{where} {path}")
+                    self.assertIn(f"_room_{nb.label}", maps, where)
+                for name in fl.borough_bosses:
+                    self.assertIsNone(mg.part_map(fl, ("borough_bosses", name)), where)
+                self.assertIsNone(mg.part_map(fl, ("neighborhoods",)), where)
+            elif isinstance(fl, mg.Floor10):
+                for k, heat in enumerate(fl.heats):
+                    suffix = mg.part_map(fl, ("heats", k))
+                    self.assertIn(suffix, maps, where)
+                    self.assertEqual(mg.map_title(suffix), f"Heat {heat.number}", where)
+            else:
+                self.assertIsNone(mg.part_map(fl, next(iter(mg.edit_children(fl)))[:1]), where)
+
     def test_a_click_finds_what_is_on_top(self):
         under = mg.HitArea(("neighborhoods", 0), "rect", (0, 0, 100, 100))
         over = mg.HitArea(("neighborhoods", 0, "boss"), "circle", (50, 50, 10))

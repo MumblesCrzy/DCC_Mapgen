@@ -396,6 +396,9 @@ A panel opens to the right of the map:
   neighborhood, its boss or its mob, or a borough, city or top-tier boss, by its
   marker or its line in the key. On a room map it is a room, by its marker, its label
   or its line in the list, or a corridor encounter. Dragging still moves the map.
+- **Double-click a neighborhood** on the overview to go to its room map (the first
+  click opens it in the panel too). **Right-click** a part for a menu: edit it, open
+  its room map, or, on a room map, go back to the main map.
 - **The part you picked lights up on the map**, wherever you picked it. If the map on
   show doesn't draw it, what holds it lights up instead: a room's neighborhood on the
   overview. A part off the screen is scrolled into view.
@@ -1069,12 +1072,17 @@ Clicking the map has its own group:
   its neighborhood;
 - where two are drawn one over the other, the one on top wins, and a round marker's
   corners are not on it;
-- a map's areas worked out in one thread take nothing from a floor drawn in another.
+- a map's areas worked out in one thread take nothing from a floor drawn in another;
+- a neighborhood, and anything in it, names its room map for a double-click to go to,
+  and a Floor 10 heat its heat's map; a borough boss has no map of its own.
 
 The self-test then clicks a room on its map and checks that the panel opens on it and
 it lights up, that pointing names it, that a drag picks nothing, that a boss clicked
 on the overview opens, that a room picked in the panel lights its neighborhood on the
-overview, and that closing the panel puts the light out.
+overview, that pointing at a neighborhood says a double-click goes to its rooms, that
+right-clicking it offers to edit it or open its room map, that a double-click does go
+there, that a room map's right-click menu goes back to the main map, and that closing
+the panel puts the light out.
 
 What's switched on and shops have their own groups, with the books' facts written into the tests rather than read back from the banks:
 - each system arrives on the DCC Database's floor, and each floor's list of new, gone and still-on systems is checked against those floors;

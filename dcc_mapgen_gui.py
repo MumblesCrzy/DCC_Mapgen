@@ -74,6 +74,7 @@ class MapView(ttk.Frame):
         self.parts = lambda suffix: []
         self.name_part = lambda path: ""
         self.on_part = lambda path: None
+        self.detail = lambda path: None      # the map that shows a part up close
         self._shown = None        # (suffix, zoom) of the picture on the canvas
         self._press = None        # where the button went down, and whether it dragged since
         self._lit = None          # the part lit up on the map
@@ -109,6 +110,11 @@ class MapView(ttk.Frame):
         self.canvas.bind("<ButtonPress-1>", self._grab)
         self.canvas.bind("<B1-Motion>", self._pan)
         self.canvas.bind("<ButtonRelease-1>", self._release)
+        self.canvas.bind("<Double-Button-1>", self._double)
+        # The context-menu button: the right one, or on a Mac also Control-click.
+        for seq in (("<Button-2>", "<Control-Button-1>") if sys.platform == "darwin"
+                    else ("<Button-3>",)):
+            self.canvas.bind(seq, self._menu)
         self.canvas.bind("<Motion>", self._hover)
         self.canvas.bind("<Leave>", lambda e: self._tip(None))
         self.canvas.bind("<MouseWheel>", self._wheel)
@@ -207,6 +213,63 @@ class MapView(ttk.Frame):
                 self.on_part(part.path)
         self._hover(event)
 
+    def _double(self, event):
+        """A double-click goes to the map that shows the part up close: a
+        neighborhood's rooms. Its first click has already opened it to edit."""
+        part = self._part_at(event)
+        closer = self._closer(part)
+        if closer:
+            self._tip(None)
+            self.goto(closer)
+
+    def _closer(self, part):
+        """The map showing a part up close, if that isn't the map on show."""
+        if part is None:
+            return None
+        suffix = self.detail(part.path)
+        return suffix if suffix and suffix != self._suffix() and \
+            any(s == suffix for s, _ in self.maps) else None
+
+    def goto(self, suffix):
+        """Show one of the floor's maps, by its suffix."""
+        # Fitted to the map's size as it is now: the click that came before a
+        # double-click may just have opened the edit panel beside it.
+        self.update_idletasks()
+        for i, (s, _) in enumerate(self.maps):
+            if s == suffix:
+                self.picker.current(i)
+                self._on_pick()
+                return
+
+    def menu_items(self, event):
+        """What right-clicking the map offers, as (label, action): edit the part
+        under the pointer, go to its map up close, or go back to the main map."""
+        items = []
+        part = self._part_at(event)
+        if part is not None:
+            name = self.name_part(part.path)
+            name = name if len(name) <= 60 else name[:59] + "…"
+            items.append((f"Edit {name}", lambda: self.on_part(part.path)))
+            closer = self._closer(part)
+            if closer:
+                items.append((f"Open {map_title(closer)}", lambda: self.goto(closer)))
+        if self._suffix() and any(s == "" for s, _ in self.maps):
+            items.append(("Back to the main map", lambda: self.goto("")))
+        return items
+
+    def _menu(self, event):
+        items = self.menu_items(event)
+        if not items:
+            return
+        self._tip(None)
+        menu = tk.Menu(self, tearoff=0)
+        for label, action in items:
+            menu.add_command(label=label, command=action)
+        try:
+            menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            menu.grab_release()
+
     # -- the parts of the floor on the map --------------------------------------
 
     def _suffix(self):
@@ -227,18 +290,22 @@ class MapView(ttk.Frame):
             return
         part = self._part_at(event)
         self.canvas.configure(cursor="hand2" if part else "")
-        self._tip((event, self.name_part(part.path)) if part else None)
+        if part is None:
+            self._tip(None)
+            return
+        closer = self._closer(part)
+        hint = "Click to edit" + (f" · double-click for {map_title(closer)}" if closer else "")
+        self._tip((event, f"{self.name_part(part.path)}\n{hint}"))
 
     def _tip(self, at):
-        """A label by the pointer naming the part under it."""
+        """A label by the pointer naming the part under it, and what a click does."""
         self.canvas.delete("tip")
         if not at:
             return
-        event, name = at
+        event, words = at
         px, py = self.canvas.canvasx(event.x), self.canvas.canvasy(event.y)
         text = self.canvas.create_text(px + 20, py + 22, anchor="nw", tags="tip",
-                                       text=f"{name}  (click to edit)",
-                                       font=("Segoe UI", 9), fill="#222")
+                                       text=words, font=("Segoe UI", 9), fill="#222")
         # Kept on the screen: to the pointer's left near the right edge, above it
         # near the bottom.
         x0, y0, x1, y1 = self.canvas.bbox(text)
@@ -1548,6 +1615,7 @@ class App(tk.Tk):
         self.view.parts = self._map_parts
         self.view.name_part = self._part_name
         self.view.on_part = self._part_clicked
+        self.view.detail = self._part_map
         self.editor.on_pick = self._part_picked
 
         txt_tab = ttk.Frame(right)
@@ -1899,6 +1967,13 @@ class App(tk.Tk):
         if suffix not in found:
             found[suffix] = mg.map_hits(res.floor, suffix, res.boss_stairs)
         return found[suffix]
+
+    def _part_map(self, path):
+        """The map that shows a part up close: a neighborhood's rooms."""
+        res = self.result
+        if res is None or not mg.is_dataclass(res.floor):
+            return None
+        return mg.part_map(res.floor, path)
 
     def _part_name(self, path):
         names = mg.describe_path(self.result.floor, path).split(" › ")
@@ -2574,6 +2649,32 @@ def selftest() -> int:
     z = view._shown[1]
     check(any(abs(c[0] - cell.box[0] * z) < 2 and abs(c[1] - cell.box[1] * z) < 2 for c in lit),
           "a room picked in the panel lights its neighborhood on the overview")
+
+    # From a neighborhood on the overview to its rooms: a double-click, or the
+    # right-click menu; and back again.
+    b_cell = next(h for h in app._map_parts("") if h.path == ("neighborhoods", 1))
+    x, y = round((b_cell.box[0] + 115) * z - canvas.canvasx(0)), round((b_cell.box[1] + 14) * z - canvas.canvasy(0))
+    canvas.event_generate("<Motion>", x=x, y=y)
+    tip = " ".join(canvas.itemcget(i, "text") for i in canvas.find_withtag("tip")
+                   if canvas.type(i) == "text")
+    check("double-click for Rooms - neighborhood B" in tip, f"pointing at a neighborhood says a double-click goes to its rooms ({tip!r})")
+    near = type("Event", (), {"x": x, "y": y})
+    labels = [label for label, _ in view.menu_items(near)]
+    check(labels[:1] == ["Edit Neighborhood B — The Sunken Sewers"]
+          and labels[1:] == ["Open Rooms - neighborhood B"], f"right-clicking it offers both ({labels})")
+    for ev in ("<ButtonPress-1>", "<ButtonRelease-1>", "<ButtonPress-1>", "<ButtonRelease-1>"):
+        canvas.event_generate(ev, x=x, y=y)
+    pump(timeout, lambda: view._shown is not None and view._shown[0] == "_room_B")
+    check(view._suffix() == "_room_B" and ed.path == ("neighborhoods", 1),
+          "double-clicking it opens it to edit and goes to its room map")
+    room = next(h for h in app._map_parts("_room_B") if h.shape == "circle" and "rooms" in h.path)
+    rx, ry = middle(room)
+    items = view.menu_items(type("Event", (), {"x": rx, "y": ry}))
+    check([label for label, _ in items] == ["Edit Room B1", "Back to the main map"],
+          f"on a room map, right-clicking offers the way back ({[label for label, _ in items]})")
+    items[-1][1]()
+    pump(timeout, lambda: view._shown is not None and view._shown[0] == "")
+    check(view._suffix() == "", "and it goes back to the main map")
     app.toggle_editor()
     check(not canvas.find_withtag("lit"), "closing the panel puts the light out")
 
