@@ -2646,15 +2646,57 @@ def _legend_layout(entries, avail: float):
 class HitArea:
     """Where a map shows one part of its floor."""
     path: tuple              # from the floor, as the edit panel finds parts
-    shape: str               # "rect" (x, y, w, h) or "circle" (cx, cy, r)
+    # "rect" (x, y, w, h), "circle" (cx, cy, r), or "sector" (cx, cy, r0, r1,
+    # a0, a1): a slice of a ring, its angles in degrees clockwise from east, as
+    # an SVG measures them (a pie slice has r0 0).
+    shape: str
     box: tuple
 
     def contains(self, x: float, y: float) -> bool:
         if self.shape == "circle":
             cx, cy, r = self.box
             return (x - cx) ** 2 + (y - cy) ** 2 <= r * r
+        if self.shape == "sector":
+            cx, cy, r0, r1, a0, a1 = self.box
+            if not r0 <= math.hypot(x - cx, y - cy) <= r1:
+                return False
+            return (math.degrees(math.atan2(y - cy, x - cx)) - a0) % 360 <= a1 - a0
         bx, by, w, h = self.box
         return bx <= x <= bx + w and by <= y <= by + h
+
+    def outline(self, steps: int = 24) -> List[Tuple[float, float]]:
+        """A sector's edge as points, to draw it with."""
+        cx, cy, r0, r1, a0, a1 = self.box
+        arc = [a0 + (a1 - a0) * k / steps for k in range(steps + 1)]
+        pts = [(cx + r1 * math.cos(math.radians(a)), cy + r1 * math.sin(math.radians(a))) for a in arc]
+        if r0 > 0:
+            pts += [(cx + r0 * math.cos(math.radians(a)), cy + r0 * math.sin(math.radians(a)))
+                    for a in reversed(arc)]
+        else:
+            pts.append((cx, cy))
+        return pts
+
+    def middle(self) -> Tuple[float, float]:
+        """A point well inside: where to aim a click, or scroll to."""
+        if self.shape == "circle":
+            return self.box[0], self.box[1]
+        if self.shape == "sector":
+            cx, cy, r0, r1, a0, a1 = self.box
+            a, r = math.radians((a0 + a1) / 2), (r0 + r1) / 2
+            return cx + r * math.cos(a), cy + r * math.sin(a)
+        bx, by, w, h = self.box
+        return bx + w / 2, by + h / 2
+
+    def bounds(self) -> Tuple[float, float, float, float]:
+        """(x0, y0, x1, y1) around it."""
+        if self.shape == "circle":
+            cx, cy, r = self.box
+            return cx - r, cy - r, cx + r, cy + r
+        if self.shape == "sector":
+            xs, ys = zip(*self.outline(90))
+            return min(xs), min(ys), max(xs), max(ys)
+        bx, by, w, h = self.box
+        return bx, by, bx + w, by + h
 
 
 _HITS = threading.local()
@@ -3506,8 +3548,9 @@ def render3_svg(fl: Floor3) -> str:
     lo, hi = FLOOR3_CFG["mob_band"]
     o.append(_text(PAD, 54, f"{fl.days} days  •  wilderness mobs L{lo}–{hi} ({fl.scaling})  •  janitor: "
                    f"{fl.janitor.name} L{fl.janitor_level}  •  seed {fl.seed}", size=12, fill="#555"))
-    for c in fl.cells:
+    for i, c in enumerate(fl.cells):
         x, y = ox + c.col * CELL, oy + c.row * CELL
+        _hit(("cells", i), "rect", x, y, CELL, CELL)
         if isinstance(c, Settlement):
             o.append(f'<rect x="{x}" y="{y}" width="{CELL}" height="{CELL}" fill="#f2dfa8" stroke="#8a5a1a" stroke-width="5"/>')
             o.append(_text(x + 10, y + 26, c.label, size=24, weight="bold"))
@@ -3517,25 +3560,33 @@ def render3_svg(fl: Floor3) -> str:
                            + ("  •  club" if c.club else ""), size=11, fill="#444"))
             o.append(_text(x + 10, y + 82, "Shops: " + _fit(", ".join(c.shops), 32), size=11, fill="#444"))
             o.append(_text(x + 10, y + 98, f"Quests: {len(c.quests)}", size=11, fill="#444"))
+            if c.quests:
+                _hit(("cells", i, "quests"), "rect", x + 6, y + 86, CELL - 12, 16)
             if any(q.unlocks for q in c.quests):
                 o.append(_text(x + 10, y + 114, "Unlocks: " + ", ".join(q.unlocks for q in c.quests if q.unlocks),
                                size=11, weight="bold", fill="#8a5a1a"))
+                _hit(("cells", i, "quests"), "rect", x + 6, y + 102, CELL - 12, 16)
             if c.name == fl.elite.settlement:
                 o.append(_text(x + CELL - 10, y + CELL - 12, "ELITE", size=13, weight="bold", anchor="end", fill="#7a1f7a"))
+                _hit(("elite",), "rect", x + CELL - 62, y + CELL - 27, 56, 20)
         else:
             o.append(f'<rect x="{x}" y="{y}" width="{CELL}" height="{CELL}" fill="#d9d6cf" stroke="#555" stroke-width="1.5"/>')
             o.append(_text(x + 10, y + 26, c.label, size=24, weight="bold"))
             o.append(_text(x + 42, y + 24, _fit(c.name, 22), size=13, weight="bold"))
             o.append(_text(x + 10, y + 48, _fit(c.mob.name, 30), size=12))
+            _hit(("cells", i, "mob"), "rect", x + 6, y + 36, CELL - 12, 16)
             o.append(_text(x + 10, y + 64, f"Level {c.level_range[0]}–{c.level_range[1]}", size=12))
             if c.boss:
                 o.append(_text(x + 10, y + 84, f"{c.boss.tier.title()} boss: " + _fit(c.boss.name, 18), size=11, fill="#444"))
                 roam = f"roams → {c.roams_to}" if c.roams_to else "stays here"
                 o.append(_text(x + 10, y + 99, f"L{c.boss.level}, {roam}", size=11, fill="#444"))
+                _hit(("cells", i, "boss"), "rect", x + 6, y + 72, CELL - 12, 32)
                 o.extend(_boss_marker(x + CELL - 30, y + CELL - 30, c.boss.tier, ""))
+                _hit(("cells", i, "boss"), "circle", x + CELL - 30, y + CELL - 30, BOSS_R[c.boss.tier] + 2)
             if c.stairwell:
                 o.append(_stair_icon(x + 12, y + CELL - 26))
                 o.append(_text(x + 32, y + CELL - 12, f"{c.stairwell.label} (locked)", size=11, weight="bold"))
+                _hit(("cells", i, "stairwell"), "rect", x + 8, y + CELL - 30, 100, 24)
             if c.is_entry:
                 o.append(f'<rect x="{x+3}" y="{y+3}" width="{CELL-6}" height="{CELL-6}" fill="none" stroke="#c0392b" stroke-width="4"/>')
                 o.append(_text(x + CELL // 2, y + CELL - 12, "ENTRY", size=14, weight="bold", anchor="middle", fill="#c0392b"))
@@ -3550,9 +3601,12 @@ def render3_svg(fl: Floor3) -> str:
     o.append(f'<rect x="{lx+690}" y="{ly-9}" width="18" height="18" fill="none" stroke="#c0392b" stroke-width="3"/>')
     o.append(_text(lx + 714, ly + 4, "Entry", size=11))
     ky = ly + 52
-    for sw in fl.stairs:
-        o.append(_text(lx, ky, f"{sw.label} ({sw.region_label}): {_fit(sw.condition, 110)}", size=12)); ky += 18
+    for k, sw in enumerate(fl.stairs):
+        o.append(_text(lx, ky, f"{sw.label} ({sw.region_label}): {_fit(sw.condition, 110)}", size=12))
+        _hit(("stairs", k), "rect", lx, ky - 13, W - 2 * lx, 17)
+        ky += 18
     o.append(_text(lx, ky, f"Elite: {fl.elite.name} — {fl.elite.show} (based in {fl.elite.settlement})", size=12, fill="#7a1f7a"))
+    _hit(("elite",), "rect", lx, ky - 13, W - 2 * lx, 17)
     o.append("</svg>")
     return "\n".join(o)
 
@@ -4511,15 +4565,22 @@ def render4_svg(fl: Floor4) -> str:
                    (c["mimic_station"], "MIMIC"),
                    (c["employee_portal"], "END OF LINE"), (c["abyss"], "ABYSS")):
         o.append(_text(xs[n], TOP - 30, lab, size=11, weight="bold", anchor="middle", fill="#333"))
+    # What the fixed columns hold, by their names: the yards, the depot's carts,
+    # what the Station Mimic belches up, and 435's staff.
+    for n, part in ((c["yard_ring"], "yards"), (c["depot"], "depot"),
+                    (c["mimic_station"], "mimic_spawn"), (c["employee_portal"], "hr")):
+        if getattr(fl, part):
+            _hit((part,), "rect", xs[n] - 36, TOP - 42, 72, 16)
     # Each ghoul station's name over its column, split over two lines so that
     # stairwell stations with nothing between them on the map still fit.
-    for gs in fl.ghoul_stations:
+    for g, gs in enumerate(fl.ghoul_stations):
         words = gs["name"].split()
         half = (len(words) + 1) // 2
         for k, part in enumerate((" ".join(words[:half]), " ".join(words[half:]))):
             if part:
                 o.append(_text(xs[gs["number"]], TOP - 66 + 11 * k, part, size=9,
                                weight="bold", anchor="middle", fill="#7a2e2e"))
+        _hit(("ghoul_stations", g), "rect", xs[gs["number"]] - 34, TOP - 77, 68, 26)
     # Vertical guide lines for the shared tail, and for the depot every line passes
     for n in (c["depot"], c["mimic_station"], c["employee_portal"], c["abyss"]):
         o.append(f'<line x1="{xs[n]}" y1="{TOP - 18}" x2="{xs[n]}" y2="{TOP + ROW * (len(fl.lines) - 1) + 30}" '
@@ -4533,6 +4594,8 @@ def render4_svg(fl: Floor4) -> str:
         o.append(f'<line x1="{x0}" y1="{y}" x2="{x1}" y2="{y}" stroke="{ln.hex}" stroke-width="10" stroke-linecap="round"/>')
         o.append(_text(x0 - 12, y + 5, f"{ln.color}", size=13, weight="bold", anchor="end", fill=ln.hex))
         o.append(_text(x0 - 12, y + 20, f"Yard {ln.yard}", size=10, anchor="end", fill="#555"))
+        _hit(("lines", i), "rect", 8, y - 10, x0 - 16, 34)          # its name
+        _hit(("lines", i), "rect", x0, y - 7, x1 - x0, 14)          # the line itself
         # yard + tail markers
         o.append(f'<rect x="{x0-7}" y="{y-7}" width="14" height="14" fill="#333"/>')
         o.append(f'<circle cx="{xs[c["mimic_station"]]}" cy="{y}" r="5" fill="#f6f2ea" stroke="#333" stroke-width="2"/>')
@@ -4576,9 +4639,9 @@ def render4_svg(fl: Floor4) -> str:
                 y1, y2 = ys[ln.color], ys[other]
                 o.append(f'<line x1="{x}" y1="{y1}" x2="{x}" y2="{y2}" stroke="#111" stroke-width="3"/>')
                 o.append(f'<line x1="{x}" y1="{y1}" x2="{x}" y2="{y2}" stroke="#fff" stroke-width="1"/>')
-    for ln in fl.lines:
+    for i, ln in enumerate(fl.lines):
         y = ys[ln.color]
-        for st in ln.stations:
+        for j, st in enumerate(ln.stations):
             x = xs[st.number]
             if st.kind == "transfer":
                 o.append(f'<circle cx="{x}" cy="{y}" r="9" fill="#fff" stroke="#111" stroke-width="3"/>')
@@ -4593,6 +4656,10 @@ def render4_svg(fl: Floor4) -> str:
             o.append(_text(x, y + 24, str(st.number), size=11, weight="bold", anchor="middle"))
             for k, what in enumerate(st.amenities()):
                 o.append(_text(x, y + 36 + 10 * k, what, size=9, anchor="middle", fill="#555"))
+            here = ("lines", i, "stations", j)
+            _hit(here, "rect", x - 18, y - 36, 36, 26)       # its stairwell, or its stubs
+            _hit(here, "circle", x, y, 12)
+            _hit(here, "rect", x - 35, y + 12, 70, 15 + 10 * len(st.amenities()))
     # Named trains as dashed loops
     dash_styles = ["8,5", "2,4", "12,4,2,4"]
     y_base = TOP + ROW * (len(fl.lines) - 1) + 60
@@ -4640,6 +4707,7 @@ def render4_svg(fl: Floor4) -> str:
         o.append(f'<line x1="{lx}" y1="{ky-4}" x2="{lx+40}" y2="{ky-4}" stroke="#222" stroke-width="2.5" stroke-dasharray="{dash_styles[k % 3]}"/>')
         route = " → ".join(f"{col} {num}" if col != "Abyss" else "Abyss" for col, num in t.stops)
         o.append(_text(lx + 50, ky, f"{t.name}: {route} (every {t.interval} min, {t.cars} cars)", size=11))
+        _hit(("named", k), "rect", lx, ky - 13, W - 2 * lx, 17)
         ky += 20
     o.append("</svg>")
     return "\n".join(o)
@@ -5111,12 +5179,13 @@ def render5_svg(fl: Floor5) -> str:
          _text(30, 58, f"{fl.days} days  •  ~{fl.crawlers} crawlers  •  seed {fl.seed}", size=12, fill="#555")]
     # wedges: Air NW, Land NE, Sea SE, Subterranean SW (quadrant order rotates from top-left clockwise)
     angles = {"Air": (180, 270), "Land": (270, 360), "Sea": (0, 90), "Subterranean": (90, 180)}
-    for q in fl.quadrants:
+    for qi, q in enumerate(fl.quadrants):
         a0, a1 = angles[q.name]
         x0 = cx + R * math.cos(math.radians(a0)); y0 = cy + R * math.sin(math.radians(a0))
         x1 = cx + R * math.cos(math.radians(a1)); y1 = cy + R * math.sin(math.radians(a1))
         o.append(f'<path d="M {cx},{cy} L {x0:.1f},{y0:.1f} A {R},{R} 0 0 1 {x1:.1f},{y1:.1f} Z" '
                  f'fill="{q.color}" stroke="#333" stroke-width="3"/>')
+        _hit(("quadrants", qi), "sector", cx, cy, 34, R, a0, a1)
         mid = math.radians((a0 + a1) / 2)
         tx = _px(cx + 0.58 * R * math.cos(mid)); ty = _px(cy + 0.58 * R * math.sin(mid))
         lines = [
@@ -5131,13 +5200,19 @@ def render5_svg(fl: Floor5) -> str:
              + (f" + {len(q.castle.guardians)} guardian{'s' if len(q.castle.guardians) != 1 else ''}"
                 if q.castle.guardians else ""), 11, "normal", "#222"),
         ]
-        for i, (t, sz, wt, col) in enumerate(lines):
+        # What each line is about: the quadrant, its faction, its mob, where its
+        # crawlers start, its castle and the castle's ruler.
+        about = [(), (), ("faction",) if q.faction else (), ("mob",),
+                 ("sites",) if q.sites else (), ("castle",), ("castle", "boss")]
+        for i, ((t, sz, wt, col), part) in enumerate(zip(lines, about)):
             o.append(_text(tx, ty - 34 + i * 16, t, size=sz, weight=wt, anchor="middle", fill=col))
+            _hit(("quadrants", qi) + part, "rect", tx - 115, ty - 34 + i * 16 - 12, 230, 15)
         # castle marker
         off = mid + math.radians(28)
         kx = _px(cx + 0.80 * R * math.cos(off)); ky = _px(cy + 0.80 * R * math.sin(off))
         o.append(f'<rect x="{kx-9}" y="{ky-9}" width="18" height="18" fill="#222"/>')
         o.append(_stair_icon(kx - 7, ky - 32))
+        _hit(("quadrants", qi, "castle"), "rect", kx - 11, ky - 34, 22, 45)
         if q.name == fl.suggested_start:
             o.append(_text(tx, ty - 34 + len(lines) * 16 + 2, "suggested start (DM)", size=10,
                            weight="bold", anchor="middle", fill="#c0392b"))
@@ -5148,6 +5223,8 @@ def render5_svg(fl: Floor5) -> str:
     o.append(f'<rect x="30" y="{ly-9}" width="18" height="18" fill="#222"/>')
     o.append(_text(56, ly + 4, "Castle (throne room holds the stairwell)", size=11))
     o.append(_text(30, ly + 26, f"Factions: {'; '.join(f.name + ' (' + f.home + ')' for f in fl.factions)}", size=11))
+    if fl.factions:
+        _hit(("factions",), "rect", 30, ly + 13, W - 60, 17)
     o.append(_text(30, ly + 44, _fit(f"Tension: {fl.tension}", 130), size=11))
     o.append("</svg>")
     return "\n".join(o)
@@ -5479,8 +5556,9 @@ def render6_svg(fl: Floor6) -> str:
         below = by_pos.get((c.row + 1, c.col))
         if below and _is_river(c) and _is_river(below):
             o.append(f'<rect x="{x + CELL//2 - 14}" y="{y + CELL//2}" width="28" height="{CELL}" fill="#7fb3d5" opacity="0.5"/>')
-    for c in fl.cells:
+    for i, c in enumerate(fl.cells):
         x, y = ox + c.col * CELL, oy + c.row * CELL
+        _hit(("cells", i), "rect", x, y, CELL, CELL)
         if isinstance(c, Settlement):
             fill = "#e8b4a0" if c.hostile else "#f2dfa8"
             stroke = "#8a1a1a" if c.hostile else "#8a5a1a"
@@ -5499,8 +5577,11 @@ def render6_svg(fl: Floor6) -> str:
                 o.append(_text(x + 10, y + 64, "Funeral Bells L95  •  inn" + ("  •  guild" if c.tutorial_guild else "") + ("  •  club" if c.club else ""), size=11, fill="#444"))
                 o.append(_text(x + 10, y + 82, "Shops: " + _fit(", ".join(c.shops), 32), size=11, fill="#444"))
                 o.append(_text(x + 10, y + 98, f"Quests: {len(c.quests)}", size=11, fill="#444"))
+                if c.quests:
+                    _hit(("cells", i, "quests"), "rect", x + 6, y + 86, CELL - 12, 16)
             if c.name == fl.elite.settlement:
                 o.append(_text(x + CELL - 10, y + CELL - 12, "ELITE", size=13, weight="bold", anchor="end", fill="#7a1f7a"))
+                _hit(("elite",), "rect", x + CELL - 62, y + CELL - 27, 56, 20)
         else:
             o.append(f'<rect x="{x}" y="{y}" width="{CELL}" height="{CELL}" fill="#cfd9b8" stroke="#555" stroke-width="1.5"/>')
             if c.river:
@@ -5510,21 +5591,30 @@ def render6_svg(fl: Floor6) -> str:
             o.append(_text(x + 10, y + 26, c.label, size=24, weight="bold"))
             o.append(_text(x + 42, y + 24, _fit(c.name, 22), size=13, weight="bold"))
             o.append(_text(x + 10, y + 48, _fit(c.mob.name, 30), size=12))
+            _hit(("cells", i, "mob"), "rect", x + 6, y + 36, CELL - 12, 16)
             o.append(_text(x + 10, y + 64, f"Level {c.level_range[0]}–{c.level_range[1]}", size=12))
             if c.boss:
                 roam = f"roams → {c.roams_to}" if c.roams_to else "stays here"
                 o.append(_text(x + 10, y + 84, f"{c.boss.tier.title()} boss: " + _fit(c.boss.name, 18), size=11, fill="#444"))
                 o.append(_text(x + 10, y + 99, f"L{c.boss.level}, {roam}", size=11, fill="#444"))
+                _hit(("cells", i, "boss"), "rect", x + 6, y + 72, CELL - 12, 32)
                 o.extend(_boss_marker(x + CELL - 30, y + CELL - 30, c.boss.tier, ""))
+                _hit(("cells", i, "boss"), "circle", x + CELL - 30, y + CELL - 30, BOSS_R[c.boss.tier] + 2)
             if c.camp:
                 cx_, cy_ = x + CELL - 50, y + 40
                 o.append(f'<circle cx="{cx_}" cy="{cy_}" r="12" fill="none" stroke="#8a1a1a" stroke-width="3"/>')
                 o.append(f'<line x1="{cx_-16}" y1="{cy_}" x2="{cx_+16}" y2="{cy_}" stroke="#8a1a1a" stroke-width="3"/>')
                 o.append(f'<line x1="{cx_}" y1="{cy_-16}" x2="{cx_}" y2="{cy_+16}" stroke="#8a1a1a" stroke-width="3"/>')
                 o.append(_text(cx_, cy_ + 30, _fit(c.camp, 14), size=10, weight="bold", anchor="middle", fill="#8a1a1a"))
+                # The camp is its hunter party's, by the region it sits in.
+                party = next((k for k, h in enumerate(fl.hunters) if h.camp_region == c.label), None)
+                if party is not None:
+                    _hit(("hunters", party), "circle", cx_, cy_, 17)
+                    _hit(("hunters", party), "rect", cx_ - 46, cy_ + 19, 92, 15)
             if c.stairwell:
                 o.append(_stair_icon(x + 12, y + CELL - 26))
                 o.append(_text(x + 32, y + CELL - 12, c.stairwell.label, size=11, weight="bold"))
+                _hit(("cells", i, "stairwell"), "rect", x + 8, y + CELL - 30, 70, 24)
             if c.is_entry:
                 o.append(f'<rect x="{x+3}" y="{y+3}" width="{CELL-6}" height="{CELL-6}" fill="none" stroke="#c0392b" stroke-width="4"/>')
                 o.append(_text(x + CELL // 2, y + CELL - 12, "ENTRY", size=14, weight="bold", anchor="middle", fill="#c0392b"))
@@ -5548,9 +5638,12 @@ def render6_svg(fl: Floor6) -> str:
     o.append(f'<rect x="{lx+600}" y="{ly-9}" width="18" height="18" fill="url(#thorn)"/>')
     o.append(_text(lx + 624, ly + 4, f"Thorn wall start ({fl.thorn_side})", size=11))
     ky = ly + 52
-    for sw in fl.stairs:
-        o.append(_text(lx, ky, f"{sw.label} ({sw.region_label}): {_fit(sw.condition, 110)}", size=12)); ky += 18
+    for k, sw in enumerate(fl.stairs):
+        o.append(_text(lx, ky, f"{sw.label} ({sw.region_label}): {_fit(sw.condition, 110)}", size=12))
+        _hit(("stairs", k), "rect", lx, ky - 13, W - 2 * lx, 17)
+        ky += 18
     o.append(_text(lx, ky, f"Elite: {fl.elite.name} — {fl.elite.show} (based in {fl.elite.settlement})", size=12, fill="#7a1f7a"))
+    _hit(("elite",), "rect", lx, ky - 13, W - 2 * lx, 17)
     o.append("</svg>")
     return "\n".join(o)
 
@@ -5821,7 +5914,7 @@ def render8_svg(fl: Floor8) -> str:
          _text(30, 58, f"{fl.days} days  •  {fl.archetype} folklore  •  start: {fl.structure}  •  seed {fl.seed}", size=12, fill="#555")]
     ring_fill = {1: "#e9e2d0", 2: "#d9cfb8", 3: "#c8b99c"}
     n = fl.wedges
-    for z in fl.zones:
+    for zi, z in enumerate(fl.zones):
         r0 = 0 if z.ring == 1 else rings[z.ring - 1]
         r1 = rings[z.ring]
         a0 = math.radians(-90 + z.wedge * 360 / n)
@@ -5833,6 +5926,8 @@ def render8_svg(fl: Floor8) -> str:
              f'L {cx + r0*math.cos(a1):.1f},{cy + r0*math.sin(a1):.1f} '
              f'A {r0},{r0} 0 {big} 0 {cx + r0*math.cos(a0):.1f},{cy + r0*math.sin(a0):.1f} Z')
         o.append(f'<path d="{p}" fill="{ring_fill[z.ring]}" stroke="#444" stroke-width="1.5"/>')
+        # The inner ring stops short of the start in the middle.
+        _hit(("zones", zi), "sector", cx, cy, r0 or 23, r1, math.degrees(a0), math.degrees(a1))
         mid = (a0 + a1) / 2
         rm = (r0 + r1) / 2 if z.ring > 1 else r1 * 0.62
         tx, ty = _px(cx + rm * math.cos(mid)), _px(cy + rm * math.sin(mid))
@@ -5843,7 +5938,11 @@ def render8_svg(fl: Floor8) -> str:
         if z.legendary:
             o.append(_text(tx, yy, "LEGEND: " + _fit(z.legendary, 20), size=9, weight="bold", anchor="middle", fill="#7a1f1f")); yy += 12
         if z.deckmasters:
-            o.append(_text(tx, yy, "DM " + ",".join(f"#{d}" for d in z.deckmasters), size=9, weight="bold", anchor="middle", fill="#1f4a7a")); yy += 12
+            o.append(_text(tx, yy, "DM " + ",".join(f"#{d}" for d in z.deckmasters), size=9, weight="bold", anchor="middle", fill="#1f4a7a"))
+            dm = next((k for k, d in enumerate(fl.deckmasters) if d.number == z.deckmasters[0]), None)
+            if dm is not None:
+                _hit(("deckmasters", dm), "rect", tx - 36, yy - 10, 72, 13)
+            yy += 12
         if z.vending:
             o.append(_text(tx, yy, "VENDING", size=9, weight="bold", anchor="middle", fill="#1f4a7a")); yy += 12
         if z.key:
@@ -6140,13 +6239,14 @@ def render9_svg(fl: Floor9) -> str:
          _text(30, 36, "Floor 9 — Faction Wars", size=22, weight="bold"),
          _text(30, 58, f"{fl.days} days  •  nine attackers around Larracos  •  warlords: {fl.warlord_mode}  •  seed {fl.seed}", size=12, fill="#555")]
     n = 9
-    for t in fl.teams:
+    for ti, t in enumerate(fl.teams):
         i = t.slot - 1
         a0 = math.radians(-90 + i * 360 / n); a1 = math.radians(-90 + (i + 1) * 360 / n)
         p = (f'M {cx + r_city*math.cos(a0):.1f},{cy + r_city*math.sin(a0):.1f} L {cx + R*math.cos(a0):.1f},{cy + R*math.sin(a0):.1f} '
              f'A {R},{R} 0 0 1 {cx + R*math.cos(a1):.1f},{cy + R*math.sin(a1):.1f} L {cx + r_city*math.cos(a1):.1f},{cy + r_city*math.sin(a1):.1f} '
              f'A {r_city},{r_city} 0 0 0 {cx + r_city*math.cos(a0):.1f},{cy + r_city*math.sin(a0):.1f} Z')
         o.append(f'<path d="{p}" fill="{t.color}" fill-opacity="0.55" stroke="#333" stroke-width="2"/>')
+        _hit(("teams", ti), "sector", cx, cy, r_city, R, math.degrees(a0), math.degrees(a1))
         mid = (a0 + a1) / 2
         tx, ty = _px(cx + 0.62 * R * math.cos(mid)), _px(cy + 0.62 * R * math.sin(mid))
         o.append(_text(tx, ty - 10, f"{t.slot}. {t.name}", size=12, weight="bold", anchor="middle"))
@@ -6162,7 +6262,7 @@ def render9_svg(fl: Floor9) -> str:
     o.append(f'<circle cx="{cx}" cy="{cy}" r="{r_forest}" fill="none" stroke="#2f5a2f" stroke-width="2" stroke-dasharray="6,4"/>')
     o.append(_text(cx, cy - r_forest - 6 + 0, "", size=1))
     # stair chambers in the forest band
-    for slot, sp in fl.stairs:
+    for si, (slot, sp) in enumerate(fl.stairs):
         i = slot - 1
         # crc32, not hash(): string hashing is salted per process, so hash() moved these
         # stair icons to new angles on every run of the same seed.
@@ -6170,6 +6270,7 @@ def render9_svg(fl: Floor9) -> str:
         rr = r_forest + (R - r_forest) * 0.5
         sx, sy = _px(cx + rr * math.cos(ang)), _px(cy + rr * math.sin(ang))
         o.append(_stair_icon(sx - 7, sy - 7))
+        _hit(("stairs", si), "rect", sx - 10, sy - 10, 20, 20)
     # Larracos
     for rr in (r_city, r_city * 0.7, r_city * 0.4):
         o.append(f'<circle cx="{cx}" cy="{cy}" r="{rr:.1f}" fill="#e8dcc0" stroke="#111" stroke-width="2"/>')
@@ -6398,6 +6499,13 @@ def render10_heat_svg(fl: Floor10, h: Heat) -> str:
          _text(30, 36, f"Heat {h.number} — {h.environment}", size=22, weight="bold"),
          _text(30, 58, f"danger {h.danger}/5  •  {h.length_km} km  •  {len(h.segments)} segments  •  requirement: {h.req_tag} @ {h.req_tier}  •  seed {fl.seed}", size=12, fill="#555"),
          _text(30, 78, f"Hint for the next heat: \"{h.hint}\"", size=12, fill="#8a5a1a")]
+    at = next((("heats", k) for k, x in enumerate(fl.heats) if x is h), None)
+
+    def hit(rest, shape, *box):
+        if at is not None:
+            _hit(at + rest, shape, *box)
+
+    hit((), "rect", 30, 14, W - 60, 70)                     # its name and what it asks
     # winding path through segment points
     n = len(h.segments)
     pts = [(80, 320)]
@@ -6422,9 +6530,14 @@ def render10_heat_svg(fl: Floor10, h: Heat) -> str:
         o.append(_text(x, y + 5, str(k), size=13, weight="bold", anchor="middle", fill="#fff"))
         ly = y - 30 if k % 2 else y + 34
         o.append(_text(x, ly, _fit(sg.hazard, 26), size=11, weight="bold", anchor="middle"))
+        hit(("segments", k - 1), "circle", x, y, 18)
+        hit(("segments", k - 1), "rect", x - 85, ly - 12, 170, 15)
     o.append(_text(30, 500, "Twist: " + _fit(h.twist, 120), size=12, fill="#7a1f7a"))
     o.append(_text(30, 522, "Requirement: " + _fit(h.env_note, 130), size=11, fill="#333"))
+    hit((), "rect", 30, 486, W - 60, 40)                    # its twist and requirement
     o.append(_text(30, 550, "Field: " + _fit(", ".join(r.name for r in h.rivals), 130), size=11, fill="#333"))
+    if h.rivals:
+        hit(("rivals",), "rect", 30, 537, W - 60, 17)
     if h.golden:
         o.append(_text(30, 578, "GOLDEN UPGRADE for everyone after this heat.", size=12, weight="bold", fill="#b8860b"))
     o.append("</svg>")
@@ -6589,19 +6702,25 @@ def render11_svg(fl: Floor11) -> str:
         o.append(f'<circle cx="{xx}" cy="{y}" r="7" fill="#7a1f7a"/>')
         o.append(f'<line x1="{xx}" y1="{y-8}" x2="{xx}" y2="{yy+6}" stroke="#7a1f7a" stroke-width="1.5"/>')
         o.append(_text(xx, yy, _fit(ev, 44), size=10, anchor="middle", fill="#7a1f7a"))
+        _hit(("route_events", i), "circle", xx, y, 9)
+        _hit(("route_events", i), "rect", xx - 120, yy - 11, 240, 14)
     # judging stands
     jx = x0 + (x1 - x0) * c["judging_km"] / 3
     o.append(f'<rect x="{jx-40}" y="{y+45}" width="80" height="34" fill="#f2dfa8" stroke="#8a5a1a" stroke-width="2"/>')
     o.append(_text(jx, y + 67, "JUDGING STANDS", size=10, weight="bold", anchor="middle"))
     # arena
     o.append(f'<circle cx="{x1+80}" cy="{y}" r="70" fill="#d9d6cf" stroke="#111" stroke-width="3"/>')
+    _hit(("boss",), "circle", x1 + 80, y, 70)
     o.append(f'<circle cx="{x1+80}" cy="{y}" r="44" fill="#c0392b" opacity="0.35"/>')
     o.append(_text(x1 + 80, y - 6, "ARENA", size=12, weight="bold", anchor="middle"))
     o.append(_text(x1 + 80, y + 10, _fit(fl.boss.name, 20), size=10, anchor="middle"))
     o.append(_text(x1 + 80, y + 24, f"L{fl.boss.level}", size=10, anchor="middle", fill="#444"))
     o.append(_stair_icon(x1 + 73, y + 34))
     o.append(_text(30, 456, f"Floor boss: {fl.boss.name} (L{fl.boss.level}) — {_fit(fl.boss.form, 90)}", size=11))
+    _hit(("boss",), "rect", 30, 443, W - 60, 17)
     o.append(_text(30, 476, "Arena roster: " + _fit(", ".join((f.substitute or f"{f.name} ({f.cls})") for f in fl.formers), 130), size=11))
+    if fl.formers:
+        _hit(("formers",), "rect", 30, 463, W - 60, 17)
     o.append(_text(30, 496, f"Grand Master: {fl.grandmaster}", size=11, fill="#555"))
     o.append(_text(30, 516, "Other groups' themes: " + ", ".join(fl.other_themes), size=11, fill="#555"))
     o.append("</svg>")

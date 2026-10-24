@@ -12,6 +12,7 @@ Run with:  python dcc_mapgen_gui.py
 """
 
 import base64
+import math
 import os
 import queue
 import re
@@ -342,6 +343,9 @@ class MapView(ttk.Frame):
                 cx, cy, r = h.box
                 box = ((cx - r) * zoom, (cy - r) * zoom, (cx + r) * zoom, (cy + r) * zoom)
                 self.canvas.create_oval(*box, outline="#e67e22", width=3, tags="lit")
+            elif h.shape == "sector":
+                pts = [v * zoom for p in h.outline() for v in p]
+                self.canvas.create_polygon(*pts, outline="#e67e22", fill="", width=3, tags="lit")
             else:
                 x, y, w, hh = h.box
                 box = (x * zoom, y * zoom, (x + w) * zoom, (y + hh) * zoom)
@@ -354,10 +358,7 @@ class MapView(ttk.Frame):
         """Scroll a lit part into view if it is off the screen."""
         if self._photo is None:
             return
-        if h.shape == "circle":
-            cx, cy = h.box[0], h.box[1]
-        else:
-            cx, cy = h.box[0] + h.box[2] / 2, h.box[1] + h.box[3] / 2
+        cx, cy = h.middle()
         cx, cy = cx * zoom, cy * zoom
         left, top = self.canvas.canvasx(0), self.canvas.canvasy(0)
         cw, ch = self.canvas.winfo_width(), self.canvas.winfo_height()
@@ -2603,10 +2604,7 @@ def selftest() -> int:
     def middle(h):
         """Where a part's middle is on the canvas widget, as a click would be."""
         zoom = view._shown[1]
-        if h.shape == "circle":
-            x, y = h.box[0], h.box[1]
-        else:
-            x, y = h.box[0] + h.box[2] / 2, h.box[1] + h.box[3] / 2
+        x, y = h.middle()
         return round(x * zoom - canvas.canvasx(0)), round(y * zoom - canvas.canvasy(0))
 
     def click(h, then=lambda: None):
@@ -2677,6 +2675,28 @@ def selftest() -> int:
     check(view._suffix() == "", "and it goes back to the main map")
     app.toggle_editor()
     check(not canvas.find_withtag("lit"), "closing the panel puts the light out")
+
+    # A round map: Floor 5's quadrants are slices of a circle.
+    say("floor 5 / medium / seed 4242, clicked")
+    app.floor.set(FLOOR_LABELS[5])
+    app._sync_floor()
+    app.size.set("medium")
+    app.seed.set("4242")
+    earlier, shown = app.result, view._photo
+    app.generate()
+    pump(timeout, lambda: app.result is not earlier and view._photo is not shown)
+    sea = next(h for h in app._map_parts("") if h.path == ("quadrants", 2) and h.shape == "sector")
+    cx, cy, r0, r1, a0, a1 = sea.box
+    z, a = view._shown[1], math.radians(a0 + (a1 - a0) * 0.25)       # near the rim, clear of words
+    x = round((cx + 0.93 * r1 * math.cos(a)) * z - canvas.canvasx(0))
+    y = round((cy + 0.93 * r1 * math.sin(a)) * z - canvas.canvasy(0))
+    canvas.event_generate("<ButtonPress-1>", x=x, y=y)
+    canvas.event_generate("<ButtonRelease-1>", x=x, y=y)
+    pump(1, lambda: bool(canvas.find_withtag("lit")))
+    check(app._editing() and ed.path == ("quadrants", 2)
+          and any(canvas.type(i) == "polygon" for i in canvas.find_withtag("lit")),
+          "a quadrant clicked on its slice opens in the panel, and its slice lights up")
+    app.toggle_editor()
 
     # An option combination the generator must reject rather than crash on.
     errs = []

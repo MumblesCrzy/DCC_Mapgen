@@ -519,17 +519,28 @@ class MapClickTest(unittest.TestCase):
     part under a click. Checked against the drawing itself: a click on a label
     the map writes picks the part the label belongs to."""
 
-    TEXT = re.compile(r'<text x="([\d.\-]+)" y="([\d.\-]+)" font-size="([\d.]+)"[^>]*>(.*?)</text>')
+    TEXT = re.compile(r'<text x="([\d.\-]+)" y="([\d.\-]+)" font-size="([\d.]+)" '
+                      r'font-weight="\w+" text-anchor="(\w+)"[^>]*>(.*?)</text>')
 
     @classmethod
     def _labels(cls, svg):
         """(x, y, text) for every label, with x, y a point inside its letters."""
         import html
-        out = []
-        for x, y, size, text in cls.TEXT.findall(svg):
-            middle = 'text-anchor="middle"' in svg[svg.find(f'<text x="{x}" y="{y}"'):][:200]
-            out.append((float(x) + (0 if middle else 3), float(y) - float(size) / 3, html.unescape(text)))
-        return out
+        nudge = {"start": 3, "middle": 0, "end": -3}
+        return [(float(x) + nudge[anchor], float(y) - float(size) / 3, html.unescape(text))
+                for x, y, size, anchor, text in cls.TEXT.findall(svg)]
+
+    def _picks(self, res, suffix, wanted, where):
+        """wanted: (does a label match, the path a click on it should pick). The
+        first label that matches, clicked, picks the path."""
+        hits = mg.map_hits(res.floor, suffix, res.boss_stairs)
+        labels = self._labels(dict(res.svgs)[suffix])
+        for match, path in wanted:
+            spots = [(x, y) for x, y, t in labels if match(t, x, y)]
+            self.assertTrue(spots, f"{where}: no label on the map for {path}")
+            got = mg.hit_at(hits, *spots[0])
+            self.assertEqual(got.path if got else None, tuple(path), f"{where}: the label for {path}")
+        return hits
 
     def _in_tree(self, fl, path):
         node = fl
@@ -560,12 +571,17 @@ class MapClickTest(unittest.TestCase):
                 for a in mg.map_hits(res.floor, suffix, res.boss_stairs):
                     where = f"{corpus.case_id(case)} {suffix} {a.path}"
                     self._in_tree(res.floor, a.path)
-                    if a.shape == "circle":
-                        cx, cy, r = a.box
-                        box = (cx - r, cy - r, cx + r, cy + r)
-                    else:
-                        box = (a.box[0], a.box[1], a.box[0] + a.box[2], a.box[1] + a.box[3])
+                    box = a.bounds()
                     self.assertTrue(0 <= box[0] and 0 <= box[1] and box[2] <= w and box[3] <= h, where)
+                    self.assertTrue(a.contains(*a.middle()), f"{where}: its middle is on it")
+
+    def test_every_map_marks_its_parts(self):
+        """Every map of every pinned floor can be clicked: none is left out."""
+        for case in corpus.CASES:
+            res = mg.generate(**case)
+            for suffix, _ in res.svgs:
+                self.assertTrue(mg.map_hits(res.floor, suffix, res.boss_stairs),
+                                f"{corpus.case_id(case)} {mg.map_title(suffix)}")
 
     def test_floors_1_and_2_overview(self):
         for case in corpus.CASES:
@@ -621,6 +637,150 @@ class MapClickTest(unittest.TestCase):
                     self.assertTrue(any(a.path == want and a.shape == "circle" for a in hits), where)
                 x, y = next((x, y) for x, y, t in labels if t.startswith(f"Floor {fl.number} — {nb.label}."))
                 self.assertEqual(pick(x, y), ("neighborhoods", i), f"{where}: the map's title")
+
+    def _cases(self, floor):
+        for case in corpus.CASES:
+            if case["floor"] == floor:
+                yield corpus.case_id(case), mg.generate(**case)
+
+    def test_floors_3_and_6(self):
+        for floor in (3, 6):
+            for where, res in self._cases(floor):
+                fl, wanted = res.floor, []
+                for i, c in enumerate(fl.cells):
+                    cell = mg.HitArea((), "rect", (0, 0, 0, 0))
+                    for a in mg.map_hits(fl, ""):
+                        if a.path == ("cells", i):
+                            cell = a
+                    inside = lambda x, y, cell=cell: cell.contains(x, y)
+                    name = mg._fit(c.name, 22)
+                    wanted.append((lambda t, x, y, n=name, f=inside: t == n and f(x, y), ("cells", i)))
+                    if isinstance(c, mg.Settlement):
+                        if c.quests and not getattr(c, "hostile", False):
+                            wanted.append((lambda t, x, y, f=inside: t.startswith("Quests: ") and f(x, y),
+                                           ("cells", i, "quests")))
+                        continue
+                    mob = mg._fit(c.mob.name, 30)
+                    wanted.append((lambda t, x, y, m=mob, f=inside: t == m and f(x, y), ("cells", i, "mob")))
+                    if c.boss:
+                        wanted.append((lambda t, x, y, f=inside: " boss: " in t and f(x, y), ("cells", i, "boss")))
+                    if c.stairwell:
+                        wanted.append((lambda t, x, y, s=c.stairwell.label, f=inside: t.split(" (")[0] == s and f(x, y),
+                                       ("cells", i, "stairwell")))
+                    if c.camp:
+                        party = next(k for k, h in enumerate(fl.hunters) if h.camp_region == c.label)
+                        wanted.append((lambda t, x, y, n=mg._fit(c.camp, 14), f=inside: t == n and f(x, y),
+                                       ("hunters", party)))
+                for k, sw in enumerate(fl.stairs):
+                    wanted.append((lambda t, x, y, s=sw: t.startswith(f"{s.label} ({s.region_label}): "), ("stairs", k)))
+                wanted.append((lambda t, x, y: t == "ELITE", ("elite",)))
+                wanted.append((lambda t, x, y: t.startswith("Elite: "), ("elite",)))
+                hits = self._picks(res, "", wanted, where)
+                for a in hits:
+                    if a.shape == "circle" and a.path[-1] == "boss":
+                        self.assertEqual(mg.hit_at(hits, *a.middle()).path, a.path, f"{where}: a boss's marker")
+
+    def test_floor_4(self):
+        for where, res in self._cases(4):
+            fl, wanted = res.floor, []
+            hits = mg.map_hits(fl, "")
+            for i, ln in enumerate(fl.lines):
+                wanted.append((lambda t, x, y, c=ln.color: t == c, ("lines", i)))
+                for j, st in enumerate(ln.stations):
+                    here = ("lines", i, "stations", j)
+                    dot = next(a for a in hits if a.path == here and a.shape == "circle")
+                    self.assertEqual(mg.hit_at(hits, *dot.middle()).path, here, f"{where}: {here}'s marker")
+                    # Its number, under its marker: the same number is on other lines.
+                    wanted.append((lambda t, x, y, n=st.number, d=dot: t == str(n) and abs(x - d.box[0]) < 1
+                                   and 0 < y - d.box[1] < 30, here))
+            for g, gs in enumerate(fl.ghoul_stations):
+                first = " ".join(gs["name"].split()[:(len(gs["name"].split()) + 1) // 2])
+                # Over its own column: two names can start with the same word.
+                column = next(a.box[0] for a in hits if a.shape == "circle" and a.path[-2:-1] == ("stations",)
+                              and mg.edit_get(fl, list(a.path)).number == gs["number"])
+                wanted.append((lambda t, x, y, w=first, cx=column: t == w and abs(x - cx) < 1 and y < 100,
+                               ("ghoul_stations", g)))
+            c4 = mg.FLOOR4_CFG
+            for label, part in (("Trainyard", "yards"), (f"DEPOT {c4['depot']}", "depot"),
+                                ("MIMIC", "mimic_spawn"), ("END OF LINE", "hr")):
+                wanted.append((lambda t, x, y, w=label: t == w, (part,)))
+            for k, t_ in enumerate(fl.named):
+                wanted.append((lambda t, x, y, n=t_.name: t.startswith(f"{n}: "), ("named", k)))
+            self._picks(res, "", wanted, where)
+
+    def test_floor_5(self):
+        for where, res in self._cases(5):
+            fl, wanted = res.floor, []
+            for qi, q in enumerate(fl.quadrants):
+                at = ("quadrants", qi)
+                wanted += [(lambda t, x, y, n=q.name.upper(): t == n, at),
+                           (lambda t, x, y, n=q.mob.name: t.startswith(f"{n} L"), at + ("mob",)),
+                           (lambda t, x, y, n=mg._fit(q.castle.name, 30): t == n, at + ("castle",)),
+                           (lambda t, x, y, lv=q.castle.boss.level: f" boss L{lv}" in t, at + ("castle", "boss"))]
+                if q.faction:
+                    wanted.append((lambda t, x, y, n=mg._fit(q.faction.name, 30): t == n, at + ("faction",)))
+            wanted.append((lambda t, x, y: t.startswith("Factions: "), ("factions",)))
+            hits = self._picks(res, "", wanted, where)
+            for qi, _ in enumerate(fl.quadrants):
+                wedge = next(a for a in hits if a.path == ("quadrants", qi) and a.shape == "sector")
+                cx, cy, r0, r1, a0, a1 = wedge.box
+                # Out near the rim, between the words and the castle.
+                a = math.radians(a0 + (a1 - a0) * 0.25)
+                spot = (cx + 0.93 * r1 * math.cos(a), cy + 0.93 * r1 * math.sin(a))
+                self.assertEqual(mg.hit_at(hits, *spot).path, ("quadrants", qi), where)
+
+    def test_floor_8(self):
+        for where, res in self._cases(8):
+            fl, wanted = res.floor, []
+            hits = mg.map_hits(fl, "")
+            for zi, z in enumerate(fl.zones):
+                wanted.append((lambda t, x, y, n=z.label: t == n, ("zones", zi)))
+                wedge = next(a for a in hits if a.path == ("zones", zi))
+                cx, cy, r0, r1, a0, a1 = wedge.box
+                a = math.radians(a0 + (a1 - a0) * 0.15)
+                spot = (cx + (r0 + 0.9 * (r1 - r0)) * math.cos(a), cy + (r0 + 0.9 * (r1 - r0)) * math.sin(a))
+                self.assertEqual(mg.hit_at(hits, *spot).path, ("zones", zi), f"{where}: zone {z.label}")
+                if z.deckmasters:
+                    dm = next(k for k, d in enumerate(fl.deckmasters) if d.number == z.deckmasters[0])
+                    wanted.append((lambda t, x, y, w=z.deckmasters, c=wedge: t == "DM " + ",".join(f"#{d}" for d in w)
+                                   and c.contains(x, y), ("deckmasters", dm)))
+            self._picks(res, "", wanted, where)
+            self.assertIsNone(mg.hit_at(hits, 500, 500), "the start in the middle is no zone")
+
+    def test_floor_9(self):
+        for where, res in self._cases(9):
+            fl, wanted = res.floor, []
+            for ti, t_ in enumerate(fl.teams):
+                wanted.append((lambda t, x, y, n=f"{t_.slot}. {t_.name}": t == n, ("teams", ti)))
+            hits = self._picks(res, "", wanted, where)
+            for si, _ in enumerate(fl.stairs):
+                icon = next(a for a in hits if a.path == ("stairs", si))
+                self.assertEqual(mg.hit_at(hits, *icon.middle()).path, ("stairs", si), where)
+            self.assertIsNone(mg.hit_at(hits, 500, 520), "Larracos in the middle is no team's")
+
+    def test_floor_10(self):
+        for where, res in self._cases(10):
+            fl = res.floor
+            for hi, h in enumerate(fl.heats):
+                at = ("heats", hi)
+                wanted = [(lambda t, x, y, n=h.number: t.startswith(f"Heat {n} — "), at),
+                          (lambda t, x, y: t.startswith("Twist: "), at)]
+                if h.rivals:
+                    wanted.append((lambda t, x, y: t.startswith("Field: "), at + ("rivals",)))
+                for k, sg in enumerate(h.segments):
+                    wanted += [(lambda t, x, y, n=k + 1: t == str(n), at + ("segments", k)),
+                               (lambda t, x, y, w=mg._fit(sg.hazard, 26): t == w, at + ("segments", k))]
+                self._picks(res, f"_heat{h.number}", wanted, f"{where} heat {h.number}")
+
+    def test_floor_11(self):
+        for where, res in self._cases(11):
+            fl = res.floor
+            wanted = [(lambda t, x, y: t == "ARENA", ("boss",)),
+                      (lambda t, x, y: t.startswith("Floor boss: "), ("boss",)),
+                      (lambda t, x, y: t.startswith("Arena roster: "), ("formers",))]
+            for i, (_, ev) in enumerate(fl.route_events):
+                wanted.append((lambda t, x, y, w=mg._fit(ev, 44): t == w, ("route_events", i)))
+            self._picks(res, "", wanted, where)
 
     def test_a_part_names_the_map_that_shows_it_up_close(self):
         """What a double-click on the map goes to: a neighborhood's room map

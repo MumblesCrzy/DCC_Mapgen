@@ -353,7 +353,7 @@ Using a screen reader? The desktop app can't be read by one; the
   (50% is `0.5`).
 - **Edit floor** (above the map, or **Edit → Edit this floor**, Ctrl+E) opens a panel
   to the right of the map where you can change anything on the floor and see it
-  redrawn. On Floors 1 and 2 you can also click a part of the map to edit it. See
+  redrawn. You can also click a part of the map to edit it. See
   [Editing in the app](#editing-in-the-app).
 - **File → Re-roll rooms from a saved floor** is `--rooms-for` in the GUI: point it at a
   floor 1–2 Markdown file this app wrote and re-roll one neighborhood's rooms.
@@ -391,11 +391,27 @@ A panel opens to the right of the map:
 - **The tree** lists the floor's parts, as the write-up names them: neighborhoods and
   their bosses, rooms and mobs; stations and trains; quadrants, castles and quests; and
   so on for each floor. Open a part to see what it holds.
-- **Click the map** to pick a part there instead (Floors 1 and 2 so far). Pointing at
-  a part names it; a click opens the panel on it. On the overview that is a
-  neighborhood, its boss or its mob, or a borough, city or top-tier boss, by its
-  marker or its line in the key. On a room map it is a room, by its marker, its label
-  or its line in the list, or a corridor encounter. Dragging still moves the map.
+- **Click the map** to pick a part there instead, on every floor. Pointing at a part
+  names it; a click opens the panel on it. Dragging still moves the map. What a click
+  can pick:
+  - **Floors 1 and 2:** a neighborhood, its boss or its mob, or a borough, city or
+    top-tier boss, by its marker or its line in the key; on a room map, a room (by its
+    marker, its label or its line in the list) or a corridor encounter.
+  - **Floors 3 and 6:** a settlement or region, a region's mob, boss and stairwell, a
+    settlement's quests, the Elite, each line of the stairwell list, and on Floor 6 a
+    hunter party by its camp.
+  - **Floor 4:** a line (by its name or the line itself), a station (its marker, its
+    number, what it has, its stairwell), a ghoul station by its name over its column,
+    the yards, the depot, the Station Mimic and 435's staff by their columns, and a
+    named train by its line in the key.
+  - **Floor 5:** a quadrant by its slice; its faction, mob, sites, castle and ruler by
+    their lines; the castle by its marker; the factions by the line under the map.
+  - **Floor 8:** a zone by its slice of its ring, and a deckmaster by its zone's DM line.
+  - **Floor 9:** a team by its slice, and a stairwell chamber by its icon.
+  - **Floor 10:** on each heat's map, the heat, a segment (its number or its hazard),
+    and the field of rivals.
+  - **Floor 11:** a route event (its dot or its words), the boss by the arena or its
+    line, and the arena's roster.
 - **Double-click a neighborhood** on the overview to go to its room map (the first
   click opens it in the panel too). **Right-click** a part for a menu: edit it, open
   its room map, or, on a room map, go back to the main map.
@@ -1062,14 +1078,21 @@ castle everywhere, is refused a level of the wrong kind, finds a quadrant's name
 and undoes it all.
 
 Clicking the map has its own group:
-- every area any map marks as a part is a part the edit panel lists, and lies on its
-  map;
+- every map of every pinned floor marks its parts, every area it marks is a part the
+  edit panel lists, lies on its map, and has its middle on it;
 - marking the areas changes no map, and is off again afterwards;
 - on every pinned Floor 1 and 2, a click picks what the map draws there: each
   neighborhood by its name, its boss by its line, every borough, city and top-tier
   boss by its marker and its line in the key; each room by its marker, its label and
   its line in the list, each corridor encounter by its line, and the room map's title
   its neighborhood;
+- on every other pinned floor, the same for its own parts: a click on each label the
+  map writes picks the part it belongs to (a region's mob, boss and stairwell, a hunter
+  camp, a station by its number on its own line, a ghoul station by its name over its
+  own column, a quadrant's castle and ruler, a zone, a deckmaster, a team, a heat's
+  segments, a route event, the arena's boss), and each slice of a round map is its
+  quadrant's, zone's or team's out to its rim, while the start on Floor 8 and Larracos
+  on Floor 9 are no one's;
 - where two are drawn one over the other, the one on top wins, and a round marker's
   corners are not on it;
 - a map's areas worked out in one thread take nothing from a floor drawn in another;
@@ -1082,7 +1105,8 @@ on the overview opens, that a room picked in the panel lights its neighborhood o
 overview, that pointing at a neighborhood says a double-click goes to its rooms, that
 right-clicking it offers to edit it or open its room map, that a double-click does go
 there, that a room map's right-click menu goes back to the main map, and that closing
-the panel puts the light out.
+the panel puts the light out. On Floor 5 it clicks a quadrant's slice and checks that
+it opens and its slice lights up.
 
 What's switched on and shops have their own groups, with the books' facts written into the tests rather than read back from the banks:
 - each system arrives on the DCC Database's floor, and each floor's list of new, gone and still-on systems is checked against those floors;
