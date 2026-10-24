@@ -380,10 +380,12 @@ try {
   const pointer = [view[0] + view[2] * 0.3, view[1] + view[3] * 0.4];
   await page.mouse.move(...pointer);
   const wheel0 = await mapAt(...pointer);
-  for (let k = 0; k < 3; k++) await page.mouse.wheel(0, -100);
+  // A quick turn of the wheel zooms by as far as it turned (a fixed small
+  // step per event barely moved it), about the pointer.
+  for (let k = 0; k < 3; k++) await page.mouse.wheel(0, -300);
   await page.waitForTimeout(300);
   const wheel1 = await mapAt(...pointer);
-  check(wheel1[2] > wheel0[2] * 1.2 && Math.hypot(wheel1[0] - wheel0[0], wheel1[1] - wheel0[1]) < 2,
+  check(wheel1[2] > wheel0[2] * 1.6 && Math.hypot(wheel1[0] - wheel0[0], wheel1[1] - wheel0[1]) < 2,
         `the wheel zooms in where the pointer is (x${(wheel1[2] / wheel0[2]).toFixed(2)}, the map under it `
         + `moved ${Math.hypot(wheel1[0] - wheel0[0], wheel1[1] - wheel0[1]).toFixed(1)})`);
   // The middle of the map's box, measured afresh: clicking a button can
@@ -414,6 +416,21 @@ try {
              inside: r.left >= v.left - 1 && r.right <= v.right + 1 && r.bottom <= v.bottom + 1 };
   });
   check(fitted.across < 2 && fitted.top < 3 && fitted.inside, `Fit shows the whole map, centred, at the top (${JSON.stringify(fitted)})`);
+  // A drag that starts in the blank around the map moves it too.
+  const blank = await page.evaluate(() => {
+    const v = document.getElementById("viewer").getBoundingClientRect();
+    const r = document.getElementById("map-img").getBoundingClientRect();
+    return v.bottom - r.bottom > 30 ? [v.left + v.width / 2, (r.bottom + v.bottom) / 2]
+      : [(v.left + r.left) / 2, v.top + v.height / 2];
+  });
+  const at0 = await page.$eval("#map-img", (i) => [i.getBoundingClientRect().left, i.getBoundingClientRect().top]);
+  await page.mouse.move(...blank);
+  await page.mouse.down();
+  await page.mouse.move(blank[0] + 60, blank[1] - 50, { steps: 8 });
+  await page.mouse.up();
+  const at1 = await page.$eval("#map-img", (i) => [i.getBoundingClientRect().left, i.getBoundingClientRect().top]);
+  check(Math.abs(at1[0] - at0[0] - 60) < 1 && Math.abs(at1[1] - at0[1] + 50) < 1,
+        `a drag from the blank around the map moves it (${(at1[0] - at0[0]).toFixed(1)}, ${(at1[1] - at0[1]).toFixed(1)})`);
 
   // A bad seed is reported, not crashed on.
   await page.fill("#seed", "abc");

@@ -369,8 +369,10 @@ function showMap(i) {
     // Scaled about its middle, Panzoom's own way: its zooming toward the
     // pointer (the wheel, and a pinch) works that out from the middle, and with
     // any other origin the map slides away from under the pointer as it zooms.
-    panzoom = Panzoom(img, { maxScale: 8, minScale: 0.05, step: 0.25 });
-    $("viewer").addEventListener("wheel", panzoom.zoomWithWheel, { passive: false });
+    // The box is the canvas: a drag anywhere in it moves the map, the blank
+    // around the map included. The map's menu is kept out of that.
+    panzoom = Panzoom(img, { maxScale: 8, minScale: 0.05, step: 0.25, canvas: true });
+    $("viewer").addEventListener("wheel", wheelZoom, { passive: false });
   }
 }
 
@@ -386,6 +388,18 @@ function fit() {
   setTimeout(() => panzoom.pan(
     (view.clientWidth - img.width) / 2 / scale, -(img.height * (1 - scale)) / 2 / scale,
     { animate: false, force: true }), 0);
+}
+
+// The wheel zooms about the pointer, by as far as the wheel turned: a notch of
+// a mouse wheel is about a fifth, and a trackpad's many small steps zoom
+// smoothly, where a step per event (Panzoom's own) raced on a trackpad and
+// crept on a mouse. Firefox counts in lines, the rest in pixels.
+function wheelZoom(e) {
+  if (!panzoom) return;
+  e.preventDefault();
+  const pixels = e.deltaY * (e.deltaMode === 1 ? 33 : e.deltaMode === 2 ? 800 : 1);
+  const factor = Math.exp(Math.max(-1, Math.min(1, -pixels * 0.002)));
+  panzoom.zoomToPoint(panzoom.getScale() * factor, { clientX: e.clientX, clientY: e.clientY });
 }
 
 // The + and - buttons zoom about the middle of what is on show, not the map's.
