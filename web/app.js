@@ -120,7 +120,9 @@ async function boot() {
   $("generate").disabled = false;
   $("generate").textContent = "Generate";
   $("open").disabled = false;
-  setStatus("Ready. Pick a floor and generate.");
+  $("open-floor").disabled = false;
+  $("reroll-go").disabled = !$("reroll-file").files.length;
+  if (!restoreShown()) setStatus("Ready. Pick a floor and generate.");
 }
 
 function fillControls() {
@@ -178,24 +180,144 @@ async function generate() {
       setStatus(res.error, true);
       return;
     }
-    result = res;
-    $("seed").value = res.seed;
     remember("floor", String(res.floor));
     remember("size", $("size").value);
-    showMaps();
-    showWriteup();
-    showSuggestions();
     const n = res.maps.length;
     // Read aloud, so in words: "floor4_medium_seed4242" is spelled out.
-    setStatus(`Floor ${res.floor}, ${res.size}, seed ${res.seed}: ${n} map${n === 1 ? "" : "s"} `
+    show(res, `Floor ${res.floor}, ${res.size}, seed ${res.seed}: ${n} map${n === 1 ? "" : "s"} `
               + "and a write-up. Same seed, same floor.");
-    // On a phone the controls fill the first screen; bring the result up.
-    document.querySelector(".tabs").scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (e) {
     setStatus(`Something went wrong: ${e.message}`, true);
     console.error(e);
   } finally {
     btn.disabled = false;
+  }
+}
+
+// -- what is on show ------------------------------------------------------------------
+
+// A floor (generated, or opened from a floor file) or a neighborhood's
+// re-rolled rooms: shown, and kept on this device so a reload brings it back.
+function show(res, words, { scroll = true, keep = true } = {}) {
+  result = res;
+  if (res.kind === "floor") {
+    $("floor").value = String(res.floor);
+    syncFloor();
+    $("size").value = res.size;
+    $("seed").value = res.seed;
+  }
+  $("save-floor").disabled = res.kind !== "floor";
+  showMaps();
+  showWriteup();
+  showSuggestions();
+  setStatus(words + (keep ? keepForReload(res) : ""));
+  // On a phone the controls fill the first screen; bring the result up.
+  if (scroll) document.querySelector(".tabs").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+// What a reload brings back: a floor as its floor file, which is all it is
+// drawn from; re-rolled rooms as they are. Kept in this browser alone.
+const KEPT = "dccmapgen.shown";
+
+function keepForReload(res) {
+  let kept = { kind: "rooms", result: res };
+  if (res.kind === "floor") {
+    const file = call("save_floor", "");
+    if (file.error) return "";
+    kept = { kind: "floor", text: file.text };
+  }
+  try {
+    localStorage.setItem(KEPT, JSON.stringify(kept));
+    return "";
+  } catch (e) {
+    forgetShown();
+    // A browser in private mode keeps nothing; one that ran out of room says so.
+    return e && e.name === "QuotaExceededError"
+      ? " It's too big to keep here for a reload; Save floor file keeps it." : "";
+  }
+}
+
+function forgetShown() {
+  try { localStorage.removeItem(KEPT); } catch { /* private mode */ }
+}
+
+function restoreShown() {
+  let kept = null;
+  try { kept = JSON.parse(localStorage.getItem(KEPT) || "null"); } catch { kept = null; }
+  if (kept && kept.kind === "floor" && typeof kept.text === "string") {
+    const res = call("open_floor", kept.text);
+    if (!res.error) {
+      show(res, `Back where you left off: Floor ${res.floor}, ${res.size}, seed ${res.seed}.`,
+           { scroll: false, keep: false });
+      return true;
+    }
+  } else if (kept && kept.kind === "rooms" && kept.result && Array.isArray(kept.result.maps)) {
+    show(kept.result, `Back where you left off: rooms re-rolled for ${kept.result.label}. `
+         + `${kept.result.name}.`, { scroll: false, keep: false });
+    return true;
+  }
+  forgetShown();
+  return false;
+}
+
+// -- floor files and re-rolled rooms ----------------------------------------------
+
+function saveFloor() {
+  const file = call("save_floor", "");
+  if (file.error) {
+    setStatus(file.error, true);
+    return;
+  }
+  download(file.name, file.text, "application/json");
+  setStatus(`Saved ${file.name}. Edit it in any text editor, and open it here or in the `
+            + "desktop app to draw it again.");
+}
+
+async function openFloor(file) {
+  setStatus(`Opening ${file.name}…`);
+  await new Promise((r) => setTimeout(r, 30));
+  try {
+    const res = call("open_floor", await file.text());
+    if (res.error) {
+      setStatus(res.error, true);
+      return;
+    }
+    const n = res.maps.length;
+    show(res, `Opened ${file.name}: Floor ${res.floor}, ${res.size}, seed ${res.seed}, `
+              + `${n} map${n === 1 ? "" : "s"} and a write-up.`);
+  } catch (e) {
+    setStatus(`Something went wrong: ${e.message}`, true);
+    console.error(e);
+  }
+}
+
+async function rerollRooms() {
+  const file = $("reroll-file").files[0];
+  if (!file) {
+    setStatus("Pick a saved write-up to re-roll rooms from.", true);
+    return;
+  }
+  const btn = $("reroll-go");
+  btn.disabled = true;
+  setStatus("Re-rolling rooms…");
+  await new Promise((r) => setTimeout(r, 30));
+  try {
+    const res = call("reroll", { text: await file.text(), label: $("reroll-label").value,
+                                 seed: $("reroll-seed").value });
+    if (res.error) {
+      setStatus(res.error, true);
+      return;
+    }
+    $("reroll-seed").value = res.seed;
+    const kept = !res.ways ? "No crossings or chamber ways in that write-up to keep."
+      : res.moved ? `Its ways out are kept; ${res.moved} had to move, listed in the write-up.`
+        : "Its ways out are kept, each in the room it was in.";
+    show(res, `Rooms re-rolled for ${res.label}. ${res.name} (seed ${res.seed}). ${kept}`);
+  } catch (e) {
+    setStatus(`Something went wrong: ${e.message}`, true);
+    console.error(e);
+  } finally {
+    btn.disabled = !$("reroll-file").files.length;
   }
 }
 
@@ -255,7 +377,10 @@ function fit() {
 // -- the write-up -------------------------------------------------------------------
 
 function showWriteup() {
-  const box = markdown(result.markdown);
+  // Re-rolled rooms are written to go under a floor's own headings, starting at
+  // ###; on their own here they get the level above, so none is skipped.
+  const box = markdown(result.kind === "rooms"
+    ? `## Rooms re-rolled for ${result.label}. ${result.name}\n\n${result.markdown}` : result.markdown);
   // Links, not a dropdown: a dropdown that jumps when it changes jumps on the
   // first arrow key, before a keyboard user has heard the rest.
   const links = [];
@@ -389,6 +514,17 @@ function wire() {
   $("save-md").addEventListener("click",
     () => download(`${result.basename}.md`, result.markdown, "text/markdown"));
   $("map-words").addEventListener("click", readMap);
+  $("open-floor").addEventListener("click", () => $("floor-file").click());
+  $("floor-file").addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    e.target.value = "";                   // the same file can be opened again
+    if (file) openFloor(file);
+  });
+  $("save-floor").addEventListener("click", saveFloor);
+  $("reroll-file").addEventListener("change", () => {
+    $("reroll-go").disabled = !api || !$("reroll-file").files.length;
+  });
+  $("reroll-go").addEventListener("click", rerollRooms);
   $("jump").addEventListener("keydown", (e) => {
     if (e.key !== "Escape" || !$("jump").open) return;
     $("jump").open = false;

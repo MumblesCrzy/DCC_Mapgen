@@ -468,6 +468,57 @@ class WebPageTest(unittest.TestCase):
             boxes = {s["text"] for s in page["suggestions"] if s["kind"] == "box"}
             self.assertEqual(boxes, {sg.label for sg in mg.floor_box_suggestions(want.floor)})
 
+    def test_a_floor_file_saved_on_the_page_opens_as_the_same_floor(self):
+        """The page's Save floor file writes the file the desktop app does, and
+        its Open draws it the same; a reload brings a floor back this way."""
+        for case in ({"floor": 1, "size": "large", "seed": 4242}, {"floor": 9, "size": "medium", "seed": 11}):
+            page = self._call("generate", {k: str(v) for k, v in case.items()})
+            saved = json.loads(self.api.save_floor(""))
+            want = mg.generate(**case)
+            self.assertEqual(saved["name"], want.basename() + mg.FLOOR_FILE_SUFFIX)
+            with tempfile.TemporaryDirectory() as d:
+                path = os.path.join(d, saved["name"])
+                mg.save_floor_file(want, path)
+                with open(path, encoding="utf-8") as f:
+                    self.assertEqual(saved["text"], f.read(), "the same file the desktop app saves")
+            back = json.loads(self.api.open_floor(saved["text"]))
+            for key in ("kind", "floor", "size", "seed", "basename", "markdown", "maps", "suggestions"):
+                self.assertEqual(back[key], page[key], f"{case} {key}")
+
+    def test_a_bad_floor_file_is_reported(self):
+        self.assertIn("isn't valid JSON", json.loads(self.api.open_floor("{nope"))["error"])
+        self.assertIn("not a DCC Mapgen floor file", json.loads(self.api.open_floor('{"a": 1}'))["error"])
+        newer = json.dumps({"format": mg.FLOOR_FILE_FORMAT, "version": mg.FLOOR_FILE_VERSION + 1})
+        self.assertIn("newer DCC Mapgen", json.loads(self.api.open_floor(newer))["error"])
+
+    def test_rooms_re_roll_on_the_page_as_in_the_app(self):
+        page = self._call("generate", {"floor": "2", "size": "large", "seed": "4242"})
+        got = self._call("reroll", {"text": page["markdown"], "label": "f", "seed": "9"})
+        with tempfile.TemporaryDirectory() as d:
+            path = os.path.join(d, "floor.md")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(page["markdown"])
+            nb, want = mg.regenerate_rooms(path, "F", 2, size="large", seed=9)
+        self.assertEqual((got["kind"], got["floor"], got["size"], got["label"], got["seed"]),
+                         ("rooms", 2, "large", "F", 9), "floor and size from the write-up's title")
+        self.assertEqual(got["markdown"], want.markdown)
+        self.assertEqual([m["svg"] for m in got["maps"]], [s for _, s in want.svgs])
+        self.assertEqual(got["maps"][0]["section"], f"F. {nb.name} — Room Detail")
+        self.assertEqual(got["ways"], len(nb.crossings) + len(nb.chamber_ways))
+        self.assertEqual(got["moved"], want.markdown.count("\n  - The "))
+        self.assertIn("error", json.loads(self.api.save_floor("")), "re-rolled rooms are no floor to save")
+
+    def test_a_write_up_that_cant_be_re_rolled_says_why(self):
+        f3 = self._call("generate", {"floor": "3", "size": "small", "seed": "1"})
+        f1 = self._call("generate", {"floor": "1", "size": "medium", "seed": "1"})
+        for payload, words in (({"text": f3["markdown"]}, "Floors 1 and 2"),
+                               ({"text": f1["markdown"], "label": "Q"}, "no neighborhood heading for label 'Q'"),
+                               ({"text": "Just some notes."}, "neighborhood heading"),
+                               ({"text": f1["markdown"], "seed": "abc"}, "Seed must be a whole number")):
+            err = self._call("reroll", payload).get("error", "")
+            self.assertIn(words, err)
+            self.assertNotIn("--rooms-for", err)
+
     def test_options_a_floor_does_not_take_are_left_out(self):
         page = self._call("generate", {"floor": "11", "size": "medium", "seed": "5", "days": "9"})
         self.assertEqual(page["markdown"], mg.generate(11, "medium", 5).markdown)

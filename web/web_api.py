@@ -7,6 +7,9 @@ the app -- web/check_pyodide.mjs holds that against tests/golden.json.
 """
 
 import json
+import os
+import re
+import tempfile
 
 import dcc_mapgen as mg
 
@@ -58,8 +61,21 @@ def generate(options: str) -> str:
         res = mg.generate(**kw)
     except mg.MapgenError as e:
         return json.dumps({"error": str(e)})
-    return json.dumps({
-        "seed": res.seed, "floor": res.number, "basename": res.basename(),
+    return json.dumps(_show(res))
+
+
+# The floor on show, for Save floor file. Rooms re-rolled on their own are not
+# a floor, and leave it empty.
+_shown = None
+
+
+def _show(res, **more) -> dict:
+    """What the page shows of a floor: its write-up, every map, the boxes it
+    names. Kept as the floor on show."""
+    global _shown
+    _shown = res
+    return {
+        "kind": "floor", "seed": res.seed, "floor": res.number, "basename": res.basename(),
         "markdown": res.markdown,
         "size": res.size,
         # Each map with the write-up section that tells what it shows in words.
@@ -67,6 +83,76 @@ def generate(options: str) -> str:
                   "section": mg.map_section(res.markdown, res.number, s)}
                  for s, svg in res.svgs],
         "suggestions": _suggestions(res),
+        **more,
+    }
+
+
+def save_floor(_: str = "") -> str:
+    """The floor on show as a floor file: everything its write-up and maps are
+    drawn from, to edit by hand and open again. The same file the desktop app
+    and --save write."""
+    if _shown is None:
+        return json.dumps({"error": "Generate or open a floor to save it as a floor file."})
+    return json.dumps({"name": _shown.basename() + mg.FLOOR_FILE_SUFFIX,
+                       "text": mg._floor_json(mg.floor_file_data(_shown)) + "\n"})
+
+
+def open_floor(text: str) -> str:
+    """Draw a floor file: the write-up and every map, edits and all."""
+    try:
+        data = json.loads(text)
+    except ValueError as e:
+        return json.dumps({"error": f"That file isn't valid JSON ({e}). A hand edit may have left "
+                                    "a comma or a quote out."})
+    try:
+        res = mg.render_floor_data(data, "That file")
+    except mg.MapgenError as e:
+        return json.dumps({"error": str(e)})
+    return json.dumps(_show(res))
+
+
+def reroll(options: str) -> str:
+    """New rooms for one neighborhood of a Floor 1 or 2 write-up this app
+    saved, as File > Re-roll rooms does in the desktop app: they keep its
+    crossings and its ways into boss chambers. The floor and its size come
+    from the write-up's title."""
+    global _shown
+    o = json.loads(options)
+    text = str(o.get("text") or "")
+    head = re.search(r"^# Floor (\d+) — .*\((\w+)\)\s*$", text, re.M)
+    floor, size = (int(head.group(1)), head.group(2)) if head else (1, "medium")
+    if floor not in (1, 2):
+        return json.dumps({"error": f"Rooms are re-rolled on Floors 1 and 2; that write-up is "
+                                    f"Floor {floor}."})
+    if size not in mg.SIZE_CFG:
+        size = "medium"
+    raw = str(o.get("seed") or "").strip()
+    try:
+        seed = int(raw) if raw else None
+    except ValueError:
+        return json.dumps({"error": f"Seed must be a whole number (got {raw!r})."})
+    # Read back as the desktop app reads a file: from a file, here in the
+    # browser's own temporary folder.
+    path = os.path.join(tempfile.gettempdir(), "dcc_mapgen_reroll.md")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(text)
+    try:
+        nb, res = mg.regenerate_rooms(path, str(o.get("label") or "").strip() or None, floor,
+                                      size=size, seed=seed)
+    except (mg.MapgenError, SystemExit) as e:
+        # Reading a write-up back reports what it couldn't find by exiting.
+        return json.dumps({"error": str(e).replace("--rooms-for: ", "").replace("the input file", "that write-up").replace("in the input file", "in that write-up")})
+    _shown = None
+    moved = res.markdown.count("\n  - The ")
+    return json.dumps({
+        "kind": "rooms", "seed": res.seed, "floor": floor, "size": size,
+        "label": nb.label, "name": nb.name, "moved": moved,
+        "ways": len(nb.crossings) + len(nb.chamber_ways),
+        "basename": f"floor{floor}_rooms_{nb.label}_seed{res.seed}",
+        "markdown": res.markdown,
+        "maps": [{"suffix": s, "title": mg.map_title(s), "svg": svg,
+                  "section": mg.map_section(res.markdown, floor, s)} for s, svg in res.svgs],
+        "suggestions": [],
     })
 
 

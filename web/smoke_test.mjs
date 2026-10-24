@@ -12,7 +12,8 @@
 // Playwright's own Chromium. Exits non-zero if anything fails.
 
 import { createServer } from "node:http";
-import { readFile, mkdir } from "node:fs/promises";
+import { readFile, mkdir, mkdtemp } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { createRequire } from "node:module";
 import { extname, join, normalize, resolve } from "node:path";
 
@@ -81,6 +82,8 @@ async function axeCheck(what) {
   check(found.length === 0, `${what}: nothing axe-core flags${found.length ? " -- " + found.join("; ") : ""}`);
 }
 const said = () => page.$eval("#status", (s) => s.textContent);
+const saying = (start) => page.waitForFunction(
+  (w) => document.getElementById("status").textContent.startsWith(w), start, { timeout: 60_000 });
 const focused = () => page.evaluate(() => {
   const el = document.activeElement;
   return { id: el.id, tag: el.tagName, text: el.textContent.trim() };
@@ -185,6 +188,62 @@ try {
   await page.click("#tab-text");
   await axeCheck("the write-up in the dark theme");
   await page.emulateMedia({ colorScheme: "light" });
+
+  // Floor files: Save floor file downloads one, and Open draws it again.
+  const keep = await mkdtemp(join(tmpdir(), "dccmapgen-smoke-"));
+  await page.selectOption("#floor", "1");
+  await page.fill("#seed", "4242");
+  await page.click("#generate");
+  await generated("Floor 1, medium, seed 4242:");
+  const wrote = await page.$eval("#writeup", (w) => w.textContent);
+  const [saved] = await Promise.all([page.waitForEvent("download"), page.click("#save-floor")]);
+  const floorFile = join(keep, saved.suggestedFilename());
+  await saved.saveAs(floorFile);
+  check(saved.suggestedFilename() === "floor1_medium_seed4242.floor.json",
+        `Save floor file downloads ${saved.suggestedFilename()}`);
+  await page.selectOption("#floor", "3");
+  await page.click("#generate");
+  await generated("Floor 3, ");
+  await page.setInputFiles("#floor-file", floorFile);
+  await saying("Opened ");
+  check(await page.$eval("#writeup", (w) => w.textContent) === wrote
+        && await page.$eval("#floor", (f) => f.value) === "1",
+        `Open a floor file draws it again ("${await said()}")`);
+
+  // Re-roll rooms: from the write-up saved as Markdown, one neighborhood's rooms.
+  await page.click("#tab-text");
+  const [md] = await Promise.all([page.waitForEvent("download"), page.click("#save-md")]);
+  const mdFile = join(keep, md.suggestedFilename());
+  await md.saveAs(mdFile);
+  await page.click("#reroll summary");
+  await page.setInputFiles("#reroll-file", mdFile);
+  await page.fill("#reroll-label", "b");
+  await page.fill("#reroll-seed", "9");
+  await page.click("#reroll-go");
+  await saying("Rooms re-rolled for B.");
+  const rolled = await page.evaluate(() => ({
+    maps: [...document.querySelectorAll("#map-pick option")].map((o) => o.textContent),
+    head: document.querySelector("#writeup h3")?.textContent || "",
+    ways: document.getElementById("writeup").textContent.includes("crossing west into A1"),
+    save: document.getElementById("save-floor").disabled,
+  }));
+  check(rolled.maps.join() === "Rooms - neighborhood B" && rolled.head.endsWith("Room Detail") && rolled.ways
+        && rolled.save, `rooms re-roll with their crossings kept ("${await said()}")`);
+  await axeCheck("re-rolled rooms, with the re-roll controls open");
+
+  // A reload brings back what was on show: the rooms, then a floor.
+  await page.reload();
+  await page.waitForSelector("#generate:not([disabled])", { timeout: 180_000 });
+  await saying("Back where you left off: rooms re-rolled for B.");
+  check(await page.$$eval("#map-pick option", (o) => o.length) === 1
+        && await page.$eval("#map-img", (i) => !i.hidden), "a reload brings back re-rolled rooms");
+  await page.setInputFiles("#floor-file", floorFile);
+  await saying("Opened ");
+  await page.reload();
+  await page.waitForSelector("#generate:not([disabled])", { timeout: 180_000 });
+  await saying("Back where you left off: Floor 1, medium, seed 4242.");
+  check(await page.$eval("#writeup", (w) => w.textContent) === wrote
+        && !(await page.$eval("#save-floor", (b) => b.disabled)), "a reload brings back a floor");
 
   // A bad seed is reported, not crashed on.
   await page.fill("#seed", "abc");

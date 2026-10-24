@@ -56,6 +56,31 @@
         <p class="hint" id="no-options">This floor has no other options.</p>
       </details>
       <button id="generate" class="primary" disabled>Loading…</button>
+      <div class="file-row">
+        <button id="open-floor" class="secondary" disabled>Open a floor file</button>
+        <button id="save-floor" class="secondary" disabled>Save floor file</button>
+      </div>
+      <input type="file" id="floor-file" accept=".json,application/json" hidden>
+      <details id="reroll">
+        <summary>Re-roll one neighborhood's rooms</summary>
+        <p class="hint">From a Floor 1 or 2 write-up this app saved (the Markdown file). The new
+          rooms keep the neighborhood's crossings and its ways into boss chambers.</p>
+        <label class="field">
+          <span>Saved write-up</span>
+          <input type="file" id="reroll-file" accept=".md,.markdown,text/markdown,text/plain">
+        </label>
+        <div class="row">
+          <label class="field">
+            <span>Neighborhood letter</span>
+            <input id="reroll-label" placeholder="the first" autocomplete="off" autocapitalize="characters">
+          </label>
+          <label class="field">
+            <span>Seed</span>
+            <input id="reroll-seed" inputmode="numeric" pattern="[0-9]*" placeholder="random" autocomplete="off">
+          </label>
+        </div>
+        <button id="reroll-go" class="secondary" disabled>Re-roll rooms</button>
+      </details>
       <p class="status" id="status" role="status">Loading the dungeon. The first visit downloads Python, a few megabytes.</p>
     </section>
 

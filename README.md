@@ -503,14 +503,25 @@ shows a screen reader nothing but the window's title.
 
 - **Add to Home Screen** installs it like an app, and after the first visit it works
   offline.
+- **Floor files.** **Save floor file** downloads the floor as a `.floor.json`, the same
+  file the desktop app and `--save` write: edit it in any text editor, and **Open a floor
+  file** draws it again, here or in the desktop app. See
+  [Floor files](#floor-files-make-a-floor-your-own).
+- **Re-roll one neighborhood's rooms** from a Floor 1 or 2 write-up you saved: pick the
+  `.md` file and a letter. The new rooms keep the neighborhood's crossings and its ways
+  into boss chambers, as the desktop app's re-roll does, and any that had to move are
+  listed.
+- **A reload brings back what was on show**, a floor or re-rolled rooms, kept in that
+  browser on that device. A floor too big to keep there says so; Save floor file keeps
+  it anywhere.
 - **Same seed, same floor.** The page runs this repo's `dcc_mapgen.py` itself, in the
   browser, through [Pyodide](https://pyodide.org) (Python compiled to WebAssembly).
   There is no server, and nothing is sent anywhere.
 - The first visit downloads Python, a few megabytes, and takes a few seconds to start
   on a phone. After that it is cached.
-- It is the smaller version of the app. It has no campaigns or leaderboard, no PNG
-  export (the browser draws the SVG itself), and leaves the stairwell and boss sliders
-  and the Floor 9 and 10 options at their defaults. The Massive and Continent sizes
+- It is the smaller version of the app. It has no campaigns or leaderboard, no edit
+  panel, no PNG export (the browser draws the SVG itself), and leaves the stairwell and
+  boss sliders and the Floor 9 and 10 options at their defaults. The Massive and Continent sizes
   work, but make 257–401 maps, so they are slow on a phone.
 
 How it is built and checked:
@@ -1145,7 +1156,17 @@ The web page's own checks (`web/smoke_test.mjs`, in CI) cover the rest: axe-core
 nothing on the page as it starts, with a map on show, the write-up and the loot boxes,
 in both themes; the map says where it is told in words, and **Read this map as text**
 lands on that heading with focus; a section picked from the jump list gets focus; the
-tabs answer the arrow keys, Home and End; and picking a box moves focus to **Open**.
+tabs answer the arrow keys, Home and End; and picking a box moves focus to **Open**. It
+also saves a floor file and opens it again to the same write-up, re-rolls a
+neighborhood's rooms from a write-up the page saved (crossings kept), and reloads to
+find the re-rolled rooms, then a floor, back where they were.
+
+The page's Python side has its own tests in the main suite: a floor file saved on the
+page is the file the desktop app saves and opens to the same floor; a bad one (broken
+JSON, not a floor file, a newer version) says what is wrong; rooms re-roll exactly as
+`--rooms-for` does, taking the floor and its size from the write-up's title; and a
+write-up that can't be re-rolled (another floor, no such letter, not a write-up, a bad
+seed) says why.
 
 Floors 1 and 2's crossings have their own group:
 - every edge two neighborhoods share has one crossing each way, the same two rooms from

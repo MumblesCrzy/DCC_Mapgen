@@ -85,6 +85,12 @@ select, input:not([type="range"]) {
   min-height: 44px;
 }
 input[type="range"] { width: 100%; min-height: 32px; }
+input[type="file"] { padding: 8px; font-size: 0.9rem; }
+
+/* Open and Save floor file, side by side under Generate. */
+.file-row { display: flex; gap: 8px; }
+.file-row button.secondary { flex: 1; min-width: 0; }
+#reroll { margin-top: 12px; }
 
 details { margin: 4px 0 12px; }
 summary { cursor: pointer; color: var(--muted); font-size: 0.9rem; padding: 6px 0; }
