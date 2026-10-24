@@ -204,6 +204,7 @@ async function generate() {
 function show(res, words, { scroll = true, keep = true, where = "status", editAt = null } = {}) {
   const mapAt = +$("map-pick").value || 0;
   result = res;
+  editing = editAt || [];
   if (res.kind === "floor") {
     $("floor").value = String(res.floor);
     syncFloor();
@@ -219,7 +220,6 @@ function show(res, words, { scroll = true, keep = true, where = "status", editAt
   showWriteup();
   showSuggestions();
   setStatus(words + (keep ? keepForReload(res) : ""), false, where);
-  editing = editAt || [];
   if (!$("panel-edit").hidden) editPart(editing, false);
   // On a phone the controls fill the first screen; bring the result up.
   if (scroll) document.querySelector(".tabs").scrollIntoView({ behavior: "smooth", block: "start" });
@@ -351,8 +351,10 @@ function showMap(i) {
   const m = result.maps[i];
   const img = $("map-img");
   const [w, h] = svgSize(m.svg);
-  if (mapUrl) URL.revokeObjectURL(mapUrl);
-  mapUrl = URL.createObjectURL(new Blob([m.svg], { type: "image/svg+xml" }));
+  closeMenu();
+  // Where this map draws the floor's parts, for a tap to find.
+  mapParts = result.kind === "floor" ? call("map_parts", m.suffix) : [];
+  lastLit = null;
   img.width = w;
   img.height = h;
   // The write-up has what the map shows in words; say where.
@@ -362,8 +364,7 @@ function showMap(i) {
   $("map-words").hidden = !m.section;
   img.hidden = false;
   $("map-empty").hidden = true;
-  img.onload = fit;
-  img.src = mapUrl;
+  drawMap(m, true);
   if (!panzoom) {
     panzoom = Panzoom(img, { maxScale: 8, minScale: 0.05, origin: "0 0", step: 0.25 });
     $("viewer").addEventListener("wheel", panzoom.zoomWithWheel, { passive: false });
@@ -513,6 +514,7 @@ function editPart(path, focus = true) {
     return;
   }
   editing = part.path;
+  refreshOutline();                 // the part being edited, outlined on the map
   const last = part.trail.length - 1;
   $("edit-trail").replaceChildren(...part.trail.map((t, i) => {
     if (i !== last) {
@@ -631,6 +633,196 @@ function undoEdit() {
        { scroll: false, where: "edit-status", editAt: editing });
 }
 
+// -- tapping the map ----------------------------------------------------------------
+// A tap on a part of the map offers to edit it, or to go to the map that shows it
+// up close; a drag still pans. Pointing with a mouse names the part. The part on
+// show in the editor is outlined on the map.
+
+let mapParts = [];         // where the map on show draws the floor's parts, in the order drawn
+let menuPart = null;       // the part the map's menu is about
+let lastLit = null;        // what the map on show was last drawn with outlined
+
+function mapNow() {
+  return result ? result.maps[+$("map-pick").value || 0] : null;
+}
+
+// The map's picture, with the part being edited outlined in it. The picture is
+// redrawn only when that changes, and fitted to the box only when asked.
+function drawMap(m, refit) {
+  const lit = litParts();
+  const key = JSON.stringify(lit.map((a) => a.box));
+  if (!refit && key === lastLit) return;
+  lastLit = key;
+  const img = $("map-img");
+  if (mapUrl) URL.revokeObjectURL(mapUrl);
+  mapUrl = URL.createObjectURL(new Blob([outlined(m.svg, lit)], { type: "image/svg+xml" }));
+  img.onload = refit ? fit : null;
+  img.src = mapUrl;
+}
+
+function refreshOutline() {
+  const m = mapNow();
+  if (m && !$("map-img").hidden) drawMap(m, false);
+}
+
+// The areas of the part being edited, or, if this map doesn't draw it, of the
+// part that holds it: a room's neighborhood on the overview.
+function litParts() {
+  const lit = editing;
+  if (!lit.length || !result || result.kind !== "floor") return [];
+  const holders = mapParts.filter((a) => a.path.length <= lit.length && a.path.every((k, i) => k === lit[i]));
+  if (!holders.length) return [];
+  const deepest = Math.max(...holders.map((a) => a.path.length));
+  return holders.filter((a) => a.path.length === deepest);
+}
+
+function sectorPoints([cx, cy, r0, r1, a0, a1], steps = 24) {
+  const rad = (d) => (d * Math.PI) / 180;
+  const arc = Array.from({ length: steps + 1 }, (_, k) => a0 + ((a1 - a0) * k) / steps);
+  const ring = (r, angles) => angles.map((d) => [cx + r * Math.cos(rad(d)), cy + r * Math.sin(rad(d))]);
+  return ring(r1, arc).concat(r0 > 0 ? ring(r0, [...arc].reverse()) : [[cx, cy]]);
+}
+
+function outlined(svg, lit) {
+  if (!lit.length) return svg;
+  const shapes = lit.map((a) => {
+    if (a.shape === "circle") return `<circle cx="${a.box[0]}" cy="${a.box[1]}" r="${a.box[2]}"/>`;
+    if (a.shape === "sector") {
+      return `<polygon points="${sectorPoints(a.box).map((p) => p.join(",")).join(" ")}"/>`;
+    }
+    const [x, y, w, h] = a.box;
+    return `<rect x="${x}" y="${y}" width="${w}" height="${h}"/>`;
+  }).join("");
+  const end = svg.lastIndexOf("</svg>");
+  return `${svg.slice(0, end)}<g fill="none" stroke="#e67e22" stroke-width="4">${shapes}</g>${svg.slice(end)}`;
+}
+
+function inside(a, x, y) {
+  if (a.shape === "circle") {
+    const [cx, cy, r] = a.box;
+    return (x - cx) ** 2 + (y - cy) ** 2 <= r * r;
+  }
+  if (a.shape === "sector") {
+    const [cx, cy, r0, r1, a0, a1] = a.box;
+    const d = Math.hypot(x - cx, y - cy);
+    if (d < r0 || d > r1) return false;
+    const turn = (((Math.atan2(y - cy, x - cx) * 180) / Math.PI - a0) % 360 + 360) % 360;
+    return turn <= a1 - a0;
+  }
+  const [bx, by, w, h] = a.box;
+  return bx <= x && x <= bx + w && by <= y && y <= by + h;
+}
+
+// The part on top at a point on the screen: the last drawn there. The picture
+// is zoomed and panned, so the point is found on it as it stands.
+function partAt(clientX, clientY) {
+  const img = $("map-img");
+  const r = img.getBoundingClientRect();
+  if (img.hidden || !r.width) return null;
+  const x = ((clientX - r.left) / r.width) * img.width;
+  const y = ((clientY - r.top) / r.height) * img.height;
+  for (let k = mapParts.length - 1; k >= 0; k--) {
+    if (inside(mapParts[k], x, y)) return mapParts[k];
+  }
+  return null;
+}
+
+function placeIn(box, clientX, clientY) {
+  const view = $("viewer").getBoundingClientRect();
+  const left = Math.min(Math.max(clientX - view.left + 10, 4), view.width - box.offsetWidth - 4);
+  const top = Math.min(Math.max(clientY - view.top + 10, 4), view.height - box.offsetHeight - 4);
+  box.style.left = `${Math.max(left, 4)}px`;
+  box.style.top = `${Math.max(top, 4)}px`;
+}
+
+function openMenu(part, clientX, clientY) {
+  menuPart = part;
+  $("map-tip").hidden = true;
+  $("map-menu-name").textContent = part.name;
+  const closer = part.closer && part.closer !== mapNow().suffix
+    ? result.maps.find((m) => m.suffix === part.closer) : null;
+  $("menu-closer").hidden = !closer;
+  if (closer) $("menu-closer").textContent = `Open ${closer.title}`;
+  $("menu-main").hidden = !mapNow().suffix || !result.maps.some((m) => m.suffix === "");
+  const menu = $("map-menu");
+  menu.hidden = false;
+  placeIn(menu, clientX, clientY);
+  $("menu-edit").focus({ preventScroll: true });
+}
+
+function closeMenu() {
+  $("map-menu").hidden = true;
+  menuPart = null;
+}
+
+function goToMap(suffix) {
+  const i = result.maps.findIndex((m) => m.suffix === suffix);
+  if (i < 0) return;
+  $("map-pick").value = String(i);
+  showMap(i);
+}
+
+function wireMapTaps() {
+  const viewer = $("viewer");
+  const down = new Set();
+  let press = null;
+  // A press that moves no more than this is a tap; more, and it pans.
+  const STILL = 8;
+  viewer.addEventListener("pointerdown", (e) => {
+    down.add(e.pointerId);
+    if ($("map-menu").contains(e.target)) return;
+    press = down.size === 1 ? { x: e.clientX, y: e.clientY, id: e.pointerId } : null;
+  }, true);
+  const lift = (e) => {
+    down.delete(e.pointerId);
+    const p = press;
+    if (!p || p.id !== e.pointerId || $("map-menu").contains(e.target)) return;
+    press = null;
+    if (e.type !== "pointerup" || Math.hypot(e.clientX - p.x, e.clientY - p.y) > STILL) return;
+    const part = partAt(e.clientX, e.clientY);
+    if (part) openMenu(part, e.clientX, e.clientY);
+    else closeMenu();
+  };
+  window.addEventListener("pointerup", lift, true);
+  window.addEventListener("pointercancel", lift, true);
+  viewer.addEventListener("pointermove", (e) => {
+    if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) > STILL) {
+      press = null;                         // a pan, and a second finger a pinch
+      closeMenu();
+    }
+    if (e.pointerType !== "mouse" || press || !$("map-menu").hidden) return;
+    // Pointing names the part under the pointer.
+    const part = partAt(e.clientX, e.clientY);
+    const tip = $("map-tip");
+    $("map-img").style.cursor = part ? "pointer" : "";
+    tip.hidden = !part;
+    if (part) {
+      tip.textContent = `${part.name} (click for more)`;
+      placeIn(tip, e.clientX, e.clientY);
+    }
+  });
+  viewer.addEventListener("pointerleave", () => { $("map-tip").hidden = true; });
+  $("map-menu").addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeMenu();
+  });
+  $("menu-edit").addEventListener("click", () => {
+    const part = menuPart;
+    closeMenu();
+    editing = part.path;
+    selectTab($("tab-edit"));
+    editPart(part.path);
+  });
+  $("menu-closer").addEventListener("click", () => {
+    const part = menuPart;
+    closeMenu();
+    goToMap(part.closer);
+  });
+  $("menu-main").addEventListener("click", () => {
+    closeMenu();
+    goToMap("");
+  });
+}
+
 // -- tabs and wiring ----------------------------------------------------------------
 
 function selectTab(tab) {
@@ -676,6 +868,7 @@ function wire() {
   $("save-md").addEventListener("click",
     () => download(`${result.basename}.md`, result.markdown, "text/markdown"));
   $("map-words").addEventListener("click", readMap);
+  wireMapTaps();
   $("open-floor").addEventListener("click", () => $("floor-file").click());
   $("floor-file").addEventListener("change", (e) => {
     const file = e.target.files[0];
@@ -721,6 +914,8 @@ if ("serviceWorker" in navigator) {
 }
 
 wire();
+// For the smoke test: where the map on show draws the floor's parts.
+window.mapgenParts = () => mapParts;
 boot().catch((e) => {
   setStatus(`Couldn't start: ${e.message}. Check the connection and reload.`, true);
   $("generate").textContent = "Unavailable";

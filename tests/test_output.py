@@ -606,6 +606,34 @@ class WebPageTest(unittest.TestCase):
         self.assertIn("isn't there any more", self._apply(["gone", 3], [["name", "x"]])["error"])
         self.assertTrue(page["markdown"])
 
+    def test_a_tap_on_the_map_finds_what_a_click_in_the_app_does(self):
+        """The page's map taps use the same areas as the desktop app's clicks,
+        in the same order, each named as the editor names it, with the map that
+        shows it up close."""
+        for case in ({"floor": 1, "size": "medium", "seed": 4242}, {"floor": 5, "size": "medium", "seed": 4242},
+                     {"floor": 10, "size": "small", "seed": 4242}):
+            page = self._call("generate", {k: str(v) for k, v in case.items()})
+            res = mg.generate(**case)
+            for m in page["maps"]:
+                parts = json.loads(self.api.map_parts(m["suffix"]))
+                hits = mg.map_hits(res.floor, m["suffix"], res.boss_stairs)
+                self.assertEqual([(tuple(p["path"]), p["shape"], tuple(p["box"])) for p in parts],
+                                 [(h.path, h.shape, h.box) for h in hits], f"{case} {m['suffix']}")
+                for p in parts:
+                    self.assertEqual(p["closer"], mg.part_map(res.floor, p["path"]))
+                    self.assertTrue(p["name"].strip())
+            if case["floor"] == 1:
+                rooms = json.loads(self.api.map_parts("_room_A"))
+                self.assertIn("Room A1", [p["name"] for p in rooms])
+                self.assertIn("Corridor encounters (2) › 1. ", "".join(p["name"] for p in rooms),
+                              "a row says what it is a row of")
+        # An edit renames what the map's parts are called.
+        self._call("generate", {"floor": "1", "size": "small", "seed": "4242"})
+        self._apply(["neighborhoods", 0, "boss"], [["name", "Mumbles the Unbroken"]], rename=[True])
+        self.assertIn("Boss — Mumbles the Unbroken", [p["name"] for p in json.loads(self.api.map_parts(""))])
+        self._call("reroll", {"text": mg.generate(1, "medium", 4242).markdown, "label": "A"})
+        self.assertEqual(json.loads(self.api.map_parts("_room_A")), [], "re-rolled rooms aren't a floor to edit")
+
     def test_options_a_floor_does_not_take_are_left_out(self):
         page = self._call("generate", {"floor": "11", "size": "medium", "seed": "5", "days": "9"})
         self.assertEqual(page["markdown"], mg.generate(11, "medium", 5).markdown)

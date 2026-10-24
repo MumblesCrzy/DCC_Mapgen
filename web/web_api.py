@@ -282,6 +282,27 @@ def edit_undo(_: str = "") -> str:
     return json.dumps(_show(mg.redraw_floor(_shown), status="Undone.", undo=len(_undo)))
 
 
+def map_parts(suffix: str) -> str:
+    """Where one map of the floor on show draws each of its parts, in the order
+    drawn, for a tap to find the one on top: its path, shape and box, what the
+    editor calls it, and the map that shows it up close (a neighborhood's rooms).
+    None for re-rolled rooms, which aren't a floor to edit."""
+    fl = _editable()
+    if fl is None:
+        return json.dumps([])
+    names, out = {}, []
+    for h in mg.map_hits(fl, suffix, _shown.boss_stairs):
+        if h.path not in names:
+            words = mg.describe_path(fl, list(h.path)).split(" › ")
+            # A row says little on its own ("1. A1 · A4"): say what it is a row of.
+            row = isinstance(mg.edit_get(fl, list(h.path)), (list, tuple))
+            names[h.path] = (" › ".join(words[-2:]) if row else words[-1], mg.part_map(fl, h.path))
+        name, closer = names[h.path]
+        out.append({"path": list(h.path), "shape": h.shape, "box": list(h.box),
+                    "name": name, "closer": closer})
+    return json.dumps(out)
+
+
 def open_boxes(options: str) -> str:
     """Open boxes on the visit's roller. Returns their write-up in Markdown."""
     o = json.loads(options)

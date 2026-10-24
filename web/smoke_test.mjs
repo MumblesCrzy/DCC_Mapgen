@@ -296,6 +296,78 @@ try {
   check((await page.$eval("#writeup", (w) => w.textContent)).includes("Keep of the Reload"),
         "a reload brings back the floor as edited");
 
+  // Tapping the map: a part tapped offers to edit it or to go to its map up
+  // close; a drag pans and offers nothing; a mouse pointing names the part.
+  const spot = (path, rim = 0.5) => page.evaluate(([p, rimAt]) => {
+    const a = window.mapgenParts().find((x) => JSON.stringify(x.path) === p);
+    const img = document.getElementById("map-img");
+    const r = img.getBoundingClientRect();
+    let x, y;
+    if (a.shape === "circle") [x, y] = a.box;
+    else if (a.shape === "rect") [x, y] = [a.box[0] + a.box[2] / 2, a.box[1] + a.box[3] / 2];
+    else {
+      const [cx, cy, r0, r1, a0, a1] = a.box;
+      const t = ((a0 + (a1 - a0) * 0.25) * Math.PI) / 180;
+      [x, y] = [cx + (r0 + (r1 - r0) * rimAt) * Math.cos(t), cy + (r0 + (r1 - r0) * rimAt) * Math.sin(t)];
+    }
+    return { x: r.left + (x / img.width) * r.width, y: r.top + (y / img.height) * r.height };
+  }, [JSON.stringify(path), rim]);
+  const menuSays = () => page.$eval("#map-menu", (m) => (m.hidden ? "" : m.innerText.replace(/\s*\n\s*/g, " | ")));
+  await page.click("#tab-map");
+  await page.waitForTimeout(800);
+  let tap = await spot(["quadrants", 2], 0.93);
+  await page.touchscreen.tap(tap.x, tap.y);
+  check((await menuSays()).startsWith("Quadrant — Sea | Edit"), `a quadrant's slice tapped opens its menu ("${await menuSays()}")`);
+  await axeCheck("the map's menu open");
+  await page.keyboard.press("Escape");
+  check(await menuSays() === "", "Escape puts the menu away");
+
+  await page.selectOption("#floor", "1");
+  await page.selectOption("#size", "medium");
+  await page.fill("#seed", "4242");
+  await page.click("#generate");
+  await generated("Floor 1, medium, seed 4242:");
+  await page.click("#tab-map");
+  await page.waitForTimeout(800);
+  tap = await spot(["neighborhoods", 1]);
+  await page.touchscreen.tap(tap.x, tap.y);
+  check(await menuSays() === "Neighborhood B — The Sunken Sewers | Edit | Open Rooms - neighborhood B",
+        `a neighborhood tapped offers its rooms ("${await menuSays()}")`);
+  await page.click("#menu-closer");
+  await page.waitForTimeout(800);
+  check(await page.$eval("#map-pick", (p) => p.selectedOptions[0].textContent) === "Rooms - neighborhood B",
+        "and goes to them");
+  // A drag pans, and opens nothing.
+  tap = await spot(["neighborhoods", 1, "rooms", 2]);
+  await page.mouse.move(tap.x, tap.y);
+  await page.mouse.down();
+  await page.mouse.move(tap.x + 40, tap.y + 30, { steps: 5 });
+  await page.mouse.up();
+  check(await menuSays() === "", "a drag pans and opens no menu");
+  await page.click("#zoom-fit");
+  await page.waitForTimeout(300);
+  tap = await spot(["neighborhoods", 1, "rooms", 2]);
+  await page.mouse.move(tap.x, tap.y);
+  const tip = await page.$eval("#map-tip", (t) => (t.hidden ? "" : t.textContent));
+  check(tip.startsWith("Room B3"), `pointing names the part ("${tip}")`);
+  await page.touchscreen.tap(tap.x, tap.y);
+  const roomMenu = await menuSays();
+  await page.click("#menu-edit");
+  at = await focused();
+  check(roomMenu === "Room B3 | Edit | Back to the main map" && at.id === "edit-title" && at.text === "Room B3"
+        && await page.$eval("#tab-edit", (t) => t.getAttribute("aria-selected") === "true"),
+        `a room tapped opens in the Edit tab ("${roomMenu}")`);
+  await page.click("#tab-map");
+  await page.waitForTimeout(800);
+  const outlined = await page.evaluate(async () =>
+    (await (await fetch(document.getElementById("map-img").src)).text()).includes('stroke="#e67e22"'));
+  check(outlined, "the room being edited is outlined on its map");
+  tap = await spot(["neighborhoods", 1, "rooms", 2]);
+  await page.touchscreen.tap(tap.x, tap.y);
+  await page.click("#menu-main");
+  await page.waitForTimeout(800);
+  check(await page.$eval("#map-pick", (p) => p.value) === "0", "Back to the main map goes back");
+
   // A bad seed is reported, not crashed on.
   await page.fill("#seed", "abc");
   await page.click("#generate");

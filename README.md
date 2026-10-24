@@ -443,8 +443,9 @@ The campaign's record (other crawlers, the leaderboard, the board's news) isn't 
 panel: edit it in the **Campaign** and **Leaderboard** tabs, where a change carries to
 the next floor.
 
-The [web page](#web-page-phones) has the same editor in its **Edit** tab, and it works
-with a screen reader, which the desktop app doesn't.
+The [web page](#web-page-phones) has the same editor in its **Edit** tab, and a tap on
+its map does what a click does here; the editor works with a screen reader, which the
+desktop app doesn't.
 
 ### Floor files by hand
 
@@ -522,6 +523,12 @@ shows a screen reader nothing but the window's title.
   by, are shown but can't be changed. Save floor file keeps the edits, and so does a
   reload. It works with a screen reader: stepping into a part moves to its name, and
   what each change did is read out under the form.
+- **Tap the map** to pick a part there: a small menu offers to **Edit** it, to **Open**
+  the map that shows it up close (a neighborhood's rooms, or the neighborhood next door
+  from a crossing's tag), or, on a room map, to go **Back to the main map**. A drag
+  still pans, and with a mouse, pointing at a part names it. The part being edited is
+  outlined on the map. What a tap can pick is what a click picks in the desktop app,
+  on every floor.
 - **A reload brings back what was on show**, a floor (edits and all) or re-rolled rooms,
   kept in that browser on that device. A floor too big to keep there says so; Save floor file keeps
   it anywhere.
@@ -530,9 +537,9 @@ shows a screen reader nothing but the window's title.
   There is no server, and nothing is sent anywhere.
 - The first visit downloads Python, a few megabytes, and takes a few seconds to start
   on a phone. After that it is cached.
-- It is the smaller version of the app. It has no campaigns or leaderboard, no clicking
-  the map to edit, no PNG export (the browser draws the SVG itself), and leaves the
-  stairwell and boss sliders and the Floor 9 and 10 options at their defaults. The Massive and Continent sizes
+- It is the smaller version of the app. It has no campaigns or leaderboard, no PNG
+  export (the browser draws the SVG itself), and leaves the stairwell and boss sliders
+  and the Floor 9 and 10 options at their defaults. The Massive and Continent sizes
   work, but make 257–401 maps, so they are slow on a phone.
 
 How it is built and checked:
@@ -1173,7 +1180,11 @@ neighborhood's rooms from a write-up the page saved (crossings kept), and reload
 find the re-rolled rooms, then a floor, back where they were. In the Edit tab it steps
 down to a castle (focus following), renames it with Enter and accepts changing the name
 everywhere, has a level of the wrong kind refused, finds nothing axe-core flags, undoes
-the rename, and reloads to find an edit kept.
+the rename, and reloads to find an edit kept. On the map it taps a Floor 5 quadrant's
+slice (its menu open, axe-core finds nothing; Escape puts it away), taps a Floor 1
+neighborhood and opens its rooms, finds that a drag opens nothing and that a mouse
+pointing names a room, taps the room and edits it (focus following), finds it outlined
+on its map, and goes back to the main map.
 
 The page's Python side has its own tests in the main suite: a floor file saved on the
 page is the file the desktop app saves and opens to the same floor; a bad one (broken
@@ -1185,6 +1196,9 @@ its values with the same kinds and locks; a rename asks first and changes nothin
 answered, then reaches the write-up and the map (or, answered no, only the one place);
 an edit is kept in the floor file, and Undo steps back to the floor exactly as it was;
 and a value of the wrong kind, a locked value or a part that's gone changes nothing.
+A tap on the page's map finds what a click in the desktop app does: the same areas in
+the same order on every map, each named as the editor names it, with the map that shows
+it up close; an edit renames them; re-rolled rooms have none.
 
 Floors 1 and 2's crossings have their own group:
 - every edge two neighborhoods share has one crossing each way, the same two rooms from
