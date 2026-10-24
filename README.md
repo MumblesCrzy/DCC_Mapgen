@@ -550,7 +550,11 @@ How it is built and checked:
   _site` serves locally.
 - `.github/workflows/pages.yml` publishes it to GitHub Pages on every release tag, or
   by hand from the Actions tab. One-time setup: **Settings → Pages → Build and
-  deployment → Source: GitHub Actions**.
+  deployment → Source: GitHub Actions**, and, so that a tag may publish, **Settings →
+  Environments → github-pages → Deployment branches and tags → Add deployment branch
+  or tag rule → Ref type: Tag, pattern `v*`**. Without that rule the tag's deploy is
+  turned away ("not allowed to deploy to github-pages due to environment protection
+  rules"); run the workflow by hand on `main` instead.
 - Before it publishes, and on every push, CI checks that the generator gives every
   [golden](#tests) floor byte for byte under Pyodide (`web/check_pyodide.mjs`), and
   drives the built page in a phone-sized browser, online and then offline
