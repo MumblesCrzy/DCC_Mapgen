@@ -2091,12 +2091,14 @@ def mob_kind(name: str, default: Optional[str] = None,
 def build_mob(name: str, level: int, tier: str = "mob", *, kind_from: str = "",
               description: str = "", where: str = "", band: Optional[Tuple[int, int]] = None,
               default_kind: Optional[str] = None, sentence: bool = False,
-              kind: Optional[str] = None, well_built: bool = False) -> MobBuild:
+              kind: Optional[str] = None, well_built: bool = False,
+              per_level: Optional[int] = None) -> MobBuild:
     """Stat a mob or boss from its level.
 
     Every stat starts at 4, as an average adult human's does; then the mob gets
     MOB_BUILDS["tier_points"][tier] points a level -- 1 for an ordinary mob, 2 for
-    a neighborhood boss and so on up, against a crawler's 3 -- spread by its type
+    a neighborhood boss and so on up, against a crawler's 3, unless `per_level`
+    says otherwise -- spread by its type
     (from `kind_from`, its noun, unless `kind` names it) and leant by the words of
     `description`. About one in eight is poorly built instead, unless it is
     `well_built`. Seeded by the mob itself, so the same mob at the same level is
@@ -2126,7 +2128,9 @@ def build_mob(name: str, level: int, tier: str = "mob", *, kind_from: str = "",
                 for s, factor in lean.items():
                     weights[STAT_ORDER.index(s)] *= factor
     weights = [w * rng.uniform(0.85, 1.15) for w in weights]
-    points = mb["tier_points"].get(tier, mb["tier_points"]["neighborhood"]) * max(1, level)
+    if per_level is None:
+        per_level = mb["tier_points"].get(tier, mb["tier_points"]["neighborhood"])
+    points = per_level * max(1, level)
     # Largest remainder, so the points add up exactly.
     total_w = sum(weights)
     shares = [points * w / total_w for w in weights]
@@ -3441,8 +3445,8 @@ class Quest:
 @dataclass
 class Mayor:
     """Who runs a settlement: an NPC, not a boss, but a strong one. Statted from
-    name and level the way the Bestiary stats a mob, so changing either restats
-    them."""
+    name, level and the settlement's size the way the Bestiary stats a mob, so
+    changing the name or the level restats them."""
     name: str
     level: int
     background: str                    # what they were before the office
@@ -3765,8 +3769,9 @@ class Generator3:
                       scaling=self.scaling, seed=self.seed)
 
 
-# A mayor outranks their own town's guards by this many levels.
-MAYOR_OVER_GUARDS = (5, 15)
+# A mayor is this many levels below their own town's guards: taking a
+# settlement is part of the dungeon.
+MAYOR_UNDER_GUARDS = (15, 20)
 
 
 def _floor_words(v, out: set) -> set:
@@ -3806,39 +3811,48 @@ def add_mayors(fl) -> None:
         used.add(first)
         bg = backgrounds.draw()
         mayor = Mayor(name=f"{first} {epithets.draw()}",
-                      level=st.guard_level + rng.randint(*MAYOR_OVER_GUARDS),
+                      level=max(1, st.guard_level - rng.randint(*MAYOR_UNDER_GUARDS)),
                       background=bg["was"], kind=bg["kind"])
         if st.mayor is None:
             st.mayor = mayor
 
 
-def mayor_build(m: Mayor) -> MobBuild:
+def mayor_points(st: Settlement) -> int:
+    """A mayor's stat points a level, by the size of their settlement."""
+    return MOB_BUILDS["mayor_points"].get(st.size, 1)
+
+
+def mayor_build(st: Settlement) -> MobBuild:
+    m = st.mayor
     return build_mob(m.name, m.level, "mayor", kind=m.kind, description=m.background,
-                     well_built=True)
+                     well_built=True, per_level=mayor_points(st))
 
 
 def mayors_note() -> List[str]:
     """How a mayor is statted, once, ahead of the settlements."""
     mb, k = MOB_BUILDS, CRAWLER_STATS["knobs"]
-    tp = mb["tier_points"]
-    lo, hi = MAYOR_OVER_GUARDS
-    return [f"Every settlement has a mayor: an NPC, not a boss, but a strong one, {lo} to "
-            f"{hi} levels above their own town's guards. A mayor is statted the way the "
-            f"Bestiary stats a mob, at {tp['mayor']} points a level, against an ordinary "
-            f"mob's {tp['mob']} and a crawler's {k['points_per_level']}: every stat starts "
-            f"at {mb['base']}, HP is CON x {k['hp_per_con']}, MP is INT, and melee adds 1 per "
-            f"{k['attack_per']} STR.", ""]
+    lo, hi = MAYOR_UNDER_GUARDS
+    sizes = ", ".join(f"{'XL' if size == 'xl' else size} {p}"
+                      for size, p in mb["mayor_points"].items())
+    return [f"Every settlement has a mayor: an NPC, not a boss, {lo} to {hi} levels below "
+            f"their own town's guards, since taking a settlement is part of the dungeon. A "
+            f"mayor is statted the way the Bestiary stats a mob, with points a level by the "
+            f"size of their town ({sizes}), against an ordinary mob's "
+            f"{mb['tier_points']['mob']} and a crawler's {k['points_per_level']}: every stat "
+            f"starts at {mb['base']}, HP is CON x {k['hp_per_con']}, MP is INT, and melee "
+            f"adds 1 per {k['attack_per']} STR.", ""]
 
 
 def mayor_lines(st: Settlement) -> List[str]:
     m = st.mayor
     if m is None:
         return []
-    b = mayor_build(m)
+    b, per = mayor_build(st), mayor_points(st)
     stats = ", ".join(f"{s} {b.stats[s]}" for s in STAT_ORDER)
     return [f"- **Mayor:** {m.name}, a level {m.level} {person_of(st.race)}, once {m.background}.",
-            f"  - {stats}; HP {b.hp:,}, MP {b.mp}, melee +{b.melee}. A {b.kind}'s build, "
-            f"with the stat points of a level {b.even_for} crawler."]
+            f"  - {stats}; HP {b.hp:,}, MP {b.mp}, melee +{b.melee}. A {b.kind}'s build at "
+            f"{per} point{'' if per == 1 else 's'} a level, with the stat points of a level "
+            f"{b.even_for} crawler."]
 
 
 def render3(fl: Floor3) -> str:

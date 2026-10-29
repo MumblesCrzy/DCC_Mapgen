@@ -590,6 +590,58 @@ the party has just met — around three times harder, once a team is four floors
 Harder, not safe: a veteran still dies, and roughly half of full Floor 1-to-11 runs
 end with one of the original groups still out there.
 
+Standing is the part the party changes in play. Befriend the group that attacked
+them on Floor 2, or fall out with an ally:
+
+```
+python dcc_mapgen.py --floor 3 --campaign mycrawl.json --standing "Thistle=allied"
+```
+
+A unique partial name is enough. The five standings that come with reaction text are
+`hostile`, `territorial`, `wary`, `friendly` and `allied`, but any wording is
+accepted — a table that decides a group is "owed a favour" can write that.
+
+In the desktop app this is the **Campaign** tab: open or start a roster, and every
+floor generated afterwards carries it. The table lists everyone met so far, the dead
+greyed out with the floor that killed them, and standing is editable there.
+
+Not every group the party meets comes out of the generator. **Add group...** adds one
+met at the table — a name, who they were before the Collapse, how many crawlers are
+in it, where they stand with the party, the floor they were met on, and their latest
+report. From the next floor generated on, an added group is carried like any other:
+dealt a fresh report each floor, picking races and classes on Floor 3, able to
+thrive or die. What the generator never does is rename it or re-deal its standing,
+which it does to every group it has just met itself. Added groups are marked
+"(added)" in the table.
+
+Any group's **crawler count**, **latest report** and **fate** — steady, thriving,
+costly or fatal — can be rewritten from the same panel as its standing. Fatal kills
+the group on the floor it was last seen, and it stops carrying; any other fate brings
+a dead group back, which is how you undo a mistake or run a resurrection. The edit
+corrects that floor's entry in the group's history rather than adding a second one,
+and marks it as yours. Either way, the next floor generated deals every living group
+a fresh report.
+
+The crawler count works differently either side of Floor 3:
+
+- **Floors 1–2.** Nobody has a race or class yet, so the count is only a number.
+  The floor prints it under the group ("Five crawlers."), each report moves it the
+  way it would move a party — a costly floor costs one — and Floor 3 deals exactly
+  that many crawlers instead of rolling the group's size. A group the generator met
+  has no number at all until Floor 3, unless you give it one.
+- **Floor 3 and deeper.** The count is the crawlers. Raising it deals newcomers who
+  share no race or class with anyone already there, as a merge does on a generated
+  floor; lowering it drops the most recent to join first. A group added on Floor 3
+  or deeper is dealt its races and classes as soon as you add it — with the level 6
+  upgrades already taken past Floor 6 — and one added with the count left blank is
+  sized by the generator on the next floor, like any other.
+
+![the Campaign tab, five floors into a run](sample/gui_campaign.png)
+
+Carrying a campaign never changes the floor itself. Teams are dealt from their own
+random stream, so the same seed gives the same map and the same everything else
+whether or not a campaign is open.
+
 ### Races and classes
 
 Floor 3 is where the System makes every surviving crawler choose a race and a
@@ -679,7 +731,7 @@ the thing is:
 |---|---|
 | a crawler | 3 |
 | an ordinary mob | 1 |
-| a settlement's mayor, on Floors 3 and 6 | 2 |
+| a settlement's mayor, on Floors 3 and 6 | 1 (tiny) to 5 (XL), by the settlement's size |
 | a neighborhood boss | 2 |
 | a borough boss | 3 |
 | a city boss | 4 |
@@ -749,15 +801,18 @@ numbers live in `MOB_BUILDS` in `data/common.json`.
 ### Mayors
 
 Every settlement on Floors 3 and 6 names a mayor, Zockau included. A mayor is an
-NPC, not a boss, but a strong one: 5 to 15 levels above their own town's guards,
-so level 65 to 105 on Floor 3 and 100 to 110 on Floor 6. Each settlement's write-up
-gives the mayor's name, level and race, what they were before the office, and a
-stat line: the five stats, HP, MP, melee, and the crawler level with as many
-points. The map writes the mayor's level and name in the settlement's cell.
+NPC, not a boss, and 15 to 20 levels below their own town's guards, since taking a
+settlement is part of the dungeon: level 40 to 75 on Floor 3, by the town's size,
+and 75 to 80 on Floor 6. Each settlement's write-up gives the mayor's name, level
+and race, what they were before the office, and a stat line: the five stats, HP,
+MP, melee, and the crawler level with as many points. The map writes the mayor's
+level and name in the settlement's cell.
 
-- **Stats** follow the Bestiary's rules at 2 points a level, between an ordinary
-  mob's 1 and a crawler's 3. That gives a mayor about a borough boss's stat
-  points (a little more on Floor 3), and well short of a city boss's.
+- **Stats** follow the Bestiary's rules, with points a level by the size of the
+  settlement: 1 for a tiny one, 2 small, 3 medium, 4 large, 5 XL. A tiny town's
+  mayor has the points of a level 13 to 15 crawler on Floor 3, one a party there
+  can take; an XL city's has more points than Floor 3's city boss. The numbers are
+  `MOB_BUILDS.mayor_points` in `data/common.json`.
 - **The build** comes from the mayor's background: a retired arena champion is a
   brute, a merchant who bought the office a charmer, the keeper of the town shrine
   a caster. A mayor is never poorly built.
@@ -773,58 +828,6 @@ moved nothing else on any floor. A floor file saved before mayors gets the ones 
 fresh build of its seed would, when it opens. A mayor's background isn't counted
 by the sponsor's threat scan, either: a mayor who once turned back a flood is no
 sign of deep water on the floor.
-
-Standing is the part the party changes in play. Befriend the group that attacked
-them on Floor 2, or fall out with an ally:
-
-```
-python dcc_mapgen.py --floor 3 --campaign mycrawl.json --standing "Thistle=allied"
-```
-
-A unique partial name is enough. The five standings that come with reaction text are
-`hostile`, `territorial`, `wary`, `friendly` and `allied`, but any wording is
-accepted — a table that decides a group is "owed a favour" can write that.
-
-In the desktop app this is the **Campaign** tab: open or start a roster, and every
-floor generated afterwards carries it. The table lists everyone met so far, the dead
-greyed out with the floor that killed them, and standing is editable there.
-
-Not every group the party meets comes out of the generator. **Add group...** adds one
-met at the table — a name, who they were before the Collapse, how many crawlers are
-in it, where they stand with the party, the floor they were met on, and their latest
-report. From the next floor generated on, an added group is carried like any other:
-dealt a fresh report each floor, picking races and classes on Floor 3, able to
-thrive or die. What the generator never does is rename it or re-deal its standing,
-which it does to every group it has just met itself. Added groups are marked
-"(added)" in the table.
-
-Any group's **crawler count**, **latest report** and **fate** — steady, thriving,
-costly or fatal — can be rewritten from the same panel as its standing. Fatal kills
-the group on the floor it was last seen, and it stops carrying; any other fate brings
-a dead group back, which is how you undo a mistake or run a resurrection. The edit
-corrects that floor's entry in the group's history rather than adding a second one,
-and marks it as yours. Either way, the next floor generated deals every living group
-a fresh report.
-
-The crawler count works differently either side of Floor 3:
-
-- **Floors 1–2.** Nobody has a race or class yet, so the count is only a number.
-  The floor prints it under the group ("Five crawlers."), each report moves it the
-  way it would move a party — a costly floor costs one — and Floor 3 deals exactly
-  that many crawlers instead of rolling the group's size. A group the generator met
-  has no number at all until Floor 3, unless you give it one.
-- **Floor 3 and deeper.** The count is the crawlers. Raising it deals newcomers who
-  share no race or class with anyone already there, as a merge does on a generated
-  floor; lowering it drops the most recent to join first. A group added on Floor 3
-  or deeper is dealt its races and classes as soon as you add it — with the level 6
-  upgrades already taken past Floor 6 — and one added with the count left blank is
-  sized by the generator on the next floor, like any other.
-
-![the Campaign tab, five floors into a run](sample/gui_campaign.png)
-
-Carrying a campaign never changes the floor itself. Teams are dealt from their own
-random stream, so the same seed gives the same map and the same everything else
-whether or not a campaign is open.
 
 ### The leaderboard
 
@@ -1105,12 +1108,13 @@ city bosses. It checks:
 - an ordinary crawler lives through every ordinary mob on their floor, and the
   Floor 11 boss kills an ordinary crawler there in one hit.
 
-Mayors have their own group, with their rules written into the test: 5 to 15 levels
-above their town's guards, 2 points a level, never poorly built. It checks:
+Mayors have their own group, with their rules written into the test: 15 to 20
+levels below their town's guards, 1 to 5 points a level from a tiny settlement to an
+XL one, never poorly built. It checks:
 - every settlement on Floors 3 and 6 has one, Zockau included, with no name,
   background or epithet repeated, and no first name already on the floor;
-- every mayor's build adds up, keeps their background's type, and is the same build
-  every time;
+- every mayor's build adds up at their settlement size's points a level, every size
+  is checked, and the build keeps their background's type and is the same every time;
 - the write-up gives each one under their own town, with the stat line their build
   says;
 - adding mayors changed nothing else on the floor;

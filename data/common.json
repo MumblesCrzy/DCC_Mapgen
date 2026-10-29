@@ -4477,7 +4477,6 @@
   "base": 4,
   "tier_points": {
    "mob": 1,
-   "mayor": 2,
    "neighborhood": 2,
    "borough": 3,
    "city": 4,
@@ -4487,6 +4486,13 @@
    "country": 7,
    "continent": 8,
    "floor": 9
+  },
+  "mayor_points": {
+   "tiny": 1,
+   "small": 2,
+   "medium": 3,
+   "large": 4,
+   "xl": 5
   },
   "trick_cost": 3,
   "hit_per_point": 5,

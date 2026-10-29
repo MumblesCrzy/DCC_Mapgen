@@ -18,6 +18,7 @@ run, because within one process that order is perfectly stable.
 
 import collections
 import contextlib
+import dataclasses
 import glob
 import io
 import json
@@ -3400,13 +3401,14 @@ class BestiaryTest(unittest.TestCase):
 
 
 class MayorTest(unittest.TestCase):
-    """Every settlement on Floors 3 and 6 names a mayor: an NPC, not a boss, but a
-    strong one. The rules, written out here: a mayor is 5 to 15 levels above
-    their town's guards, and is statted like a mob at 2 points a level, between
-    an ordinary mob's 1 and a crawler's 3, and never poorly built."""
+    """Every settlement on Floors 3 and 6 names a mayor: an NPC, not a boss. The
+    rules, written out here: a mayor is 15 to 20 levels below their town's guards,
+    since taking a settlement is part of the dungeon, and is statted like a mob at
+    points a level by the settlement's size, 1 for a tiny one up to 5 for an XL
+    one, and never poorly built."""
 
-    OVER_GUARDS = range(5, 16)
-    PER_LEVEL = 2
+    UNDER_GUARDS = range(15, 21)
+    PER_LEVEL = {"tiny": 1, "small": 2, "medium": 3, "large": 4, "xl": 5}
 
     @classmethod
     def setUpClass(cls):
@@ -3424,7 +3426,7 @@ class MayorTest(unittest.TestCase):
             self.assertTrue(mayors, where)
             for (_, c), m in zip(self._settlements(res.floor), mayors):
                 self.assertIsInstance(m, mg.Mayor, f"{where} {c.label}")
-                self.assertIn(m.level - c.guard_level, self.OVER_GUARDS, f"{where} {c.label}")
+                self.assertIn(c.guard_level - m.level, self.UNDER_GUARDS, f"{where} {c.label}")
                 self.assertIn(m.kind, [t["type"] for t in mg.MOB_BUILDS["types"]], where)
             if floor == 6:
                 self.assertTrue(any(c.hostile and c.mayor for _, c in self._settlements(res.floor)),
@@ -3445,31 +3447,37 @@ class MayorTest(unittest.TestCase):
     def test_stats_follow_the_level(self):
         for (floor, size), res in self.floors.items():
             for _, c in self._settlements(res.floor):
-                b = mg.mayor_build(c.mayor)
+                b = mg.mayor_build(c)
                 where = f"floor {floor} {size} {c.mayor.name}"
-                self.assertEqual(b.points, 5 * 4 + self.PER_LEVEL * c.mayor.level, where)
+                self.assertEqual(b.points, 5 * 4 + self.PER_LEVEL[c.size] * c.mayor.level, where)
                 self.assertEqual(b.poor, "", where)
                 self.assertTrue(all(v >= 4 for v in b.stats.values()), where)
                 self.assertEqual(b.kind, c.mayor.kind, where)
                 # Seeded by the mayor: the same mayor is always the same build.
-                self.assertEqual(mg.mayor_build(c.mayor).stats, b.stats, where)
+                self.assertEqual(mg.mayor_build(c).stats, b.stats, where)
+        sizes = {c.size for res in self.floors.values() for _, c in self._settlements(res.floor)}
+        self.assertEqual(sizes, set(self.PER_LEVEL), "every size of settlement is checked")
         # Never poorly built, though one mob in eight is.
         names = [f"Mayor {n}" for n in mg.BOSS_FIRST]
+        town = self._settlements(self.floors[(3, "small")].floor)[0][1]
         self.assertTrue(any(mg.build_mob(n, 70, "mayor").poor for n in names))
-        self.assertFalse(any(mg.mayor_build(mg.Mayor(n, 70, "a test", "brute")).poor for n in names))
+        self.assertFalse(any(mg.mayor_build(dataclasses.replace(town, mayor=mg.Mayor(n, 70, "a test", "brute"))).poor
+                             for n in names))
 
     def test_the_write_up_gives_them(self):
         for (floor, size), res in self.floors.items():
             md = res.markdown
             settlements = md[md.index("## Settlements"):]
-            self.assertIn(f"at {self.PER_LEVEL} points a level", settlements)
+            self.assertIn("(tiny 1, small 2, medium 3, large 4, XL 5)", settlements)
             for _, c in self._settlements(res.floor):
-                m, b = c.mayor, mg.mayor_build(c.mayor)
+                m, b = c.mayor, mg.mayor_build(c)
                 where = f"floor {floor} {size} {c.label}"
                 head = f"- **Mayor:** {m.name}, a level {m.level} {mg.person_of(c.race)}, once {m.background}."
                 self.assertIn(head, md, where)
                 stats = ", ".join(f"{s} {b.stats[s]}" for s in mg.STAT_ORDER)
-                self.assertIn(f"  - {stats}; HP {b.hp:,}, MP {b.mp}, melee +{b.melee}.", md, where)
+                per = self.PER_LEVEL[c.size]
+                self.assertIn(f"  - {stats}; HP {b.hp:,}, MP {b.mp}, melee +{b.melee}. A {b.kind}'s "
+                              f"build at {per} point{'s' if per > 1 else ''} a level, ", md, where)
                 # Under its own town's heading, or Zockau's.
                 section = "## Zockau" if c.hostile else f"### {c.label}. {c.name} ("
                 self.assertLess(md.index(section), md.index(head), where)
@@ -3513,8 +3521,8 @@ class MayorTest(unittest.TestCase):
         mg.edit_set(res.floor, ["cells", i, "mayor", "level"], c.mayor.level + 10)
         mg.edit_set(res.floor, ["cells", i, "mayor", "name"], "Hortensia the Recounted")
         again = mg.redraw_floor(res)
-        b = mg.mayor_build(c.mayor)
-        self.assertEqual(b.points, 5 * 4 + self.PER_LEVEL * c.mayor.level)
+        b = mg.mayor_build(c)
+        self.assertEqual(b.points, 5 * 4 + self.PER_LEVEL[c.size] * c.mayor.level)
         stats = ", ".join(f"{s} {b.stats[s]}" for s in mg.STAT_ORDER)
         self.assertIn(f"- **Mayor:** Hortensia the Recounted, a level {c.mayor.level} ", again.markdown)
         self.assertIn(f"  - {stats}; HP {b.hp:,}", again.markdown)
