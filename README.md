@@ -801,18 +801,18 @@ numbers live in `MOB_BUILDS` in `data/common.json`.
 ### Mayors
 
 Every settlement on Floors 3 and 6 names a mayor, Zockau included. A mayor is an
-NPC, not a boss, and 15 to 20 levels below their own town's guards, since taking a
-settlement is part of the dungeon: level 40 to 75 on Floor 3, by the town's size,
-and 75 to 80 on Floor 6. Each settlement's write-up gives the mayor's name, level
+NPC, not a boss, and 25 to 30 levels below their own town's guards, since taking a
+settlement is part of the dungeon: level 30 to 65 on Floor 3, by the town's size,
+and 65 to 70 on Floor 6. Each settlement's write-up gives the mayor's name, level
 and race, what they were before the office, and a stat line: the five stats, HP,
 MP, melee, and the crawler level with as many points. The map writes the mayor's
 level and name in the settlement's cell.
 
 - **Stats** follow the Bestiary's rules, with points a level by the size of the
   settlement: 1 for a tiny one, 2 small, 3 medium, 4 large, 5 XL. A tiny town's
-  mayor has the points of a level 13 to 15 crawler on Floor 3, one a party there
-  can take; an XL city's has more points than Floor 3's city boss. The numbers are
-  `MOB_BUILDS.mayor_points` in `data/common.json`.
+  mayor has the points of a level 10 to 12 crawler on Floor 3, one a party there
+  can take; an XL city's comes close to Floor 3's city boss without passing it.
+  The numbers are `MOB_BUILDS.mayor_points` in `data/common.json`.
 - **The build** comes from the mayor's background: a retired arena champion is a
   brute, a merchant who bought the office a charmer, the keeper of the town shrine
   a caster. A mayor is never poorly built.
@@ -1108,7 +1108,7 @@ city bosses. It checks:
 - an ordinary crawler lives through every ordinary mob on their floor, and the
   Floor 11 boss kills an ordinary crawler there in one hit.
 
-Mayors have their own group, with their rules written into the test: 15 to 20
+Mayors have their own group, with their rules written into the test: 25 to 30
 levels below their town's guards, 1 to 5 points a level from a tiny settlement to an
 XL one, never poorly built. It checks:
 - every settlement on Floors 3 and 6 has one, Zockau included, with no name,

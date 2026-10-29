@@ -3771,7 +3771,7 @@ class Generator3:
 
 # A mayor is this many levels below their own town's guards: taking a
 # settlement is part of the dungeon.
-MAYOR_UNDER_GUARDS = (15, 20)
+MAYOR_UNDER_GUARDS = (25, 30)
 
 
 def _floor_words(v, out: set) -> set:

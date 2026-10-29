@@ -3402,12 +3402,12 @@ class BestiaryTest(unittest.TestCase):
 
 class MayorTest(unittest.TestCase):
     """Every settlement on Floors 3 and 6 names a mayor: an NPC, not a boss. The
-    rules, written out here: a mayor is 15 to 20 levels below their town's guards,
+    rules, written out here: a mayor is 25 to 30 levels below their town's guards,
     since taking a settlement is part of the dungeon, and is statted like a mob at
     points a level by the settlement's size, 1 for a tiny one up to 5 for an XL
     one, and never poorly built."""
 
-    UNDER_GUARDS = range(15, 21)
+    UNDER_GUARDS = range(25, 31)
     PER_LEVEL = {"tiny": 1, "small": 2, "medium": 3, "large": 4, "xl": 5}
 
     @classmethod
