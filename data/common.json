@@ -4477,6 +4477,7 @@
   "base": 4,
   "tier_points": {
    "mob": 1,
+   "mayor": 2,
    "neighborhood": 2,
    "borough": 3,
    "city": 4,

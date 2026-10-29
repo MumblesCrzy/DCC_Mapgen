@@ -829,6 +829,8 @@ class MapClickTest(unittest.TestCase):
                         if c.quests and not getattr(c, "hostile", False):
                             wanted.append((lambda t, x, y, f=inside: t.startswith("Quests: ") and f(x, y),
                                            ("cells", i, "quests")))
+                        wanted.append((lambda t, x, y, f=inside: t.startswith("Mayor L") and f(x, y),
+                                       ("cells", i, "mayor")))
                         continue
                     mob = mg._fit(c.mob.name, 30)
                     wanted.append((lambda t, x, y, m=mob, f=inside: t == m and f(x, y), ("cells", i, "mob")))
@@ -3395,6 +3397,150 @@ class BestiaryTest(unittest.TestCase):
         eleven = mg.floor_bestiary(self.res[11].floor)
         boss = next(b for b in eleven if b.tier != "mob")
         self.assertGreaterEqual(self._hit(boss)[0], self._hp(mg.party_levels(11, eleven)[0]))
+
+
+class MayorTest(unittest.TestCase):
+    """Every settlement on Floors 3 and 6 names a mayor: an NPC, not a boss, but a
+    strong one. The rules, written out here: a mayor is 5 to 15 levels above
+    their town's guards, and is statted like a mob at 2 points a level, between
+    an ordinary mob's 1 and a crawler's 3, and never poorly built."""
+
+    OVER_GUARDS = range(5, 16)
+    PER_LEVEL = 2
+
+    @classmethod
+    def setUpClass(cls):
+        cls.floors = {(f, s): mg.generate(f, s, 4242, images=False)
+                      for f in (3, 6) for s in ("small", "medium", "large")}
+
+    @staticmethod
+    def _settlements(fl):
+        return [(i, c) for i, c in enumerate(fl.cells) if isinstance(c, mg.Settlement)]
+
+    def test_every_settlement_has_one(self):
+        for (floor, size), res in self.floors.items():
+            where = f"floor {floor} {size}"
+            mayors = [c.mayor for _, c in self._settlements(res.floor)]
+            self.assertTrue(mayors, where)
+            for (_, c), m in zip(self._settlements(res.floor), mayors):
+                self.assertIsInstance(m, mg.Mayor, f"{where} {c.label}")
+                self.assertIn(m.level - c.guard_level, self.OVER_GUARDS, f"{where} {c.label}")
+                self.assertIn(m.kind, [t["type"] for t in mg.MOB_BUILDS["types"]], where)
+            if floor == 6:
+                self.assertTrue(any(c.hostile and c.mayor for _, c in self._settlements(res.floor)),
+                                f"{where}: Zockau has one too")
+            # No two alike, and no first name that is already someone else's.
+            for attr in ("name", "background"):
+                values = [getattr(m, attr) for m in mayors]
+                self.assertEqual(len(set(values)), len(values), f"{where}: {attr}s")
+            epithets = [m.name.split(" ", 1)[1] for m in mayors]
+            self.assertEqual(len(set(epithets)), len(epithets), where)
+            for _, c in self._settlements(res.floor):
+                c.mayor = None
+            others = mg._floor_words(res.floor, set())
+            for (_, c), m in zip(self._settlements(res.floor), mayors):
+                c.mayor = m
+                self.assertNotIn(m.name.split()[0], others, f"{where}: {m.name}")
+
+    def test_stats_follow_the_level(self):
+        for (floor, size), res in self.floors.items():
+            for _, c in self._settlements(res.floor):
+                b = mg.mayor_build(c.mayor)
+                where = f"floor {floor} {size} {c.mayor.name}"
+                self.assertEqual(b.points, 5 * 4 + self.PER_LEVEL * c.mayor.level, where)
+                self.assertEqual(b.poor, "", where)
+                self.assertTrue(all(v >= 4 for v in b.stats.values()), where)
+                self.assertEqual(b.kind, c.mayor.kind, where)
+                # Seeded by the mayor: the same mayor is always the same build.
+                self.assertEqual(mg.mayor_build(c.mayor).stats, b.stats, where)
+        # Never poorly built, though one mob in eight is.
+        names = [f"Mayor {n}" for n in mg.BOSS_FIRST]
+        self.assertTrue(any(mg.build_mob(n, 70, "mayor").poor for n in names))
+        self.assertFalse(any(mg.mayor_build(mg.Mayor(n, 70, "a test", "brute")).poor for n in names))
+
+    def test_the_write_up_gives_them(self):
+        for (floor, size), res in self.floors.items():
+            md = res.markdown
+            settlements = md[md.index("## Settlements"):]
+            self.assertIn(f"at {self.PER_LEVEL} points a level", settlements)
+            for _, c in self._settlements(res.floor):
+                m, b = c.mayor, mg.mayor_build(c.mayor)
+                where = f"floor {floor} {size} {c.label}"
+                head = f"- **Mayor:** {m.name}, a level {m.level} {mg.person_of(c.race)}, once {m.background}."
+                self.assertIn(head, md, where)
+                stats = ", ".join(f"{s} {b.stats[s]}" for s in mg.STAT_ORDER)
+                self.assertIn(f"  - {stats}; HP {b.hp:,}, MP {b.mp}, melee +{b.melee}.", md, where)
+                # Under its own town's heading, or Zockau's.
+                section = "## Zockau" if c.hostile else f"### {c.label}. {c.name} ("
+                self.assertLess(md.index(section), md.index(head), where)
+                self.assertEqual(md.count(head), 1, where)
+
+    def test_they_change_nothing_else_on_the_floor(self):
+        """Drawn from a stream of their own: the floor is the one built before
+        settlements had mayors, with its mayors added."""
+        for floor in (3, 6):
+            with mock.patch.object(mg, "add_mayors", lambda fl: None):
+                without = mg.generate(floor, "large", 4242, images=False).floor
+            fl = self.floors[(floor, "large")].floor
+            for _, c in self._settlements(fl):
+                self.assertIsNotNone(c.mayor)
+            data = mg._to_data(fl)
+            for cell in data["cells"]:
+                cell.pop("mayor", None)
+            theirs = mg._to_data(without)
+            for cell in theirs["cells"]:
+                cell.pop("mayor", None)
+            self.assertEqual(data, theirs, f"floor {floor}")
+
+    def test_an_older_floor_file_gets_the_same_mayors(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            for floor in (3, 6):
+                res = self.floors[(floor, "medium")]
+                path = os.path.join(tmp, f"f{floor}" + mg.FLOOR_FILE_SUFFIX)
+                mg.save_floor_file(res, path)
+                with open(path, encoding="utf-8") as f:
+                    data = json.load(f)
+                for cell in data["data"]["cells"]:
+                    self.assertEqual(cell.pop("mayor", None) is None, cell["__type__"] == "Region")
+                with open(path, "w", encoding="utf-8") as f:
+                    json.dump(data, f)
+                back = mg.open_floor_file(path)
+                self.assertEqual(back.markdown, res.markdown, f"floor {floor}")
+
+    def test_an_edit_restats_them(self):
+        res = mg.generate(3, "medium", 4242)
+        i, c = self._settlements(res.floor)[0]
+        mg.edit_set(res.floor, ["cells", i, "mayor", "level"], c.mayor.level + 10)
+        mg.edit_set(res.floor, ["cells", i, "mayor", "name"], "Hortensia the Recounted")
+        again = mg.redraw_floor(res)
+        b = mg.mayor_build(c.mayor)
+        self.assertEqual(b.points, 5 * 4 + self.PER_LEVEL * c.mayor.level)
+        stats = ", ".join(f"{s} {b.stats[s]}" for s in mg.STAT_ORDER)
+        self.assertIn(f"- **Mayor:** Hortensia the Recounted, a level {c.mayor.level} ", again.markdown)
+        self.assertIn(f"  - {stats}; HP {b.hp:,}", again.markdown)
+        self.assertIn(f"Mayor L{c.mayor.level}: Hortensia the Recounted", dict(again.svgs)[""])
+        # The panel shows the build, and keeps it: it goes with the background.
+        fields = {f.key: f for f in mg.edit_fields(c.mayor)}
+        self.assertEqual(set(fields), {"name", "level", "background", "kind"})
+        self.assertTrue(fields["kind"].locked)
+        self.assertFalse(any(fields[k].locked for k in ("name", "level", "background")))
+
+    def test_a_mayors_past_is_no_threat(self):
+        """The sponsor's threat scan reads what a floor throws at a party; who
+        runs a town once turned back a flood, which is no sign of deep water."""
+        line = "once a hedge wizard who turned back the last flood in the river."
+        mayors = "".join(f"- **Mayor:** Someone {k}, a level 90 dwarf, {line}\n"
+                         f"  - STR 20, DEX 20, CON 20, INT 90, CHA 30; HP 300.\n" for k in range(4))
+        self.assertEqual(mg.threat_suggestions(mayors), [])
+        others = "".join(f"- **Feature:** {line}\n" for _ in range(4))
+        self.assertIn("water", [t.threat for t in mg.threat_suggestions(others)])
+
+    def test_one_of_a_people(self):
+        for race, one in (("Dwarves", "dwarf"), ("City Elves", "city elf"), ("High Elves", "high elf"),
+                          ("Lizardmen", "lizardman"), ("Goblins (civilized)", "goblin"),
+                          ("Kobolds (civilized)", "kobold"), ("Frog-folk", "frog-folk"),
+                          ("Ursine", "ursine"), ("Bopca", "bopca"), ("Changelings", "changeling")):
+            self.assertEqual(mg.person_of(race), one)
 
 
 class ShopsTest(unittest.TestCase):

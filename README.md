@@ -402,7 +402,7 @@ A panel opens to the right of the map:
     (double-click it to go to that neighborhood's room map), or of a way into a boss
     chamber, which opens that boss.
   - **Floors 3 and 6:** a settlement or region, a region's mob, boss and stairwell, a
-    settlement's quests, the Elite, each line of the stairwell list, and on Floor 6 a
+    settlement's mayor and quests, the Elite, each line of the stairwell list, and on Floor 6 a
     hunter party by its camp.
   - **Floor 4:** a line (by its name or the line itself), a station (its marker, its
     number, what it has, its stairwell), a ghoul station by its name over its column,
@@ -679,6 +679,7 @@ the thing is:
 |---|---|
 | a crawler | 3 |
 | an ordinary mob | 1 |
+| a settlement's mayor, on Floors 3 and 6 | 2 |
 | a neighborhood boss | 2 |
 | a borough boss | 3 |
 | a city boss | 4 |
@@ -744,6 +745,34 @@ level 295, and a veteran with half their points in Constitution below level 118.
 Each build is seeded by the mob itself, so the same mob at the same level always
 has the same stats, and adding the Bestiary moved nothing else on any floor. The
 numbers live in `MOB_BUILDS` in `data/common.json`.
+
+### Mayors
+
+Every settlement on Floors 3 and 6 names a mayor, Zockau included. A mayor is an
+NPC, not a boss, but a strong one: 5 to 15 levels above their own town's guards,
+so level 65 to 105 on Floor 3 and 100 to 110 on Floor 6. Each settlement's write-up
+gives the mayor's name, level and race, what they were before the office, and a
+stat line: the five stats, HP, MP, melee, and the crawler level with as many
+points. The map writes the mayor's level and name in the settlement's cell.
+
+- **Stats** follow the Bestiary's rules at 2 points a level, between an ordinary
+  mob's 1 and a crawler's 3. That gives a mayor about a borough boss's stat
+  points (a little more on Floor 3), and well short of a city boss's.
+- **The build** comes from the mayor's background: a retired arena champion is a
+  brute, a merchant who bought the office a charmer, the keeper of the town shrine
+  a caster. A mayor is never poorly built.
+- **Names** are a first name nobody else on the floor has, boss or quest giver, and
+  an epithet: Rodney the Tolerated, Esmeralda the Lifelong. No two mayors on a floor
+  share a background or an epithet. The banks are `MAYOR_BACKGROUND` and
+  `MAYOR_EPITHET` in `data/floor3.json`.
+- **Editing:** the edit panel has a Mayor under each settlement. A new name or level
+  restats them; their build stays with their background.
+
+Mayors are drawn on a stream of their own after the floor is built, so adding them
+moved nothing else on any floor. A floor file saved before mayors gets the ones a
+fresh build of its seed would, when it opens. A mayor's background isn't counted
+by the sponsor's threat scan, either: a mayor who once turned back a flood is no
+sign of deep water on the floor.
 
 Standing is the part the party changes in play. Befriend the group that attacked
 them on Floor 2, or fall out with an ally:
@@ -1075,6 +1104,21 @@ city bosses. It checks:
   bosses;
 - an ordinary crawler lives through every ordinary mob on their floor, and the
   Floor 11 boss kills an ordinary crawler there in one hit.
+
+Mayors have their own group, with their rules written into the test: 5 to 15 levels
+above their town's guards, 2 points a level, never poorly built. It checks:
+- every settlement on Floors 3 and 6 has one, Zockau included, with no name,
+  background or epithet repeated, and no first name already on the floor;
+- every mayor's build adds up, keeps their background's type, and is the same build
+  every time;
+- the write-up gives each one under their own town, with the stat line their build
+  says;
+- adding mayors changed nothing else on the floor;
+- a floor file saved without mayors opens with the same ones a fresh build has;
+- a new name or level reaches the write-up and the map, restatted, and the build
+  can't be edited apart from the background;
+- a mayor's background is not a sign for the sponsor's threat scan;
+- a race reads as one of its people: a dwarf, a city elf, a lizardman, a goblin.
 
 Floor files have their own group:
 - every pinned floor, saved and opened again, draws the same write-up and maps byte

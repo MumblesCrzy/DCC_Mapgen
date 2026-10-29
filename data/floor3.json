@@ -598,5 +598,109 @@
   "Owed to the {role}",
   "{giver} Knows Somebody",
   "The Short Version, from the {role}"
+ ],
+ "MAYOR_EPITHET": [
+  "the Unopposed",
+  "the Twice-Elected",
+  "the Recounted",
+  "the Incumbent",
+  "the Interim",
+  "the Write-In",
+  "the Landslide",
+  "the Uncontested",
+  "the Reasonable",
+  "the Tolerated",
+  "the Appointed",
+  "the Acting",
+  "the Beloved (Officially)",
+  "the Re-Elected",
+  "the Ribbon-Cutter",
+  "the Last Candidate",
+  "the Gavel",
+  "the Lifelong",
+  "the Narrowly Elected",
+  "the Undisputed",
+  "the Unimpeached",
+  "the Term-Limited",
+  "the Provisional",
+  "the Once-Recalled"
+ ],
+ "MAYOR_BACKGROUND": [
+  {
+   "was": "a retired arena champion",
+   "kind": "brute"
+  },
+  {
+   "was": "the old captain of the guard",
+   "kind": "brute"
+  },
+  {
+   "was": "the blacksmith who forged the town gate",
+   "kind": "brute"
+  },
+  {
+   "was": "a bouncer at the inn who stopped the last riot alone",
+   "kind": "brute"
+  },
+  {
+   "was": "the master builder who raised the walls",
+   "kind": "worker"
+  },
+  {
+   "was": "a quarry foreman who outlasted the quarry",
+   "kind": "worker"
+  },
+  {
+   "was": "the innkeeper who kept the lights on",
+   "kind": "worker"
+  },
+  {
+   "was": "a merchant who bought the office outright",
+   "kind": "charmer"
+  },
+  {
+   "was": "a town crier who never stopped talking",
+   "kind": "charmer"
+  },
+  {
+   "was": "the town's most persuasive debt collector",
+   "kind": "charmer"
+  },
+  {
+   "was": "an auctioneer who sold the old mayor's chair",
+   "kind": "charmer"
+  },
+  {
+   "was": "the keeper of the town shrine",
+   "kind": "caster"
+  },
+  {
+   "was": "a hedge wizard who turned back the last flood",
+   "kind": "caster"
+  },
+  {
+   "was": "the archivist who knows where every record is filed",
+   "kind": "caster"
+  },
+  {
+   "was": "an alchemist with a very good explanation for the crater",
+   "kind": "caster"
+  },
+  {
+   "was": "a reformed bandit",
+   "kind": "skirmisher"
+  },
+  {
+   "was": "the scout who found this place",
+   "kind": "skirmisher"
+  },
+  {
+   "was": "a monster hunter who settled down",
+   "kind": "skirmisher"
+  },
+  {
+   "was": "a courier who never once lost a parcel",
+   "kind": "skirmisher"
+  }
  ]
 }

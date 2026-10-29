@@ -216,6 +216,17 @@ def singular(noun: str) -> str:
         return noun[:-1]
     return noun
 
+def person_of(race: str) -> str:
+    """One of a people, in a sentence: "Dwarves" is a dwarf, "City Elves" a city
+    elf, "Lizardmen" a lizardman and "Goblins (civilized)" a goblin. singular()
+    is for mob nouns, and makes dwarves into "dwarve"."""
+    word = re.sub(r"\s*\(.*\)$", "", race).lower()
+    if word.endswith("ves"):
+        return word[:-3] + "f"
+    if word.endswith("men"):
+        return word[:-3] + "man"
+    return singular(word)
+
 def article(word: str) -> str:
     return "an" if word[0].lower() in "aeiou" else "a"
 
@@ -1332,7 +1343,7 @@ def threat_suggestions(text: str, top: int = 3) -> List[ThreatSign]:
     threats = LOOT_BOXES["benefactor"]["threats"]
     owners, phrase_re = _sign_index()
     hits = {key: [] for key in threats}
-    in_code = in_layout = False
+    in_code = in_layout = in_mayor = False
     for line in text.splitlines():
         if line.strip().startswith("```"):
             in_code = not in_code
@@ -1341,7 +1352,10 @@ def threat_suggestions(text: str, top: int = 3) -> List[ThreatSign]:
             # The layout says where each place is, not what is there: a river
             # crossing six cells is one river, told of in the cells' own sections.
             in_layout = line.strip() == "## Layout"
-        if in_code or in_layout or not line.strip():
+        # A mayor is who runs a town, not what the floor throws at a party: one
+        # who once turned back a flood is no sign of deep water.
+        in_mayor = line.startswith("- **Mayor:**") or (in_mayor and line.startswith("  "))
+        if in_code or in_layout or in_mayor or not line.strip():
             continue
         found = {}                                  # threat -> its matches on this line
         matches = [m for m in _WORD.finditer(line) if m.group(0).lower() in owners]
@@ -2076,22 +2090,27 @@ def mob_kind(name: str, default: Optional[str] = None,
 
 def build_mob(name: str, level: int, tier: str = "mob", *, kind_from: str = "",
               description: str = "", where: str = "", band: Optional[Tuple[int, int]] = None,
-              default_kind: Optional[str] = None, sentence: bool = False) -> MobBuild:
+              default_kind: Optional[str] = None, sentence: bool = False,
+              kind: Optional[str] = None, well_built: bool = False) -> MobBuild:
     """Stat a mob or boss from its level.
 
     Every stat starts at 4, as an average adult human's does; then the mob gets
     MOB_BUILDS["tier_points"][tier] points a level -- 1 for an ordinary mob, 2 for
     a neighborhood boss and so on up, against a crawler's 3 -- spread by its type
-    (from `kind_from`, its noun) and leant by the words of `description`. About
-    one in eight is poorly built instead. Seeded by the mob itself, so the same
-    mob at the same level is always the same build, and statting a floor never
-    moves anything else on it."""
+    (from `kind_from`, its noun, unless `kind` names it) and leant by the words of
+    `description`. About one in eight is poorly built instead, unless it is
+    `well_built`. Seeded by the mob itself, so the same mob at the same level is
+    always the same build, and statting a floor never moves anything else on it."""
     mb = MOB_BUILDS
     rng = random.Random(f"build|{name}|{level}|{tier}")
-    kind, weights = mob_kind(kind_from or name, default_kind, sentence)
+    if kind:
+        match = next((t for t in mb["types"] if t["type"] == kind), None)
+        weights = list(match["weights"] if match else mb["default_weights"])
+    else:
+        kind, weights = mob_kind(kind_from or name, default_kind, sentence)
     base = {s: mb["base"] for s in STAT_ORDER}
     poor = None
-    if rng.randrange(mb["poorly_built_in"]) == 0:
+    if not well_built and rng.randrange(mb["poorly_built_in"]) == 0:
         poor = rng.choice(mb["poor_builds"])
         weights = list(poor["weights"])
         for s in poor["dump"]:
@@ -3420,6 +3439,16 @@ class Quest:
     unlocks: Optional[str] = None      # stairwell label
 
 @dataclass
+class Mayor:
+    """Who runs a settlement: an NPC, not a boss, but a strong one. Statted from
+    name and level the way the Bestiary stats a mob, so changing either restats
+    them."""
+    name: str
+    level: int
+    background: str                    # what they were before the office
+    kind: str                          # the build that background gives: brute, caster, ...
+
+@dataclass
 class Settlement:
     idx: int
     label: str
@@ -3438,6 +3467,7 @@ class Settlement:
     distance: int = 0
     hostile: bool = False
     on_river: bool = False
+    mayor: Optional[Mayor] = None
 
 @dataclass
 class Stairwell:
@@ -3724,7 +3754,7 @@ class Generator3:
         elite = Elite(
             name=f"{self.rng.choice(BOSS_FIRST)} {self.rng.choice(ELITE_TITLE)}",
             show=self.rng.choice(ELITE_SHOW).format(noun=singular(reg.mob.noun), adj=self.rng.choice(RUIN_ADJ)),
-            form=self.rng.choice(ELITE_FORM).format(race=singular(host.race).lower()),
+            form=self.rng.choice(ELITE_FORM).format(race=person_of(host.race)),
             plot_armor=self.rng.choice(PLOT_ARMOR), settlement=host.name, region=reg.name)
 
         days = self.days_override or self.rng.randint(*self.cfg["days"])
@@ -3733,6 +3763,83 @@ class Generator3:
                       janitor_level=self.rng.randint(*self.cfg["janitor_level"]), elite=elite,
                       grid=n, cells=[grid[p] for p in cells], stairs=stairs,
                       scaling=self.scaling, seed=self.seed)
+
+
+# A mayor outranks their own town's guards by this many levels.
+MAYOR_OVER_GUARDS = (5, 15)
+
+
+def _floor_words(v, out: set) -> set:
+    """Every word written anywhere on a floor, outside the campaign's record."""
+    if isinstance(v, str):
+        out.update(re.findall(r"[A-Za-z]+", v))
+    elif is_dataclass(v) and not isinstance(v, type):
+        for k, x in vars(v).items():
+            if k not in EDIT_HIDDEN:
+                _floor_words(x, out)
+    elif isinstance(v, dict):
+        for x in v.values():
+            _floor_words(x, out)
+    elif isinstance(v, (list, tuple)):
+        for x in v:
+            _floor_words(x, out)
+    return out
+
+
+def add_mayors(fl) -> None:
+    """Give every settlement on a Floor 3 or 6 that has no mayor one.
+
+    Drawn on a stream of their own, after the floor is built: adding mayors moved
+    nothing else on any floor. Every settlement draws in turn whether it needs a
+    mayor or not, so a floor file from before mayors gets the ones a fresh build
+    of its seed would. No first name is one already on the floor, a boss's or a
+    quest giver's, and no two mayors share a background or an epithet."""
+    if all(c.mayor for c in fl.cells if isinstance(c, Settlement)):
+        return
+    rng = random.Random(f"floor{fl.number}|{fl.seed}|mayors")
+    used = _floor_words(fl, set())
+    backgrounds, epithets = Deck(rng, MAYOR_BACKGROUND), Deck(rng, MAYOR_EPITHET)
+    for st in fl.cells:
+        if not isinstance(st, Settlement):
+            continue
+        first = rng.choice([n for n in BOSS_FIRST if n not in used] or BOSS_FIRST)
+        used.add(first)
+        bg = backgrounds.draw()
+        mayor = Mayor(name=f"{first} {epithets.draw()}",
+                      level=st.guard_level + rng.randint(*MAYOR_OVER_GUARDS),
+                      background=bg["was"], kind=bg["kind"])
+        if st.mayor is None:
+            st.mayor = mayor
+
+
+def mayor_build(m: Mayor) -> MobBuild:
+    return build_mob(m.name, m.level, "mayor", kind=m.kind, description=m.background,
+                     well_built=True)
+
+
+def mayors_note() -> List[str]:
+    """How a mayor is statted, once, ahead of the settlements."""
+    mb, k = MOB_BUILDS, CRAWLER_STATS["knobs"]
+    tp = mb["tier_points"]
+    lo, hi = MAYOR_OVER_GUARDS
+    return [f"Every settlement has a mayor: an NPC, not a boss, but a strong one, {lo} to "
+            f"{hi} levels above their own town's guards. A mayor is statted the way the "
+            f"Bestiary stats a mob, at {tp['mayor']} points a level, against an ordinary "
+            f"mob's {tp['mob']} and a crawler's {k['points_per_level']}: every stat starts "
+            f"at {mb['base']}, HP is CON x {k['hp_per_con']}, MP is INT, and melee adds 1 per "
+            f"{k['attack_per']} STR.", ""]
+
+
+def mayor_lines(st: Settlement) -> List[str]:
+    m = st.mayor
+    if m is None:
+        return []
+    b = mayor_build(m)
+    stats = ", ".join(f"{s} {b.stats[s]}" for s in STAT_ORDER)
+    return [f"- **Mayor:** {m.name}, a level {m.level} {person_of(st.race)}, once {m.background}.",
+            f"  - {stats}; HP {b.hp:,}, MP {b.mp}, melee +{b.melee}. A {b.kind}'s build, "
+            f"with the stat points of a level {b.even_for} crawler."]
+
 
 def render3(fl: Floor3) -> str:
     settlements = [c for c in fl.cells if isinstance(c, Settlement)]
@@ -3787,12 +3894,14 @@ def render3(fl: Floor3) -> str:
 
     o.append("## Settlements")
     o.append("")
+    o += mayors_note()
     for st in settlements:
         o.append(f"### {st.label}. {st.name} ({st.size} {st.race.lower()} settlement)")
         o.append("")
         o.append(f"- **Location:** {compass(st.row, st.col, fl.grid)}. Guards: Level {st.guard_level}. "
                  f"Safe-room inn present{'; tutorial guild hall' if st.tutorial_guild else ''}"
                  f"{'; nightclub access (Desperado-style)' if st.club else ''}.")
+        o += mayor_lines(st)
         o.append(f"- **Shops:** {', '.join(st.shops)}")
         o.append(f"- **Race guildhalls:** {', '.join(st.race_guilds) if st.race_guilds else 'none'}")
         o.append(f"- **Class guildhalls:** {', '.join(st.class_guilds)}")
@@ -3830,6 +3939,15 @@ def render3(fl: Floor3) -> str:
     o.extend(crawler_section(fl))
     return "\n".join(o)
 
+def _mayor_svg(c: Settlement, i: int, x: int, y: int) -> List[str]:
+    """A settlement cell's mayor line, with its baseline at y."""
+    if c.mayor is None:
+        return []
+    _hit(("cells", i, "mayor"), "rect", x + 6, y - 12, CELL - 12, 16)
+    return [_text(x + 10, y, f"Mayor L{c.mayor.level}: " + _fit(c.mayor.name, 26),
+                  size=11, fill="#444")]
+
+
 def render3_svg(fl: Floor3) -> str:
     n = fl.grid
     W = max(PAD * 2 + CELL * n, 800)
@@ -3852,14 +3970,15 @@ def render3_svg(fl: Floor3) -> str:
             o.append(_text(x + 10, y + 48, f"{c.size.upper()} settlement — {c.race}", size=12))
             o.append(_text(x + 10, y + 64, f"Guards L{c.guard_level}  •  inn" + ("  •  guild" if c.tutorial_guild else "")
                            + ("  •  club" if c.club else ""), size=11, fill="#444"))
-            o.append(_text(x + 10, y + 82, "Shops: " + _fit(", ".join(c.shops), 32), size=11, fill="#444"))
-            o.append(_text(x + 10, y + 98, f"Quests: {len(c.quests)}", size=11, fill="#444"))
+            o += _mayor_svg(c, i, x, y + 80)
+            o.append(_text(x + 10, y + 98, "Shops: " + _fit(", ".join(c.shops), 32), size=11, fill="#444"))
+            o.append(_text(x + 10, y + 114, f"Quests: {len(c.quests)}", size=11, fill="#444"))
             if c.quests:
-                _hit(("cells", i, "quests"), "rect", x + 6, y + 86, CELL - 12, 16)
-            if any(q.unlocks for q in c.quests):
-                o.append(_text(x + 10, y + 114, "Unlocks: " + ", ".join(q.unlocks for q in c.quests if q.unlocks),
-                               size=11, weight="bold", fill="#8a5a1a"))
                 _hit(("cells", i, "quests"), "rect", x + 6, y + 102, CELL - 12, 16)
+            if any(q.unlocks for q in c.quests):
+                o.append(_text(x + 10, y + 130, "Unlocks: " + ", ".join(q.unlocks for q in c.quests if q.unlocks),
+                               size=11, weight="bold", fill="#8a5a1a"))
+                _hit(("cells", i, "quests"), "rect", x + 6, y + 118, CELL - 12, 16)
             if c.name == fl.elite.settlement:
                 o.append(_text(x + CELL - 10, y + CELL - 12, "ELITE", size=13, weight="bold", anchor="end", fill="#7a1f7a"))
                 _hit(("elite",), "rect", x + CELL - 62, y + CELL - 27, 56, 20)
@@ -5763,6 +5882,9 @@ def render6(fl: Floor6) -> str:
     o.append("")
     for note in fl.zockau_notes:
         o.append(f"- {note}")
+    for st in settlements:
+        if st.hostile:
+            o += mayor_lines(st)
     o.append("")
     o.append("## Hunter Parties")
     o.append("")
@@ -5781,6 +5903,7 @@ def render6(fl: Floor6) -> str:
     o.append("")
     o.append("## Settlements")
     o.append("")
+    o += mayors_note()
     for st in settlements:
         if st.hostile:
             continue
@@ -5789,6 +5912,7 @@ def render6(fl: Floor6) -> str:
         o.append(f"- **Location:** {compass(st.row, st.col, fl.grid)}. Guards: Level {st.guard_level} Funeral Bells. "
                  f"Safe-room inn present{'; tutorial guild hall' if st.tutorial_guild else ''}"
                  f"{'; nightclub access' if st.club else ''}.")
+        o += mayor_lines(st)
         o.append(f"- **Shops:** {', '.join(st.shops)}")
         o.append(f"- **Race guildhalls:** {', '.join(st.race_guilds) if st.race_guilds else 'none'}")
         o.append(f"- **Class guildhalls:** {', '.join(st.class_guilds)}")
@@ -5866,13 +5990,15 @@ def render6_svg(fl: Floor6) -> str:
                 o.append(_text(x + 10, y + 48, "HUNTERS' CITY — guards hostile", size=12, weight="bold", fill="#8a1a1a"))
                 o.append(_text(x + 10, y + 64, "Unguarded stairwell in the park", size=11, fill="#444"))
                 o.append(_text(x + 10, y + 80, "Desperado Club  •  pub strip", size=11, fill="#444"))
+                o += _mayor_svg(c, i, x, y + 96)
             else:
                 o.append(_text(x + 10, y + 48, f"{c.size.upper()} settlement — {c.race}", size=12))
                 o.append(_text(x + 10, y + 64, "Funeral Bells L95  •  inn" + ("  •  guild" if c.tutorial_guild else "") + ("  •  club" if c.club else ""), size=11, fill="#444"))
-                o.append(_text(x + 10, y + 82, "Shops: " + _fit(", ".join(c.shops), 32), size=11, fill="#444"))
-                o.append(_text(x + 10, y + 98, f"Quests: {len(c.quests)}", size=11, fill="#444"))
+                o += _mayor_svg(c, i, x, y + 80)
+                o.append(_text(x + 10, y + 98, "Shops: " + _fit(", ".join(c.shops), 32), size=11, fill="#444"))
+                o.append(_text(x + 10, y + 114, f"Quests: {len(c.quests)}", size=11, fill="#444"))
                 if c.quests:
-                    _hit(("cells", i, "quests"), "rect", x + 6, y + 86, CELL - 12, 16)
+                    _hit(("cells", i, "quests"), "rect", x + 6, y + 102, CELL - 12, 16)
             if c.name == fl.elite.settlement:
                 o.append(_text(x + CELL - 10, y + CELL - 12, "ELITE", size=13, weight="bold", anchor="end", fill="#7a1f7a"))
                 _hit(("elite",), "rect", x + CELL - 62, y + CELL - 27, 56, 20)
@@ -8318,6 +8444,8 @@ def generate(floor: int = 1, size: str = "medium", seed: Optional[int] = None, *
     else:
         fl = Generator(floor, size, scaling, seed, days, boss_stairs,
                        stair_chance, borough_boss_rate).build()
+    if floor in (3, 6):
+        add_mayors(fl)
 
     # Other crawlers are dealt on their own rng stream, after the floor is
     # built, so every floor can carry a campaign roster through one code path
@@ -8562,6 +8690,8 @@ def render_floor_data(data: dict, where: str = "the floor file") -> GenResult:
         fl = _from_data(tree)
     except MapgenError as e:
         raise MapgenError(f"{where}: {e}")
+    if number in (3, 6) and isinstance(getattr(fl, "cells", None), list):
+        add_mayors(fl)              # a file saved before settlements had mayors
     boss_stairs = bool(data.get("boss_stairs", True))
     try:
         text = _render_floor(fl, number)
