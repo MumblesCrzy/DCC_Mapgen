@@ -533,6 +533,22 @@ def disposition_labels() -> List[str]:
     return [d["label"] for d in TEAM_DISPOSITION]
 
 
+# The players' own group. Not a stance towards the party -- it is the party -- so
+# the generator never deals it: a group the DM sets to it is carried from floor to
+# floor and otherwise left to the table.
+US = "us"
+
+
+def is_us(team: "CrawlerTeam") -> bool:
+    return team.disposition.strip().lower() == US
+
+
+def standing_labels() -> List[str]:
+    """Every standing the app offers: the five that come with reaction text, then
+    the players' own group."""
+    return disposition_labels() + [US]
+
+
 @dataclass
 class RankedCrawler:
     """Someone who has been on the Dungeon Leaderboard: the Top Ten by ratings,
@@ -7700,9 +7716,13 @@ def build_crawler_teams(fl, size: str, seed: int, floor: int,
     roster = roster or CampaignRoster()
     days = getattr(fl, "days", None)
 
-    active = roster.active()
-    for t in active:
+    # The players' own group comes along to every floor and is dealt nothing:
+    # no report, no fate, no crawlers. What happens to the party is the table's.
+    # Nor does it take one of the floor's places, so a campaign that starts with
+    # only the party in it meets as many groups as one that starts empty.
+    for t in roster.active():
         t.floor = floor
+    active = [t for t in roster.active() if not is_us(t)]
     taken_surnames = {t.surname for t in roster.teams if t.surname}
     taken_origins = {t.origin for t in roster.teams}
     # A campaign meets new groups on every floor, not just when deaths have left
@@ -7836,7 +7856,9 @@ def _resize_party(team: CrawlerTeam, crawlers: int) -> None:
     raising it deals newcomers who share no race or class with anyone already
     there, as a merge on a generated floor does; lowering it removes the most
     recent to join. A group past floor 6 arrives with its upgrades taken."""
-    if not team.members and team.floor < CLASS_FLOOR:
+    if not team.members and (team.floor < CLASS_FLOOR or is_us(team)):
+        # The players pick their own races and classes, so their group's count
+        # stays a number at any depth.
         team.headcount = crawlers
         return
     if crawlers > len(team.members):
@@ -8040,7 +8062,12 @@ def _ranked_member(roster: CampaignRoster, c: RankedCrawler) -> Optional[dict]:
     team = _group(roster, c.team)
     if team is None or not team.alive:
         return None
-    return next((m for m in team.members if m["race"] == c.race), None)
+    member = next((m for m in team.members if m["race"] == c.race), None)
+    if member is None and is_us(team):
+        # The party's crawlers are the players' to keep track of: one ranked from
+        # it stays theirs while the party lives, whatever the roster counts.
+        return {"race": c.race, "class": c.klass}
+    return member
 
 
 def _recruit(rng, roster: CampaignRoster, floor: int, taken: set,
@@ -8052,7 +8079,7 @@ def _recruit(rng, roster: CampaignRoster, floor: int, taken: set,
     ranked_groups = {c.team for c in board(roster) if c.team}
     pool = []
     for t in roster.teams:
-        if t.alive and t.floor == floor and t.name not in ranked_groups:
+        if t.alive and t.floor == floor and t.name not in ranked_groups and not is_us(t):
             free = [m for m in t.members if (t.name, m["race"]) not in known]
             if free:
                 pool.append((t, free))
@@ -8228,6 +8255,8 @@ def place_on_board(roster: CampaignRoster, name: str, rank: int, *, race: str = 
                 raise MapgenError(f"{group.name} died on floor {group.died_on}")
             member = next((m for m in group.members
                            if m["race"].lower() == race.strip().lower()), None)
+            if member is None and is_us(group):
+                member = {"race": race.strip(), "class": klass.strip()}
             if member is None:
                 there = ", ".join(f"{m['race']} {m['class']}" for m in group.members)
                 raise MapgenError(f"{group.name} has nobody of the race {race!r}"
@@ -8268,7 +8297,8 @@ def drop_from_board(roster: CampaignRoster, name: str, *,
     if died:
         c.died_on = floor
         team, member = _group(roster, c.team), _ranked_member(roster, c)
-        if member is not None:
+        # The party's losses are the table's to record, as its fate is.
+        if member is not None and not is_us(team):
             if len(team.members) > 1:
                 team.members.remove(member)
                 set_status(roster, team.name)
@@ -8374,8 +8404,17 @@ def leaderboard_section(fl) -> List[str]:
 
 def _set_standing(roster: CampaignRoster, name: str, standing: str) -> str:
     team = set_standing(roster, name, standing)
-    note = "" if standing in disposition_labels() else " (no reaction text for that one)"
-    return f"{team.name} now stands {standing} with the party{note}"
+    return standing_note(team)
+
+
+def standing_note(team: CrawlerTeam) -> str:
+    """What a change of standing did, in a sentence."""
+    if is_us(team):
+        return (f"{team.name} is the players' own group: it comes to every floor, and "
+                f"the generator deals it no report and no fate")
+    note = ("" if team.disposition in disposition_labels()
+            else " (no reaction text for that one)")
+    return f"{team.name} now stands {team.disposition} with the party{note}"
 
 
 def floor_teams(roster: CampaignRoster, floor: int) -> List[CrawlerTeam]:
@@ -8384,7 +8423,7 @@ def floor_teams(roster: CampaignRoster, floor: int) -> List[CrawlerTeam]:
     Snapshots, not the roster's own objects: the roster goes on being dealt on
     later floors, and a result handed back for floor 1 should still describe floor
     1 after floor 2 has been generated from the same campaign."""
-    teams = [t for t in roster.teams if t.floor == floor and t.history]
+    teams = [t for t in roster.teams if t.floor == floor and t.history and not is_us(t)]
     teams.sort(key=lambda t: (t.day is None, t.day or 0, t.name))
     # The member dicts are copied too, not just the list: floor 6 upgrades classes
     # in place, and a floor 3 result should still show the floor 3 classes.
@@ -9094,7 +9133,8 @@ def main(argv=None):
                    help="set where a team stands with the party before generating, e.g. "
                         '--standing "Team Thistle=allied" (repeatable). Needs --campaign. '
                         "Any wording is accepted; " + "/".join(disposition_labels()) +
-                        " come with reaction text")
+                        " come with reaction text, and " + US + " marks the players' own "
+                        "group, which the generator carries and deals nothing")
     p.add_argument("--rooms-for", type=str, default=None, metavar="FILE",
                    help="skip normal generation; parse one '### X. Name' neighborhood block from FILE "
                         "(as produced by this script, floor 1/2 only) and (re)generate just its room "

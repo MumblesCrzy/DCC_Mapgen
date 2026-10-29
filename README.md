@@ -601,6 +601,17 @@ A unique partial name is enough. The five standings that come with reaction text
 `hostile`, `territorial`, `wary`, `friendly` and `allied`, but any wording is
 accepted — a table that decides a group is "owed a favour" can write that.
 
+One more standing is offered, and it isn't a stance towards the party: **`us`** is the
+players' own group. Put the party on the roster with **Add group...**, or set any
+group to `us`, and it comes to every floor without being dealt anything: no report,
+no fate, no crawlers. It isn't written up among the other crawlers, and it doesn't
+take one of the floor's places, so a campaign that starts with only the party on the
+roster meets the same groups as one that starts empty. Its crawler count stays a
+plain number at any depth, since the players pick their own races and classes. The
+generator never deals it onto the leaderboard; put the party's crawlers on the list
+yourself, and they stay there while the party lives. Move it to any other standing
+and it's dealt like any other group from the next floor on.
+
 In the desktop app this is the **Campaign** tab: open or start a roster, and every
 floor generated afterwards carries it. The table lists everyone met so far, the dead
 greyed out with the floor that killed them, and standing is editable there.
@@ -1084,6 +1095,18 @@ checked:
 - someone who fell off is never dealt back on under a new name;
 - each refused edit leaves the campaign exactly as it was;
 - the whole leaderboard survives a save and load.
+
+The players' own group, standing `us`, has its own group:
+- it is offered as a standing and never dealt to a group the generator meets;
+- it comes to every floor, Floors 1 to 6, with no report, fate or crawlers dealt, and
+  isn't written up as another crawler group;
+- a campaign that starts with only the party meets the same groups and the same
+  leaderboard as one that starts empty;
+- its crawler count stays a number at any depth;
+- the generator never deals it onto the leaderboard, even after it has crawlers; one
+  of its crawlers put there by the DM stays, with their own class, until the party
+  dies;
+- moved to another standing, it is dealt a report again.
 
 The bestiary has its own group, with the points per level written into the test:
 3 for a crawler, 1 for an ordinary mob, 2, 3 and 4 for neighborhood, borough and

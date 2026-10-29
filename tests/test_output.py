@@ -2058,6 +2058,116 @@ class CampaignEditTest(unittest.TestCase):
         self.assertFalse([t for t in roster.teams if t.name.startswith("The Bad Count")])
 
 
+class PlayersGroupTest(unittest.TestCase):
+    """The standing "us" marks the players' own group on the campaign roster. It
+    comes to every floor and the generator deals it nothing -- no report, no fate,
+    no crawlers -- writes it up nowhere as another crawler group, and never puts
+    it on the leaderboard. What happens to the party is the table's."""
+
+    FLOORS = (1, 2, 3, 4, 5, 6)
+
+    def _with_us(self, floor=1, crawlers=4):
+        roster = mg.CampaignRoster()
+        mg.add_team(roster, "The Table", origin="a game night that ran long",
+                    standing="us", floor=floor, crawlers=crawlers)
+        return roster
+
+    def test_offered_but_never_dealt(self):
+        self.assertIn("us", mg.standing_labels())
+        self.assertNotIn("us", mg.disposition_labels())
+        for seed in (1, 2, 3):
+            roster = None
+            for f in self.FLOORS:
+                roster = mg.generate(f, "large", seed, images=False, roster=roster).roster
+            self.assertFalse([t.name for t in roster.teams if mg.is_us(t)], f"seed {seed}")
+
+    def test_carried_and_dealt_nothing(self):
+        roster = self._with_us()
+        ours = mg.find_team(roster, "The Table")
+        record = [dict(e) for e in ours.history]
+        for f in self.FLOORS:
+            res = mg.generate(f, "medium", 4242, images=False, roster=roster)
+            roster = res.roster
+            where = f"floor {f}"
+            self.assertTrue(ours.alive, where)
+            self.assertEqual(ours.floor, f, where)
+            self.assertEqual((ours.status, ours.outcome, ours.day), ("", "steady", None), where)
+            self.assertEqual(ours.history, record, where)
+            self.assertEqual((ours.members, ours.crawler_count), ([], 4), where)
+            self.assertNotIn("The Table", [t.name for t in res.floor.other_crawlers], where)
+            self.assertNotIn("The Table", res.markdown, where)
+            self.assertTrue(res.floor.other_crawlers, f"{where} still has other groups")
+
+    def test_its_count_is_a_number_at_any_depth(self):
+        """The players pick their own races and classes."""
+        roster = self._with_us(floor=4, crawlers=3)
+        ours = mg.find_team(roster, "The Table")
+        self.assertEqual((ours.members, ours.crawler_count), ([], 3))
+        mg.set_status(roster, "The Table", crawlers=5)
+        self.assertEqual((ours.members, ours.crawler_count), ([], 5))
+
+    def test_a_group_made_us_is_never_dealt_onto_the_board(self):
+        """Even one the generator dealt crawlers to before it became the party."""
+        for seed in range(1, 9):
+            roster = None
+            for f in (1, 2, 3):
+                roster = mg.generate(f, "large", seed, images=False, roster=roster).roster
+            for t in roster.active():
+                if t.members:
+                    t.disposition = "us"
+            roster = mg.generate(4, "large", seed, images=False, roster=roster).roster
+            ours = {t.name for t in roster.teams if mg.is_us(t)}
+            self.assertFalse([c.name for c in mg.board(roster) if c.team in ours], f"seed {seed}")
+
+    def test_takes_no_place_on_the_floor(self):
+        """A campaign that starts with only the party in it meets the same groups,
+        and the same leaderboard, as one that starts empty."""
+        for f in (1, 4):
+            plain = mg.generate(f, "medium", 77, images=False, roster=mg.CampaignRoster())
+            ours = mg.generate(f, "medium", 77, images=False, roster=self._with_us(f))
+            self.assertEqual(ours.markdown, plain.markdown, f"floor {f}")
+            self.assertEqual([t.name for t in ours.roster.teams if not mg.is_us(t)],
+                             [t.name for t in plain.roster.teams], f"floor {f}")
+
+    def test_a_party_crawler_on_the_board_stays_the_tables(self):
+        roster = mg.generate(4, "medium", 4242, images=False, roster=self._with_us(4)).roster
+        self.assertFalse([c for c in mg.board(roster) if c.team == "The Table"],
+                         "the generator never deals the party onto the list")
+        carl = mg.place_on_board(roster, "Carl", 1, race="Human", klass="Bard",
+                                 team="The Table")
+        self.assertEqual((carl.race, carl.klass, carl.team), ("Human", "Bard", "The Table"))
+        for f in (5, 6):
+            roster = mg.generate(f, "medium", 4242, images=False, roster=roster).roster
+            self.assertTrue(carl.alive and carl.rank == 1, f"floor {f}")
+            self.assertEqual(carl.klass, "Bard", f"floor {f}: the players' class is theirs")
+        mg.drop_from_board(roster, "Carl", died=True)
+        ours = mg.find_team(roster, "The Table")
+        self.assertTrue(ours.alive and ours.crawler_count == 4,
+                        "a party crawler's death is the table's to record")
+        # The party dying takes its ranked crawlers with it, as for any group.
+        dee = mg.place_on_board(roster, "Donut", 2, race="Cat", team="The Table")
+        mg.set_status(roster, "The Table", outcome="fatal")
+        roster = mg.generate(8, "medium", 4242, images=False, roster=roster).roster
+        self.assertFalse(dee.alive)
+
+    def test_a_group_moved_off_us_is_dealt_again(self):
+        roster = self._with_us()
+        roster = mg.generate(1, "medium", 4242, images=False, roster=roster).roster
+        mg.set_standing(roster, "The Table", "allied")
+        res = mg.generate(2, "medium", 4242, images=False, roster=roster)
+        ours = mg.find_team(res.roster, "The Table")
+        self.assertIn("The Table", [t.name for t in res.floor.other_crawlers])
+        self.assertEqual(len(ours.history), 2)
+        self.assertTrue(ours.status)
+
+    def test_what_setting_it_says(self):
+        roster = self._with_us()
+        self.assertIn("the players' own group", mg._set_standing(roster, "The Table", "us"))
+        self.assertIn("the players' own group", mg._set_standing(roster, "The Table", " US "))
+        self.assertEqual(mg._set_standing(roster, "The Table", "allied"),
+                         "The Table now stands allied with the party")
+
+
 class Floor4LayoutTest(unittest.TestCase):
     """The Iron Tangle's stations, as the books lay them out, and its withdrawal.
 

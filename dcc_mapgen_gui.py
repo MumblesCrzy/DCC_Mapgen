@@ -442,7 +442,10 @@ class CampaignView(ttk.Frame):
 
     Not every group the party meets comes out of the generator, so a group met at
     the table can be added here too, and any group's latest report and fate can
-    be rewritten -- including killing it, or bringing it back."""
+    be rewritten -- including killing it, or bringing it back.
+
+    The players' own group can be kept here as well, with the standing "us": it
+    comes to every floor, and the generator deals it nothing."""
 
     COLUMNS = (("name", "Team", 210), ("standing", "Standing", 85),
                ("party", "Crawlers", 60), ("met", "Met", 40),
@@ -489,9 +492,9 @@ class CampaignView(ttk.Frame):
         self.standing = tk.StringVar()
         # Not readonly: a table can decide a group is "owed a favour" or "blood
         # feud", and the generator takes any wording -- the listed five are just
-        # the ones that come with reaction text.
+        # the ones that come with reaction text, and "us" is the players' own group.
         self.standing_cb = ttk.Combobox(row, textvariable=self.standing, width=14,
-                                        values=mg.disposition_labels(), state="disabled")
+                                        values=mg.standing_labels(), state="disabled")
         self.standing_cb.pack(side="left", padx=(4, PAD))
         ttk.Label(row, text="Crawlers").pack(side="left")
         self.crawlers = tk.StringVar()
@@ -516,9 +519,11 @@ class CampaignView(ttk.Frame):
         for widget in (self.standing_cb, self.crawlers_sb, self.report_entry):
             widget.bind("<Return>", lambda e: self.apply())
         ttk.Label(edit, text="All of it carries onto the next floor you generate; that "
-                             "floor deals every living group a fresh report. Fewer "
-                             "crawlers drops the most recent to join.",
-                  foreground="#666", font=("Segoe UI", 8)).pack(anchor="w", pady=(4, 0))
+                             "floor deals every living group a fresh report, except one "
+                             "standing \"us\": the players' own group, which it leaves to "
+                             "you. Fewer crawlers drops the most recent to join.",
+                  foreground="#666", font=("Segoe UI", 8), wraplength=760,
+                  justify="left").pack(anchor="w", pady=(4, 0))
 
         self.refresh()
 
@@ -586,7 +591,7 @@ class CampaignView(ttk.Frame):
             self._select(None)
             return
         for t in roster.teams:
-            fate = t.status or "not yet reported"
+            fate = t.status or ("your own group" if mg.is_us(t) else "not yet reported")
             seen = f"floor {t.floor}" if t.history else "-"
             if not t.alive:
                 fate = f"died on floor {t.died_on} - {fate}"
@@ -675,9 +680,7 @@ class CampaignView(ttk.Frame):
         elif not was_alive and team.alive:
             msg = f"{team.name} is back, and carries onto the next floor"
         else:
-            known = standing in mg.disposition_labels()
-            msg = (f"{team.name} now stands {standing} with the party"
-                   + ("" if known else " (no reaction text for that one)"))
+            msg = mg.standing_note(team)
         n = team.crawler_count
         if n != count_was:
             msg += f"; {n} crawler{'' if n == 1 else 's'}"
@@ -726,7 +729,7 @@ class CampaignView(ttk.Frame):
                 ("Crawlers", ttk.Spinbox(body, from_=1, to=20, width=6,
                                          textvariable=fields["crawlers"])),
                 ("Standing", ttk.Combobox(body, textvariable=fields["standing"], width=34,
-                                          values=mg.disposition_labels())),
+                                          values=mg.standing_labels())),
                 ("Met on floor", ttk.Spinbox(body, from_=1, to=18, width=6,
                                              textvariable=fields["floor"])),
                 ("Latest report", ttk.Entry(body, textvariable=fields["status"], width=36)),
@@ -739,7 +742,8 @@ class CampaignView(ttk.Frame):
                              "tour\". Leave it blank if nobody knows. Leave Crawlers "
                              "blank and the generator sizes the group, as it does any "
                              "other; met on floor 3 or deeper, a count is dealt races "
-                             "and classes straight away.",
+                             "and classes straight away. Standing \"us\" is the players' "
+                             "own group: the generator deals it nothing.",
                   foreground="#666", font=("Segoe UI", 8), wraplength=360,
                   justify="left").grid(row=len(rows), column=0, columnspan=2,
                                        sticky="w", pady=(6, 0))
@@ -1012,7 +1016,9 @@ class LeaderboardView(ttk.Frame):
         dlg.resizable(False, False)
         body = ttk.Frame(dlg, padding=PAD * 2)
         body.pack(fill="both", expand=True)
-        groups = [t for t in roster.teams if t.alive and t.members]
+        # The players' own group is offered whether or not it has crawlers on the
+        # roster: they pick their own races and classes.
+        groups = [t for t in roster.teams if t.alive and (t.members or mg.is_us(t))]
         fields = {"name": tk.StringVar(), "team": tk.StringVar(value="(none)"),
                   "race": tk.StringVar(), "class": tk.StringVar(),
                   "rank": tk.StringVar(value=str(mg.BOARD_SIZE)),
@@ -1028,7 +1034,7 @@ class LeaderboardView(ttk.Frame):
             # A crawler from a group is one of its members: offer their races, and
             # take the class from whoever is picked.
             team = next((t for t in groups if t.name == fields["team"].get()), None)
-            if team is None:
+            if team is None or mg.is_us(team):
                 race_cb.configure(values=mg.CRAWLER_RACE)
                 class_cb.configure(state="normal")
                 return
@@ -1056,8 +1062,10 @@ class LeaderboardView(ttk.Frame):
             widget.grid(row=r, column=1, sticky="w", padx=(PAD, 0), pady=2)
         ttk.Label(body, text="Leave Group as (none) for a stranger, or for one of the party. "
                              "A crawler from a group is one of its members, so pick their "
-                             "race from it; the class comes with them. Whoever holds the "
-                             "rank now, and everyone below, moves down one.",
+                             "race from it; the class comes with them. One from the "
+                             "players' own group (standing \"us\") takes any race and "
+                             "class. Whoever holds the rank now, and everyone below, "
+                             "moves down one.",
                   foreground="#666", font=("Segoe UI", 8), wraplength=360,
                   justify="left").grid(row=len(rows), column=0, columnspan=2,
                                        sticky="w", pady=(6, 0))
@@ -2352,6 +2360,15 @@ def selftest() -> int:
     check(not sky.alive and "dead" in cv.tree.item("The Sky Pirates", "tags"),
           "setting a group's fate to fatal kills it")
     check(sky.status == "shot down over the market", "the report can be rewritten")
+    # The players' own group: offered as a standing, and left alone by the generator.
+    check("us" in cv.standing_cb.cget("values"), "the standing list offers \"us\"")
+    check(cv.add_group({"name": "The Table", "crawlers": "3", "standing": "us", "floor": "3"}),
+          "the players' own group can be added")
+    app.update()
+    ours = mg.find_team(app.roster, "The Table")
+    check(cv.tree.set("The Table", "party") == "3" and not ours.members
+          and cv.tree.set("The Table", "fate") == "your own group",
+          "the players' group is counted, not dealt races and classes")
 
     # The Leaderboard tab: nothing before Floor 4, then the Top Ten, edited.
     lb = app.board_tab
@@ -2362,6 +2379,10 @@ def selftest() -> int:
     app.update()
     ranked = [r for r in lb.tree.get_children() if lb.tree.set(r, "rank").isdigit()]
     check(len(ranked) == 10, f"Floor 4 deals a Top Ten ({len(ranked)})")
+    ours = mg.find_team(app.roster, "The Table")
+    check(ours.alive and ours.floor == 4 and ours.crawler_count == 3 and not ours.members
+          and not any(c.team == "The Table" for c in mg.board(app.roster)),
+          "the players' group comes to Floor 4 as it was, and is not dealt onto the list")
     third = mg.board(app.roster)[2]
     lb.tree.selection_set(third.name)
     app.update()
@@ -2385,6 +2406,10 @@ def selftest() -> int:
                           "class": "Bard", "rank": "2", "multiplier": "1"})
           and mg.find_ranked(app.roster, "Hero of the Party").rank == 2,
           "one of the party can be put on the list")
+    check(lb.add_crawler({"name": "Second of the Party", "team": "The Table", "race": "Elf",
+                          "class": "Monk", "rank": "3", "multiplier": "1"})
+          and mg.find_ranked(app.roster, "Second of the Party").team == "The Table",
+          "one of the players' own group can be put on the list, with any race and class")
     group = next(t for t in app.roster.active() if t.members)
     check(not lb.add_crawler({"name": "Not In It", "team": group.name, "race": "Nobody",
                               "rank": "3"}) and errors,
