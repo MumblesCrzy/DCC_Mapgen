@@ -3661,6 +3661,164 @@ class MayorTest(unittest.TestCase):
             self.assertEqual(mg.person_of(race), one)
 
 
+class HunterTest(unittest.TestCase):
+    """Floor 6's hunter parties, hunter by hunter. The rules, written out here:
+    hunters carry the same gear and spells crawlers do, and offworld tech only
+    gets in smuggled. Every hunter is statted like a crawler, 3 points a level,
+    and starts at level 50, as the books' hunters did this season."""
+
+    LEVEL = 50
+    PER_LEVEL = 3
+    # What a camp or a hunting style can't be built on: offworld tech.
+    OFFWORLD_WORDS = ("turret", "drone", "hover", "sensor", "portal generator", "stasis",
+                      "beacon", "railgun", "pulse rifle", "exoskeleton")
+
+    @classmethod
+    def setUpClass(cls):
+        cls.floors = {s: mg.generate(6, s, 4242, images=False) for s in ("small", "medium", "large")}
+        items = mg.LOOT_BOXES["items"]
+        cls.bank = {pool: set(v if isinstance(v, list) else [i for band in v.values() for i in band])
+                    for pool, v in items.items()}
+
+    def _hunters(self):
+        for size, res in self.floors.items():
+            for p in res.floor.hunters:
+                yield size, res, p
+
+    @staticmethod
+    def _base(item):
+        """An item without its enchantments."""
+        return re.sub(r" \([^()]*\)$", "", item)
+
+    def test_every_party_is_its_hunters(self):
+        roles = {r["role"]: r for r in mg.HUNTER_ROLES}
+        for size, res, p in self._hunters():
+            where = f"{size} {p.leader}"
+            self.assertEqual(len(p.members), p.size, where)
+            self.assertEqual(p.members[0].name, p.leader, f"{where}: the leader first")
+            starts = [next(s for s in mg.HUNTER_NAME_PARTS["start"] if h.name.startswith(s))
+                      for h in p.members[1:]]
+            self.assertEqual(len(set(starts)), len(starts), f"{where}: names start alike")
+            for h in p.members:
+                self.assertEqual(h.level, self.LEVEL, where)
+                self.assertIn(h.role, roles, where)
+                self.assertEqual(h.kind, roles[h.role]["kind"], where)
+                self.assertEqual(len(h.gear), len(roles[h.role]["gear"]), where)
+        for size, res in self.floors.items():
+            names = [h.name for p in res.floor.hunters for h in p.members]
+            self.assertEqual(len(set(names)), len(names), f"{size}: a name used twice")
+
+    def test_statted_like_a_crawler(self):
+        for size, res, p in self._hunters():
+            for h in p.members:
+                b = mg.hunter_build(h)
+                self.assertEqual(b.points, 5 * 4 + self.PER_LEVEL * h.level, h.name)
+                self.assertEqual((b.poor, b.kind), ("", h.kind), h.name)
+        self.assertEqual(mg.CRAWLER_STATS["knobs"]["points_per_level"], self.PER_LEVEL)
+
+    def test_gear_is_a_crawlers_and_offworld_tech_is_smuggled(self):
+        offworld = (self.bank["offworld"] | set(mg.HUNTER_WEAPONS) | set(mg.HUNTER_ARMOR)
+                    | set(mg.HUNTER_TECH))
+        crawler = set().union(*(v for k, v in self.bank.items() if k != "offworld"))
+        smuggling, parties = 0, 0
+        for size, res, p in self._hunters():
+            mobs = {mg.singular(c.mob.name) for c in res.floor.cells if isinstance(c, mg.Region)}
+            for h in p.members:
+                for item in h.gear:
+                    base = self._base(item)
+                    tamed = re.fullmatch(r"a tamed (.+), kept as a minion", item)
+                    self.assertTrue(base in crawler or (tamed and tamed.group(1) in mobs),
+                                    f"{h.name}: {item}")
+                    self.assertNotIn(base, offworld, f"{h.name}: {item}")
+            smuggled = [h.smuggled for h in p.members if h.smuggled]
+            self.assertLessEqual(len(smuggled), 1, p.leader)
+            for item in smuggled:
+                self.assertIn(item, self.bank["offworld"], p.leader)
+        for seed in range(1, 41):
+            for p in mg.generate(6, "large", seed, images=False).floor.hunters:
+                parties += 1
+                smuggling += any(h.smuggled for h in p.members)
+        self.assertTrue(0.35 < smuggling / parties < 0.65, f"{smuggling} of {parties}")
+        for text in mg.CAMP_TYPES + mg.HUNT_STYLES:
+            self.assertFalse([w for w in self.OFFWORLD_WORDS if w in text.lower()], text)
+
+    def test_a_leader_carries_better(self):
+        """A weapon or focus: Gold, one enchantment; a leader's Platinum, two."""
+        effects = {q: {e for e, _ in mg.LOOT_BOXES["effects"][q]} for q in ("Gold", "Platinum")}
+        for size, res, p in self._hunters():
+            for h in p.members:
+                quality = "Platinum" if h.name == p.leader else "Gold"
+                for item in h.gear:
+                    if self._base(item) in self.bank["weapons"] | self.bank["magic"]:
+                        fx = re.search(r"\(([^()]*)\)$", item).group(1).split("; ")
+                        self.assertEqual(len(fx), mg.LOOT_BOXES["effects_per_item"][quality], item)
+                        self.assertTrue(set(fx) <= effects[quality], item)
+
+    def test_the_write_up_gives_them(self):
+        for size, res, p in self._hunters():
+            md = res.markdown
+            self.assertIn(f"### {p.leader}'s party ({p.species}, {p.size} hunters, Level 50)", md)
+            for h in p.members:
+                b = mg.hunter_build(h)
+                stats = ", ".join(f"{s} {b.stats[s]}" for s in mg.STAT_ORDER)
+                lead = " (leader)" if h.name == p.leader else ""
+                self.assertIn(f"  - **{h.name}**{lead}, {mg.article(h.role)} {h.role}, Level "
+                              f"{h.level}. {stats}; HP {b.hp:,}, MP {b.mp}, melee +{b.melee}.", md)
+                self.assertIn(f"    - Gear: {'; '.join(h.gear)}.", md)
+                if h.smuggled:
+                    self.assertIn(f"    - Smuggled in: {h.smuggled}.", md)
+            self.assertNotIn("Loadout", md)
+
+    def test_they_change_nothing_else_on_the_floor(self):
+        with mock.patch.object(mg, "add_hunters", lambda fl: None):
+            without = mg.generate(6, "large", 4242, images=False).floor
+        data, theirs = mg._to_data(self.floors["large"].floor), mg._to_data(without)
+        for d in (data, theirs):
+            for p in d["hunters"]:
+                p.pop("members")
+        self.assertEqual(data, theirs)
+
+    def test_an_older_floor_file_gets_the_same_hunters(self):
+        res = self.floors["medium"]
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "f6" + mg.FLOOR_FILE_SUFFIX)
+            mg.save_floor_file(res, path)
+            with open(path, encoding="utf-8") as f:
+                data = json.load(f)
+            for p in data["data"]["hunters"]:     # as a party was saved before members
+                del p["members"]
+                p.update(weapons=["pulse rifle", "sonic lance"], armor="ceramic plate armor",
+                         tech=["thermal goggles", "a hover-skiff"])
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(data, f)
+            back = mg.open_floor_file(path)
+        self.assertEqual(back.markdown, res.markdown)
+        for p in back.floor.hunters:
+            self.assertFalse({"weapons", "armor", "tech"} & set(vars(p)))
+
+    def test_an_edit_restats_them(self):
+        res = mg.generate(6, "small", 4242)
+        p = res.floor.hunters[0]
+        h = p.members[1]
+        mg.edit_set(res.floor, ["hunters", 0, "members", 1, "level"], 62)
+        again = mg.redraw_floor(res)
+        b = mg.hunter_build(h)
+        self.assertEqual(b.points, 5 * 4 + self.PER_LEVEL * 62)
+        self.assertIn(f"{p.size} hunters, Levels 50–62)", again.markdown)
+        self.assertIn(f"  - **{h.name}**, {mg.article(h.role)} {h.role}, Level 62. STR {b.stats['STR']},",
+                      again.markdown)
+        fields = {f.key: f for f in mg.edit_fields(h)}
+        self.assertTrue(fields["kind"].locked)
+        self.assertFalse(any(fields[k].locked for k in ("name", "role", "level", "gear", "smuggled")))
+
+    def test_a_hunters_gear_is_no_threat_sign(self):
+        """An enchantment names what it is good against, not what the floor holds."""
+        gear = "".join(f"    - Gear: a spear (deals extra damage to undead); a scroll of fireball.\n"
+                       f"    - Smuggled in: a sonic lance.\n" for _ in range(4))
+        self.assertEqual(mg.threat_suggestions(gear), [])
+        self.assertTrue(mg.threat_suggestions(gear.replace("- Gear: ", "- ")))
+
+
 class ShopsTest(unittest.TestCase):
     """Shops and prices. The books' rules are written out here: marketplaces
     from the Third Floor; a general store charges three times a specialist's

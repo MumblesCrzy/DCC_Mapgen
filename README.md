@@ -840,6 +840,38 @@ fresh build of its seed would, when it opens. A mayor's background isn't counted
 by the sponsor's threat scan, either: a mayor who once turned back a flood is no
 sign of deep water on the floor.
 
+### Hunters
+
+Floor 6's hunter parties are written up hunter by hunter. Hunters carry the same
+gear and spells crawlers do; offworld tech is contraband, and only gets in
+smuggled. Each party's leader comes first, and everyone in it has:
+
+- **A name and a role:** bruiser, skirmisher, tracker, caster, medic, trapper or
+  beast handler, from `HUNTER_ROLES` in `data/floor6.json`. No two names on a floor
+  are the same, and no two in a party start alike.
+- **Stats like a crawler's:** 4 in every stat plus 3 points a level, spread by the
+  role, so a level 50 hunter has 170 points, a level 50 crawler's. Every hunter
+  starts at level 50, as the books' hunters did that season (20 levels over their
+  usual 30).
+- **Gear from the loot banks** a crawler's boxes draw from, by role: a weapon and
+  armor for a bruiser, a focus and two spell scrolls for a caster, a focus and
+  healing for a medic, explosives and a tool for a trapper. A beast handler keeps a
+  tamed mob from the floor's own jungle as a minion. Weapons and foci are Gold, with
+  one enchantment, and the leader's are Platinum, with two; armor and boots are
+  Silver.
+- **Smuggled tech:** about half the parties have one piece of offworld tech, from
+  the loot banks' offworld pool, carried by one hunter.
+
+Camps and hunting styles that used to assume offworld tech now use what the dungeon
+has: a ruin ringed with traps rather than turrets, a cave behind a warded door
+rather than a portal generator, a familiar scouting overhead rather than drones.
+Hunters are drawn on a stream of their own after the floor is built, so nothing
+else on a floor moved; a floor file saved before them gets the ones a fresh build
+would, when it opens. The edit panel lists each party's members: a new name or
+level restats a hunter, and their build stays the one their role gave them. Their
+gear isn't counted by the sponsor's threat scan: an enchantment says what a weapon
+is good against, not what is on the floor.
+
 ### The leaderboard
 
 From Floor 4, the Other Crawlers section ends with the Dungeon Leaderboard: the Top
@@ -1146,6 +1178,24 @@ XL one, never poorly built. It checks:
   can't be edited apart from the background;
 - a mayor's background is not a sign for the sponsor's threat scan;
 - a race reads as one of its people: a dwarf, a city elf, a lizardman, a goblin.
+
+Floor 6's hunters have their own group, with the rules written into the test: the
+same gear and spells as crawlers, offworld tech only smuggled, 3 points a level from
+level 50. It checks:
+- every party is as many hunters as it says, leader first, each with a role, the
+  build that role gives, and that role's gear, with no name used twice;
+- every build adds up at a crawler's points a level;
+- every piece of gear is from the crawler loot banks, or a tamed mob from the floor,
+  and none of it is offworld; at most one smuggled piece a party, from the offworld
+  pool, in about half the parties; no camp or hunting style is built on offworld
+  tech;
+- weapons and foci carry Gold's one enchantment, a leader's Platinum's two;
+- the write-up gives every hunter with their stats, gear and anything smuggled;
+- adding hunters changed nothing else on the floor, and a floor file saved before
+  them opens with the same ones;
+- a new level restats a hunter and the party's heading says so, and the build is
+  shown but not edited;
+- a hunter's gear is not a sign for the sponsor's threat scan.
 
 Floor files have their own group:
 - every pinned floor, saved and opened again, draws the same write-up and maps byte

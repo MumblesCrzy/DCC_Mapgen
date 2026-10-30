@@ -1371,7 +1371,10 @@ def threat_suggestions(text: str, top: int = 3) -> List[ThreatSign]:
         # A mayor is who runs a town, not what the floor throws at a party: one
         # who once turned back a flood is no sign of deep water.
         in_mayor = line.startswith("- **Mayor:**") or (in_mayor and line.startswith("  "))
-        if in_code or in_layout or in_mayor or not line.strip():
+        # Nor is a hunter's gear: an enchantment names what it is good against,
+        # not what the floor holds.
+        gear = line.lstrip().startswith(("- Gear: ", "- Smuggled in: "))
+        if in_code or in_layout or in_mayor or gear or not line.strip():
             continue
         found = {}                                  # threat -> its matches on this line
         matches = [m for m in _WORD.finditer(line) if m.group(0).lower() in owners]
@@ -1461,9 +1464,10 @@ class LootRoller:
     as long as the roller does, so a session of rolls works through each bank
     before it repeats anything. Seeded, a roller reproduces its whole sequence."""
 
-    def __init__(self, seed: Optional[int] = None):
+    def __init__(self, seed: Optional[int] = None, rng: Optional[random.Random] = None):
         self.seed = seed if seed is not None else random.randrange(1_000_000)
-        self.rng = random.Random(f"boxes|{self.seed}")
+        # A floor dealing gear from these banks hands over a stream of its own.
+        self.rng = rng or random.Random(f"boxes|{self.seed}")
         self._decks = {}
 
     def _deck(self, key: str, items) -> Deck:
@@ -5699,9 +5703,22 @@ F6_RULES = [
     "Parties cap at 30. Larger groups are split automatically. Guilds are available.",
     "Stairwells have no timing restriction. One is unguarded in Zockau's park; others are hidden in the valley or sit near city-tier mobs.",
     "Hunters start at Level 50, can die for real, and drop a Hunter Hand trophy. They earn a scalp for every crawler they kill.",
+    "Hunters carry the same gear and spells crawlers do. Offworld tech is contraband: what a party has, it smuggled in.",
     "Settlement guards are Level 95 Funeral Bells. Same law as Floor 3: don't touch the NPCs where a guard can see.",
     "A wall of thorns advances across the floor as the timer runs down. Nothing behind it survives.",
 ]
+
+
+@dataclass
+class Hunter:
+    """One hunter in a party: statted like a crawler, from name, level and role,
+    and carrying a crawler's gear."""
+    name: str
+    role: str
+    level: int
+    kind: str                       # the build their role gives: brute, caster, ...
+    gear: List[str]
+    smuggled: str = ""              # offworld tech, smuggled in; most carry none
 
 
 @dataclass
@@ -5709,14 +5726,12 @@ class HunterParty:
     leader: str
     species: str
     size: int
-    weapons: List[str]
-    armor: str
-    tech: List[str]
     sponsor: str
     style: str
     camp_type: str
     camp_region: str
     patrol: List[str]
+    members: List[Hunter] = field(default_factory=list)
 
 
 @dataclass
@@ -5823,11 +5838,16 @@ class Generator6(Generator3):
         for i in range(SIZE6_CFG[self.size]["hunters"]):
             camp = camp_pool[i % len(camp_pool)]
             adj = [c.label for c in base.cells if abs(c.row - camp.row) + abs(c.col - camp.col) == 1]
+            leader = self._unique(lambda: self.rng.choice(HUNTER_LEADER))
+            species, size = self.rng.choice(HUNTER_SPECIES), self.rng.choice([2, 3, 4, 4, 5, 6, 8])
+            # A party's loadout used to be drawn here, from offworld banks. Hunters
+            # carry a crawler's gear now, dealt with their members on a stream of
+            # their own; the draws stay so that nothing after them on the floor moves.
+            self.rng.sample(HUNTER_WEAPONS, 2), self.rng.choice(HUNTER_ARMOR)
+            self.rng.sample(HUNTER_TECH, 2)
             hp = HunterParty(
-                leader=self._unique(lambda: self.rng.choice(HUNTER_LEADER)),
-                species=self.rng.choice(HUNTER_SPECIES), size=self.rng.choice([2, 3, 4, 4, 5, 6, 8]),
-                weapons=self.rng.sample(HUNTER_WEAPONS, 2), armor=self.rng.choice(HUNTER_ARMOR),
-                tech=self.rng.sample(HUNTER_TECH, 2), sponsor=self.rng.choice(SPONSOR_PERKS),
+                leader=leader, species=species, size=size,
+                sponsor=self.rng.choice(SPONSOR_PERKS),
                 style=self.rng.choice(HUNT_STYLES), camp_type=self.rng.choice(CAMP_TYPES),
                 camp_region=camp.label, patrol=self.rng.sample(adj, min(2, len(adj))))
             camp.camp = hp.leader
@@ -5848,6 +5868,123 @@ class Generator6(Generator3):
                       elite=base.elite, grid=n, cells=base.cells, stairs=stairs, scaling=self.scaling, seed=self.seed,
                       hunters=hunters, zockau_label=z.label, zockau_notes=list(ZOCKAU_NOTES),
                       thorn_side=side, thorn_schedule=sched, bounty=list(BOUNTY_BOARD))
+
+
+# Gear for each of a hunter's slots: the loot banks a crawler's boxes draw from,
+# at these qualities. A party's leader carries a better weapon or focus.
+HUNTER_GEAR_QUALITY = {"member": "Gold", "leader": "Platinum", "worn": "Silver"}
+_HEALING = re.compile(r"heal|mending|bandage|salve|regeneration")
+# About half the parties have smuggled one piece of offworld tech in.
+HUNTER_SMUGGLES = 0.5
+
+
+def _hunter_gear(roller: "LootRoller", slot: str, leader: bool, minions: List[str]) -> str:
+    q = HUNTER_GEAR_QUALITY["leader" if leader else "member"]
+    worn = HUNTER_GEAR_QUALITY["worn"]
+    consumables = [i for band in LOOT_BOXES["items"]["consumables"].values() for i in band]
+    if slot == "weapon":
+        return roller._make("weapons", q, False)
+    if slot == "focus":
+        return roller._make("magic", q, False)
+    if slot == "armor":
+        return roller._make("apparel", worn, False)
+    if slot == "boots":
+        return roller._make("footwear", worn, False)
+    if slot == "spell":
+        return roller._deck("spells", [i for i in consumables if "scroll of" in i]).draw()
+    if slot == "healing":
+        return roller._deck("healing", [i for i in consumables if _HEALING.search(i)]).draw()
+    if slot == "tool":
+        return roller._item("tools", q)
+    if slot == "explosive":
+        return roller._item("explosives", q)
+    if slot == "minion":
+        return f"a tamed {singular(roller.rng.choice(minions))}, kept as a minion"
+    raise MapgenError(f"a hunter has no gear slot called {slot!r}")
+
+
+def _hunter_name(rng, taken: set, starts: set) -> str:
+    """A name nobody on the floor has, starting differently from everyone else's
+    in the party: Nimyr and Nimuz in one camp read as the generator stuttering."""
+    parts = HUNTER_NAME_PARTS
+    for _ in range(200):
+        start = rng.choice(parts["start"])
+        name = start + rng.choice(parts["end"])
+        if name.lower() not in taken and start not in starts:
+            break
+    taken.add(name.lower())
+    starts.add(start)
+    return name
+
+
+def add_hunters(fl) -> None:
+    """Fill every Floor 6 hunter party that has no members with its hunters.
+
+    Each is named (the party's leader first), given a role from HUNTER_ROLES,
+    and carries that role's gear from the loot banks a crawler's boxes draw from.
+    About half the parties have one piece of offworld tech, smuggled in. Dealt
+    on a stream of their own after the floor is built, so adding them moved
+    nothing else; every party draws in turn, so a floor file from before hunters
+    had members gets the ones a fresh build of its seed would."""
+    parties = getattr(fl, "hunters", None) or []
+    for p in parties:
+        for old in ("weapons", "armor", "tech"):       # a party's loadout, before members
+            if old in vars(p):
+                delattr(p, old)
+    if all(p.members for p in parties):
+        return
+    rng = random.Random(f"floor{fl.number}|{fl.seed}|hunters")
+    roller = LootRoller(fl.seed, rng=rng)
+    minions = [c.mob.name for c in fl.cells if isinstance(c, Region)]
+    taken = {w.lower() for p in parties for w in p.leader.split()}
+    level = FLOOR6_CFG["hunter_level"]
+    for p in parties:
+        roles, starts = Deck(rng, HUNTER_ROLES), set()
+        members = []
+        for k in range(p.size):
+            role = roles.draw()
+            name = p.leader if k == 0 else _hunter_name(rng, taken, starts)
+            gear = [_hunter_gear(roller, slot, k == 0, minions) for slot in role["gear"]]
+            members.append(Hunter(name=name, role=role["role"], level=level,
+                                  kind=role["kind"], gear=gear))
+        if rng.random() < HUNTER_SMUGGLES:
+            rng.choice(members).smuggled = roller._item("offworld", "Bronze")
+        if not p.members:
+            p.members = members
+
+
+def hunter_build(h: Hunter) -> MobBuild:
+    return build_mob(h.name, h.level, "hunter", kind=h.kind, well_built=True,
+                     per_level=CRAWLER_STATS["knobs"]["points_per_level"])
+
+
+def hunters_note() -> List[str]:
+    k = CRAWLER_STATS["knobs"]
+    return [f"Each hunter is statted like a crawler, {MOB_BUILDS['base']} in every stat "
+            f"plus {k['points_per_level']} points a level, spread by their role: HP is CON "
+            f"x {k['hp_per_con']}, MP is INT, and melee adds 1 per {k['attack_per']} STR. "
+            f"Their gear comes from the same banks a crawler's loot boxes do. Offworld "
+            f"tech is contraband, so what a party has, it smuggled in.", ""]
+
+
+def hunter_lines(party: HunterParty) -> List[str]:
+    o = ["- **Hunters:**"]
+    for h in party.members:
+        b = hunter_build(h)
+        stats = ", ".join(f"{s} {b.stats[s]}" for s in STAT_ORDER)
+        lead = " (leader)" if h.name == party.leader else ""
+        o.append(f"  - **{h.name}**{lead}, {article(h.role)} {h.role}, Level {h.level}. "
+                 f"{stats}; HP {b.hp:,}, MP {b.mp}, melee +{b.melee}.")
+        o.append(f"    - Gear: {'; '.join(h.gear)}.")
+        if h.smuggled:
+            o.append(f"    - Smuggled in: {h.smuggled}.")
+    return o
+
+
+def _party_levels(party: HunterParty) -> str:
+    levels = sorted({h.level for h in party.members}) or [FLOOR6_CFG["hunter_level"]]
+    return (f"Level {levels[0]}" if len(levels) == 1
+            else f"Levels {levels[0]}–{levels[-1]}")
 
 
 def render6(fl: Floor6) -> str:
@@ -5918,13 +6055,14 @@ def render6(fl: Floor6) -> str:
     o.append("")
     o.append("## Hunter Parties")
     o.append("")
+    o += hunters_note()
     for h in fl.hunters:
-        o.append(f"### {h.leader}'s party ({h.species}, {h.size} hunters, Level {c6['hunter_level']})")
+        o.append(f"### {h.leader}'s party ({h.species}, {h.size} hunters, {_party_levels(h)})")
         o.append("")
         o.append(f"- **Camp:** {h.camp_type} in region {h.camp_region}. Patrols {', '.join(h.patrol)}.")
         o.append(f"- **Style:** {h.style}")
-        o.append(f"- **Loadout:** {', '.join(h.weapons)}; {h.armor}; {', '.join(h.tech)}.")
         o.append(f"- **Sponsor perk:** {h.sponsor}.")
+        o += hunter_lines(h)
         o.append("")
     o.append("## Bounty Board")
     o.append("")
@@ -8499,6 +8637,8 @@ def generate(floor: int = 1, size: str = "medium", seed: Optional[int] = None, *
                        stair_chance, borough_boss_rate).build()
     if floor in (3, 6):
         add_mayors(fl)
+    if floor == 6:
+        add_hunters(fl)
 
     # Other crawlers are dealt on their own rng stream, after the floor is
     # built, so every floor can carry a campaign roster through one code path
@@ -8745,6 +8885,8 @@ def render_floor_data(data: dict, where: str = "the floor file") -> GenResult:
         raise MapgenError(f"{where}: {e}")
     if number in (3, 6) and isinstance(getattr(fl, "cells", None), list):
         add_mayors(fl)              # a file saved before settlements had mayors
+    if number == 6 and isinstance(getattr(fl, "hunters", None), list):
+        add_hunters(fl)             # or before hunter parties had members
     boss_stairs = bool(data.get("boss_stairs", True))
     try:
         text = _render_floor(fl, number)

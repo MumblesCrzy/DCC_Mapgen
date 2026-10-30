@@ -135,21 +135,21 @@
  ],
  "HUNT_STYLES": [
   "Ambush predators: sit on trails between settlements and wait.",
-  "Drone-scouted sweeps; they know where you slept.",
+  "Sweeps scouted by a familiar overhead; they know where you slept.",
   "Bait safe rooms with wounded crawlers and shoot whoever comes to help.",
   "Camp-and-patrol; they never split up and never move at night.",
   "Trophy hunters: only interested in top-listed crawlers, ignore everyone else.",
-  "Slavers with a stasis cage; they want you alive.",
+  "Slavers with a warded cage; they want you alive.",
   "Loud. Music, lights, fireworks. Want to be found.",
   "Follow the thorn wall and shoot what it flushes."
  ],
  "CAMP_TYPES": [
-  "a fortified ruin with turrets",
-  "a hover-yacht moored above the canopy",
+  "a fortified ruin ringed with traps",
+  "a ruined temple with a single trapped way in",
   "a captured settlement inn",
-  "tents around a supply-drop beacon",
-  "a cave with a portal generator",
-  "a treehouse platform ringed with sensors"
+  "tents around a sponsor's supply-drop clearing",
+  "a cave behind a warded door",
+  "a treehouse platform ringed with alarm wards"
  ],
  "BOUNTY_BOARD": [
   [
@@ -186,5 +186,126 @@
   "Ursine police attack crawlers on sight. Diplomatic hunters walk freely.",
   "The stairwell in the park is unguarded, and everyone on the floor knows exactly where it is.",
   "One real safe room on the pub strip; the rest are fronts."
+ ],
+ "HUNTER_NAME_PARTS": {
+  "start": [
+   "Vash",
+   "Kor",
+   "Zel",
+   "Mur",
+   "Tak",
+   "Ril",
+   "Oss",
+   "Quel",
+   "Brak",
+   "Ix",
+   "Yor",
+   "Ven",
+   "Thal",
+   "Gro",
+   "Sev",
+   "Ush",
+   "Nim",
+   "Drav",
+   "Kesh",
+   "Pell",
+   "Zor",
+   "Hask",
+   "Lum",
+   "Fen",
+   "Corv",
+   "Abb",
+   "Sith",
+   "Trel"
+  ],
+  "end": [
+   "ek",
+   "ara",
+   "ix",
+   "olt",
+   "un",
+   "essa",
+   "ath",
+   "ir",
+   "omo",
+   "ka",
+   "rel",
+   "ush",
+   "ine",
+   "ax",
+   "oth",
+   "ul",
+   "eth",
+   "is",
+   "ova",
+   "ark",
+   "en",
+   "yr",
+   "ilde",
+   "osk",
+   "ani",
+   "uz"
+  ]
+ },
+ "HUNTER_ROLES": [
+  {
+   "role": "bruiser",
+   "kind": "brute",
+   "gear": [
+    "weapon",
+    "armor"
+   ]
+  },
+  {
+   "role": "skirmisher",
+   "kind": "skirmisher",
+   "gear": [
+    "weapon",
+    "boots"
+   ]
+  },
+  {
+   "role": "tracker",
+   "kind": "skirmisher",
+   "gear": [
+    "weapon",
+    "tool"
+   ]
+  },
+  {
+   "role": "caster",
+   "kind": "caster",
+   "gear": [
+    "focus",
+    "spell",
+    "spell"
+   ]
+  },
+  {
+   "role": "medic",
+   "kind": "caster",
+   "gear": [
+    "focus",
+    "healing",
+    "healing"
+   ]
+  },
+  {
+   "role": "trapper",
+   "kind": "worker",
+   "gear": [
+    "weapon",
+    "explosive",
+    "tool"
+   ]
+  },
+  {
+   "role": "beast handler",
+   "kind": "charmer",
+   "gear": [
+    "weapon",
+    "minion"
+   ]
+  }
  ]
 }
