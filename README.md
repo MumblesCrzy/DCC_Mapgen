@@ -8,6 +8,8 @@ A procedural floor/map generator in the style of the *Dungeon Crawler Carl* book
 
 - **Floors 1 & 2** — neighborhood/borough/city grid, from small up through large (1 City). Beyond that, huge/giant/massive/continent tile multiple Cities together — County (4 Cities), State (9), Country (16), Continent (25) — each City keeping its own City Boss, with one top-tier boss (County/State/Country/Continent) overseeing all of them. Bosses (with a word-bank uniqueness guard so names/forms don't collide), loot boxes, achievements, an Elite, other crawler teams, the tutorial guild, and a full connected **room graph** per neighborhood (safe rooms, hidden passages, guild hall, filler rooms, corridor encounters). Each neighborhood **crosses into the ones beside it** at a room on each side of their shared edge: its Entrance is the way in from the neighbor nearer the floor's entry, and the write-up and both room maps say where each crossing comes out. Each borough's boss chamber sits at the corner its four neighborhoods share, the city's where its boroughs meet and a top-tier boss's at the floor's middle: every neighborhood around one has a way in from one of its rooms, given in that room's line, under the boss ("Reached from") and as a tag in that corner of the room map. `--stair-chance` and `--borough-boss-rate` tune how often neighborhood stairwells and borough bosses show up.
 - **Floor 3** (The Over City) — settlements on a wilderness grid, roaming bosses, locked stairwells, a quest board per town, one Elite.
+  - **Around each settlement:** a town takes up part of its cell, and the rest is wilderness with a mob of its own, levelled by its distance from the hub as a region's is, and a line on what the land is like. No boss lives there, but one may wander in: the write-up lists which, and the map names the first two under the town. Floor 6's settlements, Zockau included, are the same, in jungle. The descriptions are `SETTLEMENT_OUTSKIRTS` in `data/floor3.json` and `JUNGLE_OUTSKIRTS` in `data/floor6.json`.
+  - **Roaming bosses:** each boss wanders every cell within its range, settlements' outskirts included, and the write-up lists them. The range is one cell up to a cap set by the map's size: 1 on a small map, 2 on a medium, 3 on a large. It's an editable number on the boss's region; set it to 0 and the boss stays home. Floor 6's bosses roam the same way.
 - **Floor 4** (The Iron Tangle) — schematic rail/transit map, laid out the way the books lay it out, with its content from this project's own word banks rather than the books' plot:
   - **Stations:** every line has stairwells at 12, 24, 36, 48 and 72. A transfer has a safe room only if its number is prime, a Desperado Club if it ends in 1, and a Club Vanquisher if it ends in 9.
   - **Transfers and safe rooms:** most stations on the Iron Tangle are transfers, to far more lines than a floor details. So besides meeting each other, each line meets lines that aren't detailed, at a prime in each stretch a party uses: the yard to the stairwells, the stairwells to its spawn, and the forty stations past it. That gives every line a safe room in each stretch, and a floor 4–6 safe rooms on small, 8–12 on medium and 14–21 on large. A transfer to a line that isn't detailed is marked "not detailed here" on the line's list, says "change for the X Line" in its safe room's heading, and appears as a short stub in that line's color on the map.
@@ -403,7 +405,8 @@ A panel opens to the right of the map:
     (double-click it to go to that neighborhood's room map), or of a way into a boss
     chamber, which opens that boss.
   - **Floors 3 and 6:** a settlement or region, a region's mob, boss and stairwell, a
-    settlement's mayor and quests, the Elite, each line of the stairwell list, and on Floor 6 a
+    settlement's mayor, quests and outskirts mob, a boss named as wandering into a
+    settlement's outskirts, the Elite, each line of the stairwell list, and on Floor 6 a
     hunter party by its camp.
   - **Floor 4:** a line (by its name or the line itself), a station (its marker, its
     number, what it has, its stairwell), a ghoul station by its name over its column,
@@ -1163,6 +1166,23 @@ city bosses. It checks:
   bosses;
 - an ordinary crawler lives through every ordinary mob on their floor, and the
   Floor 11 boss kills an ordinary crawler there in one hit.
+
+The land around Floors 3 and 6's settlements, and how far their bosses roam, have
+their own group, with the caps written into the test (1, 2 and 3 cells on a small,
+medium and large map). It checks:
+- every settlement's outskirts has a description from its floor's bank, none twice on
+  a floor, a mob no other cell has, the levels a region that far out would have, and
+  no boss;
+- every boss roams one cell up to its map's cap, and a large map's bosses reach one,
+  two and three;
+- a boss's roaming cells are exactly those within its range, written up as such, and
+  a settlement lists exactly the bosses whose range reaches it;
+- the write-up gives the outskirts under each town and the Bestiary its mob;
+- the town is a box in the top part of its cell on the map;
+- adding outskirts and ranges changed nothing else on the floor, and a floor file from
+  before them, its bosses roaming to one neighbor, opens with the same ones;
+- a range edited to 0 keeps a boss home and out of every settlement, and a wide one
+  reaches the whole map.
 
 Mayors have their own group, with their rules written into the test: 25 to 30
 levels below their town's guards, 1 to 5 points a level from a tiny settlement to an

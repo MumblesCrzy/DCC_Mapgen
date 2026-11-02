@@ -2202,7 +2202,8 @@ def floor_bestiary(fl) -> List[MobBuild]:
         boss(fl.top_boss, getattr(fl, "top_tier_name", "") or "the top")
     for c in getattr(fl, "cells", None) or []:                     # floors 3 and 6
         if getattr(c, "mob", None):
-            mob(c.mob, c.level_range, f"region {c.label}")
+            mob(c.mob, c.level_range,
+                f"around settlement {c.label}" if isinstance(c, Settlement) else f"region {c.label}")
             if getattr(c, "second_mob", None):
                 mob(c.second_mob, c.level_range, f"region {c.label}")
             boss(getattr(c, "boss", None), f"region {c.label}", c.mob.noun)
@@ -3492,6 +3493,11 @@ class Settlement:
     hostile: bool = False
     on_river: bool = False
     mayor: Optional[Mayor] = None
+    # The town takes up part of its cell. The rest is wilderness, with a mob of
+    # its own and no boss, though one may wander in from a region nearby.
+    outskirts: str = ""
+    mob: Optional[Mob] = None
+    level_range: Tuple[int, int] = (0, 0)
 
 @dataclass
 class Stairwell:
@@ -3517,7 +3523,9 @@ class Region:
     second_mob: Optional[Mob] = None
     second_shift: str = ""
     boss: Optional[Boss] = None
-    roams_to: Optional[str] = None
+    # How many cells from here the region's boss wanders: every cell within that
+    # many steps, settlements' outskirts included.
+    roam_range: Optional[int] = None
     stairwell: Optional[Stairwell] = None
     distance: int = 0
     is_entry: bool = False
@@ -3540,6 +3548,19 @@ class Floor3:
     seed: int
     number: int = 3
     other_crawlers: List[CrawlerTeam] = field(default_factory=list)
+
+def grid_level_range(rng, band, scaling: str, dist: int, max_dist: int) -> Tuple[int, int]:
+    """A Floor 3 or 6 cell's mob levels: rising with its distance from the hub,
+    or rolled anywhere in the floor's band."""
+    lo, hi = band
+    if scaling == "distance" and max_dist > 0:
+        c = lo + (dist / max_dist) * (hi - lo)
+        a = max(lo, int(round(c - 2)))
+        b = min(hi, int(round(c + 2)))
+        return (a, max(a, b))
+    a = rng.randint(lo, hi - 2)
+    return (a, min(hi, a + rng.randint(2, 4)))
+
 
 class Generator3:
     FLOOR = 3
@@ -3606,14 +3627,7 @@ class Generator3:
         return Boss(name, tier, level, form, mech, chamber, False)
 
     def level_range(self, dist, max_dist):
-        lo, hi = self.cfg["mob_band"]
-        if self.scaling == "distance" and max_dist > 0:
-            c = lo + (dist / max_dist) * (hi - lo)
-            a = max(lo, int(round(c - 2)))
-            b = min(hi, int(round(c + 2)))
-            return (a, max(a, b))
-        a = self.rng.randint(lo, hi - 2)
-        return (a, min(hi, a + self.rng.randint(2, 4)))
+        return grid_level_range(self.rng, self.cfg["mob_band"], self.scaling, dist, max_dist)
 
     def make_quest(self, s_name, region_names, settlement_names, mob_names, unlocks=None) -> Quest:
         d = self.quest_decks
@@ -3731,7 +3745,11 @@ class Generator3:
         for reg in regions:
             if reg.boss:
                 adj = [x for x in neighbors(reg) if isinstance(x, Region)]
-                reg.roams_to = self.rng.choice(adj).label if adj else None
+                # A boss used to roam to one neighbor, drawn here. How far it
+                # roams is dealt after the floor is built now; the draw stays so
+                # nothing after it on the floor moves.
+                if adj:
+                    self.rng.choice(adj)
 
         # Stairwells: distinct regions; condition depends on what's there.
         stairs = []
@@ -3842,6 +3860,133 @@ def mayor_points(st: Settlement) -> int:
     return MOB_BUILDS["mayor_points"].get(st.size, 1)
 
 
+def roam_cap(grid: int) -> int:
+    """The farthest a boss wanders, in cells, by the map's size: one on a small
+    floor's 3x3, two on a medium 4x4, three on a large 5x5."""
+    return max(1, grid - 2)
+
+
+def roam_cells(fl, reg) -> list:
+    """Every other cell within a region's boss's range, in the floor's order."""
+    reach = reg.roam_range or 0
+    return [c for c in fl.cells if c is not reg
+            and abs(c.row - reg.row) + abs(c.col - reg.col) <= reach]
+
+
+def wanderers(fl, cell) -> List[Tuple[int, "Region"]]:
+    """(index, region) of each boss that may wander into a cell from elsewhere."""
+    return [(j, c) for j, c in enumerate(fl.cells)
+            if isinstance(c, Region) and c.boss and c is not cell
+            and any(x is cell for x in roam_cells(fl, c))]
+
+
+def add_roaming(fl) -> None:
+    """Deal each boss on a Floor 3 or 6 how far it roams: one cell to the map's
+    cap. Dealt on a stream of its own after the floor is built, so nothing else
+    moved; a floor file from before ranges gets the ones a fresh build would."""
+    regions = [c for c in fl.cells if isinstance(c, Region)]
+    for r in regions:
+        if "roams_to" in vars(r):                    # the one neighbor, before ranges
+            delattr(r, "roams_to")
+    if all(r.roam_range is not None for r in regions if r.boss):
+        return
+    rng = random.Random(f"floor{fl.number}|{fl.seed}|roaming")
+    cap = roam_cap(fl.grid)
+    for r in regions:
+        if r.boss:
+            reach = rng.randint(1, cap)
+            if r.roam_range is None:
+                r.roam_range = reach
+
+
+def add_outskirts(fl) -> None:
+    """Give the land around every Floor 3 or 6 settlement a description, a mob
+    no other cell on the floor has, and that mob's levels by its distance from
+    the hub, as a region's are. No boss: one may only wander in. Dealt on a
+    stream of its own, so nothing else moved; every settlement draws in turn, so
+    a floor file from before outskirts gets the ones a fresh build would."""
+    settlements = [c for c in fl.cells if isinstance(c, Settlement)]
+    if all(s.mob for s in settlements):
+        return
+    rng = random.Random(f"floor{fl.number}|{fl.seed}|outskirts")
+    deck = Deck(rng, JUNGLE_OUTSKIRTS if fl.number == 6 else SETTLEMENT_OUTSKIRTS)
+    band = (FLOOR6_CFG if fl.number == 6 else FLOOR3_CFG)["mob_band"]
+    used = {m.name for c in fl.cells for m in (getattr(c, "mob", None), getattr(c, "second_mob", None)) if m}
+    used.add(fl.janitor.name)
+    hub = fl.grid // 2
+    max_dist = max(abs(c.row - hub) + abs(c.col - hub) for c in fl.cells) or 1
+    for s in settlements:
+        for _ in range(100):
+            adj, noun = mob_words(rng, fl.number)
+            if f"{adj} {noun}" not in used:
+                break
+        mob = describe_mob(rng, adj, noun)
+        used.add(mob.name)
+        levels = grid_level_range(rng, band, fl.scaling, s.distance, max_dist)
+        outskirts = deck.draw()
+        if s.mob is None:
+            s.mob, s.level_range, s.outskirts = mob, levels, outskirts
+
+
+def roam_line(fl, reg) -> str:
+    cells = roam_cells(fl, reg)
+    if not cells:
+        return "  - Stays in this region."
+    names = [c.label if isinstance(c, Region) else f"{c.label} (around {c.name})" for c in cells]
+    r = reg.roam_range
+    return f"  - Roams up to {r} cell{'' if r == 1 else 's'} from here: {', '.join(names)}."
+
+
+def outskirts_lines(fl, st: Settlement) -> List[str]:
+    o = []
+    if st.outskirts:
+        o.append(f"- **Around it:** {st.outskirts}.")
+    if st.mob:
+        lo, hi = st.level_range
+        o.append(f"- **Mob:** {st.mob.name}, Level {lo}–{hi}")
+        o.append(f"  - {st.mob.quirk}")
+        o.append(f"  - *{st.mob.description}*")
+    w = wanderers(fl, st)
+    if w:
+        o.append("- **Bosses that may wander in:** " + "; ".join(
+            f"{r.boss.name} ({r.boss.tier} boss, Level {r.boss.level}) from {r.label}"
+            for _, r in w) + ".")
+    return o
+
+
+def _settlement_svg(o: list, c: Settlement, x: int, y: int, ground: str, under=()) -> None:
+    """A settlement's cell: the ground around it, anything that runs under the
+    town (a river), and the town as a box in the top of the cell. The town's own
+    lines go in the box; then _outskirts_svg."""
+    fill = "#e8b4a0" if c.hostile else "#f2dfa8"
+    stroke = "#8a1a1a" if c.hostile else "#8a5a1a"
+    o.append(f'<rect x="{x}" y="{y}" width="{CELL}" height="{CELL}" fill="{ground}" stroke="#555" stroke-width="1.5"/>')
+    o.extend(under)
+    o.append(f'<rect x="{x + 6}" y="{y + 6}" width="{CELL - 12}" height="{TOWN_H}" fill="{fill}" '
+             f'stroke="{stroke}" stroke-width="3"/>')
+
+
+def _outskirts_svg(o: list, fl, c: Settlement, i: int, x: int, y: int) -> None:
+    """Under the town's box: the mob around it, and who may wander in."""
+    if c.name == fl.elite.settlement:
+        o.append(_text(x + CELL - 14, y + TOWN_H, "ELITE", size=13, weight="bold", anchor="end", fill="#7a1f7a"))
+        _hit(("elite",), "rect", x + CELL - 66, y + TOWN_H - 15, 56, 20)
+    top = y + TOWN_H + 6
+    if c.mob:
+        o.append(_text(x + 10, top + 20, _fit(c.mob.name, 30), size=12))
+        _hit(("cells", i, "mob"), "rect", x + 6, top + 8, CELL - 12, 16)
+        o.append(_text(x + 10, top + 36, f"Level {c.level_range[0]}–{c.level_range[1]}", size=12))
+    w = wanderers(fl, c)
+    for k, (j, r) in enumerate(w[:2]):
+        yy = top + 54 + 15 * k
+        if k == 1 and len(w) > 2:
+            o.append(_text(x + 10, yy, f"+{len(w) - 1} more may wander in", size=11, fill="#444"))
+            break
+        o.append(_text(x + 10, yy, f"Wanders in: " + _fit(r.boss.name, 18) + f" (L{r.boss.level})",
+                       size=11, fill="#444"))
+        _hit(("cells", j, "boss"), "rect", x + 6, yy - 12, CELL - 12, 15)
+
+
 def mayor_build(st: Settlement) -> MobBuild:
     m = st.mayor
     return build_mob(m.name, m.level, "mayor", kind=m.kind, description=m.background,
@@ -3943,6 +4088,7 @@ def render3(fl: Floor3) -> str:
         for q in st.quests:
             o.append(f"  - **{q.title}** — from {q.giver}. {q.objective} Reward: {q.reward}.")
             o.append(f"    - *{q.flavor}*")
+        o += outskirts_lines(fl, st)
         o.append("")
 
     o.append("## Wilderness Regions")
@@ -3962,7 +4108,7 @@ def render3(fl: Floor3) -> str:
             b = reg.boss
             o.append(f"- **{b.tier.title()} Boss:** {b.name} (Level {b.level})")
             o.append(f"  - Form: {b.form}.")
-            o.append(f"  - Roams between here and {reg.roams_to}." if reg.roams_to else "  - Stays in this region.")
+            o.append(roam_line(fl, reg))
             o.append(f"  - Mechanic: {b.mechanic}")
             o.append(f"  - Drops: a {boss_box(b.tier, fl.number)}")
         if reg.stairwell:
@@ -3973,6 +4119,10 @@ def render3(fl: Floor3) -> str:
     o.extend(crawler_section(fl))
     return "\n".join(o)
 
+# How tall a settlement's town is in its cell; the rest is its outskirts.
+TOWN_H = 140
+
+
 def _mayor_svg(c: Settlement, i: int, x: int, y: int) -> List[str]:
     """A settlement cell's mayor line, with its baseline at y."""
     if c.mayor is None:
@@ -3980,6 +4130,11 @@ def _mayor_svg(c: Settlement, i: int, x: int, y: int) -> List[str]:
     _hit(("cells", i, "mayor"), "rect", x + 6, y - 12, CELL - 12, 16)
     return [_text(x + 10, y, f"Mayor L{c.mayor.level}: " + _fit(c.mayor.name, 26),
                   size=11, fill="#444")]
+
+
+def _roam_svg(c: "Region") -> str:
+    r = c.roam_range or 0
+    return f"roams {r} cell{'' if r == 1 else 's'}" if r else "stays here"
 
 
 def render3_svg(fl: Floor3) -> str:
@@ -3998,7 +4153,7 @@ def render3_svg(fl: Floor3) -> str:
         x, y = ox + c.col * CELL, oy + c.row * CELL
         _hit(("cells", i), "rect", x, y, CELL, CELL)
         if isinstance(c, Settlement):
-            o.append(f'<rect x="{x}" y="{y}" width="{CELL}" height="{CELL}" fill="#f2dfa8" stroke="#8a5a1a" stroke-width="5"/>')
+            _settlement_svg(o, c, x, y, "#d9d6cf")
             o.append(_text(x + 10, y + 26, c.label, size=24, weight="bold"))
             o.append(_text(x + 42, y + 24, _fit(c.name, 22), size=13, weight="bold"))
             o.append(_text(x + 10, y + 48, f"{c.size.upper()} settlement — {c.race}", size=12))
@@ -4013,9 +4168,7 @@ def render3_svg(fl: Floor3) -> str:
                 o.append(_text(x + 10, y + 130, "Unlocks: " + ", ".join(q.unlocks for q in c.quests if q.unlocks),
                                size=11, weight="bold", fill="#8a5a1a"))
                 _hit(("cells", i, "quests"), "rect", x + 6, y + 118, CELL - 12, 16)
-            if c.name == fl.elite.settlement:
-                o.append(_text(x + CELL - 10, y + CELL - 12, "ELITE", size=13, weight="bold", anchor="end", fill="#7a1f7a"))
-                _hit(("elite",), "rect", x + CELL - 62, y + CELL - 27, 56, 20)
+            _outskirts_svg(o, fl, c, i, x, y)
         else:
             o.append(f'<rect x="{x}" y="{y}" width="{CELL}" height="{CELL}" fill="#d9d6cf" stroke="#555" stroke-width="1.5"/>')
             o.append(_text(x + 10, y + 26, c.label, size=24, weight="bold"))
@@ -4025,7 +4178,7 @@ def render3_svg(fl: Floor3) -> str:
             o.append(_text(x + 10, y + 64, f"Level {c.level_range[0]}–{c.level_range[1]}", size=12))
             if c.boss:
                 o.append(_text(x + 10, y + 84, f"{c.boss.tier.title()} boss: " + _fit(c.boss.name, 18), size=11, fill="#444"))
-                roam = f"roams → {c.roams_to}" if c.roams_to else "stays here"
+                roam = _roam_svg(c)
                 o.append(_text(x + 10, y + 99, f"L{c.boss.level}, {roam}", size=11, fill="#444"))
                 _hit(("cells", i, "boss"), "rect", x + 6, y + 72, CELL - 12, 32)
                 o.extend(_boss_marker(x + CELL - 30, y + CELL - 30, c.boss.tier, ""))
@@ -6052,6 +6205,7 @@ def render6(fl: Floor6) -> str:
     for st in settlements:
         if st.hostile:
             o += mayor_lines(st)
+            o += outskirts_lines(fl, st)
     o.append("")
     o.append("## Hunter Parties")
     o.append("")
@@ -6088,6 +6242,7 @@ def render6(fl: Floor6) -> str:
         for q in st.quests:
             o.append(f"  - **{q.title}** — from {q.giver}. {q.objective} Reward: {q.reward}.")
             o.append(f"    - *{q.flavor}*")
+        o += outskirts_lines(fl, st)
         o.append("")
     o.append("## Jungle Regions")
     o.append("")
@@ -6109,7 +6264,7 @@ def render6(fl: Floor6) -> str:
             b = reg.boss
             o.append(f"- **{b.tier.title()} Boss:** {b.name} (Level {b.level})")
             o.append(f"  - Form: {b.form}.")
-            o.append(f"  - Roams between here and {reg.roams_to}." if reg.roams_to else "  - Stays in this region.")
+            o.append(roam_line(fl, reg))
             o.append(f"  - Mechanic: {b.mechanic}")
             o.append(f"  - Drops: a {boss_box(b.tier, fl.number)}")
         if reg.camp:
@@ -6138,20 +6293,21 @@ def render6_svg(fl: Floor6) -> str:
     by_pos = {(c.row, c.col): c for c in fl.cells}
     def _is_river(c):
         return (isinstance(c, Region) and bool(c.river)) or (isinstance(c, Settlement) and c.on_river)
-    def _vert(c, x, y):
+    def _vert(c, x, y, out=None):
         below = by_pos.get((c.row + 1, c.col))
         if below and _is_river(c) and _is_river(below):
-            o.append(f'<rect x="{x + CELL//2 - 14}" y="{y + CELL//2}" width="28" height="{CELL}" fill="#7fb3d5" opacity="0.5"/>')
+            (o if out is None else out).append(
+                f'<rect x="{x + CELL//2 - 14}" y="{y + CELL//2}" width="28" height="{CELL}" fill="#7fb3d5" opacity="0.5"/>')
     for i, c in enumerate(fl.cells):
         x, y = ox + c.col * CELL, oy + c.row * CELL
         _hit(("cells", i), "rect", x, y, CELL, CELL)
         if isinstance(c, Settlement):
-            fill = "#e8b4a0" if c.hostile else "#f2dfa8"
-            stroke = "#8a1a1a" if c.hostile else "#8a5a1a"
-            o.append(f'<rect x="{x}" y="{y}" width="{CELL}" height="{CELL}" fill="{fill}" stroke="{stroke}" stroke-width="5"/>')
+            # The river runs under the town, and out the other side.
+            river = []
             if c.on_river:
-                o.append(f'<rect x="{x}" y="{y + CELL//2 - 14}" width="{CELL}" height="28" fill="#7fb3d5" opacity="0.6"/>')
-            _vert(c, x, y)
+                river.append(f'<rect x="{x}" y="{y + CELL//2 - 14}" width="{CELL}" height="28" fill="#7fb3d5" opacity="0.7"/>')
+            _vert(c, x, y, river)
+            _settlement_svg(o, c, x, y, "#cfd9b8", river)
             o.append(_text(x + 10, y + 26, c.label, size=24, weight="bold"))
             o.append(_text(x + 42, y + 24, _fit(c.name, 22), size=13, weight="bold"))
             if c.hostile:
@@ -6167,9 +6323,7 @@ def render6_svg(fl: Floor6) -> str:
                 o.append(_text(x + 10, y + 114, f"Quests: {len(c.quests)}", size=11, fill="#444"))
                 if c.quests:
                     _hit(("cells", i, "quests"), "rect", x + 6, y + 102, CELL - 12, 16)
-            if c.name == fl.elite.settlement:
-                o.append(_text(x + CELL - 10, y + CELL - 12, "ELITE", size=13, weight="bold", anchor="end", fill="#7a1f7a"))
-                _hit(("elite",), "rect", x + CELL - 62, y + CELL - 27, 56, 20)
+            _outskirts_svg(o, fl, c, i, x, y)
         else:
             o.append(f'<rect x="{x}" y="{y}" width="{CELL}" height="{CELL}" fill="#cfd9b8" stroke="#555" stroke-width="1.5"/>')
             if c.river:
@@ -6182,7 +6336,7 @@ def render6_svg(fl: Floor6) -> str:
             _hit(("cells", i, "mob"), "rect", x + 6, y + 36, CELL - 12, 16)
             o.append(_text(x + 10, y + 64, f"Level {c.level_range[0]}–{c.level_range[1]}", size=12))
             if c.boss:
-                roam = f"roams → {c.roams_to}" if c.roams_to else "stays here"
+                roam = _roam_svg(c)
                 o.append(_text(x + 10, y + 84, f"{c.boss.tier.title()} boss: " + _fit(c.boss.name, 18), size=11, fill="#444"))
                 o.append(_text(x + 10, y + 99, f"L{c.boss.level}, {roam}", size=11, fill="#444"))
                 _hit(("cells", i, "boss"), "rect", x + 6, y + 72, CELL - 12, 32)
@@ -8708,6 +8862,8 @@ def generate(floor: int = 1, size: str = "medium", seed: Optional[int] = None, *
                        stair_chance, borough_boss_rate).build()
     if floor in (3, 6):
         add_mayors(fl)
+        add_outskirts(fl)
+        add_roaming(fl)
     if floor == 6:
         add_hunters(fl)
     if floor == 8:
@@ -8957,7 +9113,9 @@ def render_floor_data(data: dict, where: str = "the floor file") -> GenResult:
     except MapgenError as e:
         raise MapgenError(f"{where}: {e}")
     if number in (3, 6) and isinstance(getattr(fl, "cells", None), list):
-        add_mayors(fl)              # a file saved before settlements had mayors
+        add_mayors(fl)              # a file saved before settlements had mayors,
+        add_outskirts(fl)           # outskirts,
+        add_roaming(fl)             # or bosses a range to roam
     if number == 6 and isinstance(getattr(fl, "hunters", None), list):
         add_hunters(fl)             # or before hunter parties had members
     if number == 8 and isinstance(getattr(fl, "zones", None), list):
@@ -9004,7 +9162,7 @@ EDIT_LOCKED = {"idx", "row", "col", "label", "id", "connects_to", "number", "tra
                "kind", "wedge", "ring", "slot", "seed", "size", "spawn", "distance",
                "is_entry", "color", "hex", "region_label", "home", "tier", "grid",
                "wedges", "deckmasters", "floor", "first_seen", "suggested_start",
-               "borough", "city", "roams_to", "zone"}
+               "borough", "city", "zone"}
 EDIT_LOCKED_IN = {("Quadrant", "name"),
                   # A line's yard letter is how it finds its yard; the thorn wall's
                   # side, its schedule; a Floor 8 zone's stairwell, key and vending

@@ -702,5 +702,19 @@
    "was": "a courier who never once lost a parcel",
    "kind": "skirmisher"
   }
+ ],
+ "SETTLEMENT_OUTSKIRTS": [
+  "Allotments planted in the rubble and fenced with car doors; the guards' patrols stop at the last fence",
+  "A ring of collapsed overpasses the town uses as a wall, and the mobs use as a road",
+  "A no-man's-land of flattened blocks, cleared so the walls can see anything crossing it",
+  "Stalls along the approach road, where traders who can't afford a town license sell from carts",
+  "A drained reservoir the town dumps its refuse into; things live in the refuse",
+  "Half a mile of orchard gone wild, where the town's foragers go in pairs",
+  "An old rail yard on the edge of town, its carriages rented out as flophouses",
+  "A cemetery the town keeps meaning to move inside the walls",
+  "Overgrown parkland with a bandstand the guards use as a lookout",
+  "A strip of burned-out warehouses the town hasn't the guards to hold",
+  "A car park of rusted cars the town strips for parts, and something else strips for meat",
+  "A road of toll gates nobody staffs any more, each one still shut"
  ]
 }

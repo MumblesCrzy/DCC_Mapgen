@@ -833,6 +833,13 @@ class MapClickTest(unittest.TestCase):
                                            ("cells", i, "quests")))
                         wanted.append((lambda t, x, y, f=inside: t.startswith("Mayor L") and f(x, y),
                                        ("cells", i, "mayor")))
+                        # Around the town: its mob, and the first boss that may wander in.
+                        wanted.append((lambda t, x, y, m=mg._fit(c.mob.name, 30), f=inside: t == m and f(x, y),
+                                       ("cells", i, "mob")))
+                        w = mg.wanderers(fl, c)
+                        if w:
+                            wanted.append((lambda t, x, y, f=inside: t.startswith("Wanders in: ") and f(x, y),
+                                           ("cells", w[0][0], "boss")))
                         continue
                     mob = mg._fit(c.mob.name, 30)
                     wanted.append((lambda t, x, y, m=mob, f=inside: t == m and f(x, y), ("cells", i, "mob")))
@@ -3921,6 +3928,147 @@ class WildlifeTest(unittest.TestCase):
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(data, f)
             self.assertEqual(mg.open_floor_file(path).markdown, res.markdown)
+
+
+class SettlementAreaTest(unittest.TestCase):
+    """On Floors 3 and 6 a settlement takes up part of its cell, and the rest is
+    wilderness: a mob of its own, levelled by its distance from the hub as a
+    region is, and no boss -- though one may wander in. A roaming boss wanders
+    every cell within its range, one cell up to a cap set by the map's size."""
+
+    CAP = {3: 1, 4: 2, 5: 3}            # a small, medium and large map's grid
+
+    @classmethod
+    def setUpClass(cls):
+        cls.floors = {(f, s): mg.generate(f, s, 4242, images=False)
+                      for f in (3, 6) for s in ("small", "medium", "large")}
+
+    def _cells(self, cls_):
+        for (floor, size), res in self.floors.items():
+            for i, c in enumerate(res.floor.cells):
+                if isinstance(c, cls_):
+                    yield f"floor {floor} {size} {c.label}", res, i, c
+
+    def test_the_land_around_a_settlement(self):
+        for (floor, size), res in self.floors.items():
+            fl = res.floor
+            names = [c.mob.name for c in fl.cells] + [c.second_mob.name for c in fl.cells
+                                                      if getattr(c, "second_mob", None)]
+            self.assertEqual(len(set(names)), len(names), f"floor {floor} {size}: a mob twice")
+            hub = fl.grid // 2
+            far = max(abs(c.row - hub) + abs(c.col - hub) for c in fl.cells)
+            band = (mg.FLOOR6_CFG if floor == 6 else mg.FLOOR3_CFG)["mob_band"]
+            bank = mg.JUNGLE_OUTSKIRTS if floor == 6 else mg.SETTLEMENT_OUTSKIRTS
+            towns = [c for c in fl.cells if isinstance(c, mg.Settlement)]
+            self.assertEqual(len({c.outskirts for c in towns}), len(towns), f"floor {floor} {size}")
+            for c in towns:
+                where = f"floor {floor} {size} {c.label}"
+                self.assertIn(c.outskirts, bank, where)
+                self.assertIsInstance(c.mob, mg.Mob, where)
+                self.assertFalse(hasattr(c, "boss"), f"{where}: no boss lives here")
+                # Distance scaling: the same levels a region this far out would have.
+                self.assertEqual(c.level_range, mg.grid_level_range(None, band, "distance", c.distance, far),
+                                 where)
+
+    def test_roaming_range_by_map_size(self):
+        for where, res, i, c in self._cells(mg.Region):
+            if c.boss:
+                self.assertIn(c.roam_range, range(1, self.CAP[res.floor.grid] + 1), where)
+            else:
+                self.assertIsNone(c.roam_range, where)
+        for grid, cap in self.CAP.items():
+            self.assertEqual(mg.roam_cap(grid), cap)
+        # Not always the same reach: a large map's bosses go one, two or three.
+        seen = {c.roam_range for seed in range(1, 11)
+                for c in mg.generate(3, "large", seed, images=False).floor.cells
+                if getattr(c, "boss", None)}
+        self.assertEqual(seen, {1, 2, 3})
+
+    def test_who_wanders_where(self):
+        for where, res, i, c in self._cells(mg.Region):
+            if not c.boss:
+                continue
+            fl, reach = res.floor, c.roam_range
+            cells = [x for x in fl.cells if x is not c
+                     and abs(x.row - c.row) + abs(x.col - c.col) <= reach]
+            self.assertEqual([x.label for x in mg.roam_cells(fl, c)], [x.label for x in cells], where)
+            names = [x.label if isinstance(x, mg.Region) else f"{x.label} (around {x.name})" for x in cells]
+            self.assertIn(f"  - Roams up to {reach} cell{'' if reach == 1 else 's'} from here: "
+                          f"{', '.join(names)}.", res.markdown, where)
+        for where, res, i, c in self._cells(mg.Settlement):
+            w = mg.wanderers(res.floor, c)
+            came = [r.label for r in res.floor.cells if isinstance(r, mg.Region) and r.boss
+                    and abs(r.row - c.row) + abs(r.col - c.col) <= r.roam_range]
+            self.assertEqual([r.label for _, r in w], came, where)
+            if w:
+                self.assertIn("- **Bosses that may wander in:** " + "; ".join(
+                    f"{r.boss.name} ({r.boss.tier} boss, Level {r.boss.level}) from {r.label}"
+                    for _, r in w) + ".", res.markdown, where)
+
+    def test_the_write_up_and_the_bestiary_give_the_mob(self):
+        for where, res, i, c in self._cells(mg.Settlement):
+            lo, hi = c.level_range
+            md = res.markdown
+            head = md.index("## Zockau") if c.hostile else md.index(f"### {c.label}. {c.name} (")
+            for line in (f"- **Around it:** {c.outskirts}.", f"- **Mob:** {c.mob.name}, Level {lo}–{hi}",
+                         f"  - *{c.mob.description}*"):
+                self.assertLess(head, md.index(line), where)
+            self.assertIn(f"| {c.mob.name} | around settlement {c.label} |", md, where)
+
+    def test_the_town_takes_part_of_its_cell(self):
+        for (floor, size), res in self.floors.items():
+            svg = dict(mg.floor_svgs(res.floor))[""]
+            towns = [c for c in res.floor.cells if isinstance(c, mg.Settlement)]
+            boxes = re.findall(rf'<rect x="[\d.]+" y="[\d.]+" width="{mg.CELL - 12}" height="{mg.TOWN_H}"', svg)
+            self.assertEqual(len(boxes), len(towns), f"floor {floor} {size}")
+            self.assertLess(mg.TOWN_H, mg.CELL * 2 // 3)
+
+    def test_they_change_nothing_else_on_the_floor(self):
+        for floor in (3, 6):
+            with mock.patch.object(mg, "add_outskirts", lambda fl: None), \
+                 mock.patch.object(mg, "add_roaming", lambda fl: None):
+                without = mg.generate(floor, "large", 4242, images=False).floor
+            data, theirs = mg._to_data(self.floors[(floor, "large")].floor), mg._to_data(without)
+            for d in (data, theirs):
+                for c in d["cells"]:
+                    for k in ("outskirts", "mob", "level_range", "roam_range"):
+                        if c["__type__"] == "Settlement" or k == "roam_range":
+                            c.pop(k, None)
+            self.assertEqual(data, theirs, f"floor {floor}")
+
+    def test_an_older_floor_file_gets_the_same(self):
+        for floor in (3, 6):
+            res = self.floors[(floor, "medium")]
+            with tempfile.TemporaryDirectory() as tmp:
+                path = os.path.join(tmp, f"f{floor}" + mg.FLOOR_FILE_SUFFIX)
+                mg.save_floor_file(res, path)
+                with open(path, encoding="utf-8") as f:
+                    data = json.load(f)
+                for c in data["data"]["cells"]:
+                    if c["__type__"] == "Settlement":
+                        del c["outskirts"], c["mob"], c["level_range"]
+                    else:                  # as a boss roamed before ranges: to one neighbor
+                        c.pop("roam_range")
+                        if c.get("boss"):
+                            c["roams_to"] = "A"
+                with open(path, "w", encoding="utf-8") as f:
+                    json.dump(data, f)
+                back = mg.open_floor_file(path)
+            self.assertEqual(back.markdown, res.markdown, f"floor {floor}")
+            self.assertFalse([c for c in back.floor.cells if "roams_to" in vars(c)])
+
+    def test_an_edited_range_moves_the_boss(self):
+        res = mg.generate(3, "large", 4242)
+        k, reg = next((k, c) for k, c in enumerate(res.floor.cells) if getattr(c, "boss", None))
+        mg.edit_set(res.floor, ["cells", k, "roam_range"], 0)
+        again = mg.redraw_floor(res)
+        part = again.markdown[again.markdown.index(f"### {reg.label}. {reg.name}"):]
+        self.assertIn("  - Stays in this region.", part[:part.index("\n### ")])
+        self.assertFalse([s for s in res.floor.cells if isinstance(s, mg.Settlement)
+                          and any(r is reg for _, r in mg.wanderers(res.floor, s))])
+        mg.edit_set(res.floor, ["cells", k, "roam_range"], 9)
+        self.assertEqual(len(mg.roam_cells(res.floor, reg)), len(res.floor.cells) - 1)
+        self.assertIn("L%d, roams 9 cells" % reg.boss.level, dict(mg.redraw_floor(res).svgs)[""])
 
 
 class ShopsTest(unittest.TestCase):
