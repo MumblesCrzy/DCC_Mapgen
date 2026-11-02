@@ -3739,8 +3739,14 @@ class HunterTest(unittest.TestCase):
                 parties += 1
                 smuggling += any(h.smuggled for h in p.members)
         self.assertTrue(0.35 < smuggling / parties < 0.65, f"{smuggling} of {parties}")
-        for text in mg.CAMP_TYPES + mg.HUNT_STYLES:
+        for text in mg.CAMP_TYPES + mg.HUNT_STYLES + [prize for _, prize in mg.BOUNTY_BOARD]:
             self.assertFalse([w for w in self.OFFWORLD_WORDS if w in text.lower()], text)
+
+    def test_no_ransom_for_a_hunter(self):
+        """Not in the books: nobody pays to get a hunter back."""
+        for f in mg.FLOORS:
+            md = mg.generate(f, "large", 4242, images=False).markdown
+            self.assertNotIn("ransom", md.lower(), f"floor {f}")
 
     def test_a_leader_carries_better(self):
         """A weapon or focus: Gold, one enchantment; a leader's Platinum, two."""
