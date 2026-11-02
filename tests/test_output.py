@@ -20,6 +20,7 @@ import collections
 import contextlib
 import dataclasses
 import glob
+import html
 import io
 import json
 import math
@@ -3880,6 +3881,12 @@ class WildlifeTest(unittest.TestCase):
         for region, size, res in self._floors():
             md, svg = res.markdown, dict(mg.floor_svgs(res.floor))[""]
             self.assertIn("any local animal with a punny name can be flagged too", md)
+            # Each on the map, trimmed to fit its wedge where it has to be.
+            labels = [html.unescape(t) for t in re.findall(r'>\+ ([^<]+)<', svg)]
+            wild = [mg.wildlife_name(z.wildlife) for z in res.floor.zones if z.wildlife]
+            self.assertEqual(len(labels), len(wild), f"{region} {size}")
+            for label, name in zip(labels, wild):
+                self.assertTrue(name.startswith(label.rstrip("…")) and len(label) >= 4, label)
             for z in res.floor.zones:
                 if not z.wildlife:
                     continue
@@ -3890,7 +3897,6 @@ class WildlifeTest(unittest.TestCase):
                 self.assertLess(md.index(f"#### {z.label} ("), after)
                 self.assertIn(f"  - Totem card: **{z.wildlife_totem.name}** [{z.wildlife_totem.rarity}]",
                               md[after:])
-                self.assertIn(">+ " + mg._fit(mg.wildlife_name(z.wildlife), 20) + "<", svg)
 
     def test_they_change_nothing_else_on_the_floor(self):
         for region in ("Caribbean", "East Asia"):

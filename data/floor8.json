@@ -28,11 +28,11 @@
     "the Wild Hunt's master"
    ],
    "wildlife": [
-    "Arctic Terns (never attack out of turn)",
-    "Reindeer (deer that bring the rain)",
     "Hooded Crows (wear hoodies and mug people)",
     "Musk Oxen (drenched in cheap cologne)",
-    "Ptarmigans (the P is silent, and so is the attack)"
+    "Killer Whales (contract killers, very professional)",
+    "Northern Pike (fish armed with pikes)",
+    "Lion's Mane Jellyfish (manes like lions, tempers to match)"
    ]
   },
   "Mediterranean": {
@@ -64,10 +64,10 @@
    ],
    "wildlife": [
     "Swordfish (fish that fence)",
-    "Barbary Macaques (give terrible haircuts)",
-    "Flamingos (birds that are on fire)",
     "Praying Mantises (pray before every fight, and mean it)",
-    "Hermit Crabs (live alone and want you gone)"
+    "Hermit Crabs (live alone and want you gone)",
+    "Sea Urchins (street urchins who pick your pocket)",
+    "Stingrays (run sting operations)"
    ]
   },
   "Eastern Europe": {
@@ -98,11 +98,11 @@
     "the Likho"
    ],
    "wildlife": [
-    "Bison (say \"bye, son\" before they charge)",
-    "Lynxes (link up into chains)",
-    "Wild Boars (talk you to death)",
     "Moles (double agents)",
-    "Brown Bears (bear grudges)"
+    "Fire Salamanders (actually on fire)",
+    "Stag Beetles (permanently on a stag night)",
+    "Kingfishers (royalty, and they expect a bow)",
+    "Beavers (eager to a fault, and never stop working)"
    ]
   },
   "British Isles": {
@@ -137,7 +137,7 @@
     "Robins (rob you blind)",
     "Adders (add up your mistakes)",
     "Red Kites (fly on strings)",
-    "Hedgehogs (hedge every bet)"
+    "Cuckoos (completely cuckoo)"
    ]
   },
   "East Asia": {
@@ -168,11 +168,11 @@
     "a Great Oni Lord"
    ],
    "wildlife": [
-    "Pandas (pander to the audience)",
-    "Koi (play coy)",
     "Cranes (lift heavy things, like you)",
     "Mandarin Ducks (speak only Mandarin)",
-    "Sika Deer (seek ya, and always find you)"
+    "Moon Bears (moon you, then maul you)",
+    "Firefly Squid (squid that are on fire)",
+    "Spider Crabs (half spider, half crab)"
    ]
   },
   "South Asia": {
@@ -204,10 +204,10 @@
    ],
    "wildlife": [
     "King Cobras (demand tribute)",
-    "Mongooses (more than one goose, all of them angry)",
-    "Peacocks (keep the peace by force)",
-    "Water Buffalo (buff each other before a fight)",
-    "Sloth Bears (win by doing nothing)"
+    "Sloth Bears (win by doing nothing)",
+    "Fishing Cats (bait a hook and reel you in)",
+    "Flying Foxes (foxes with wings)",
+    "Clouded Leopards (carry their own storm cloud)"
    ]
   },
   "Middle East": {
@@ -241,8 +241,8 @@
     "Desert Monitors (watch everything, report everything)",
     "Persian Cats (only speak Persian)",
     "Sandgrouse (grouse constantly)",
-    "Hoopoes (shoot hoops with your head)",
-    "Gazelles (gaze until you can't move)"
+    "Deathstalker Scorpions (stalk you, specifically, to the death)",
+    "Sand Cats (made of sand, and it gets everywhere)"
    ]
   },
   "West Africa": {
@@ -274,10 +274,10 @@
    ],
    "wildlife": [
     "Weaver Birds (weave spells)",
-    "Chimpanzees (chimp in on every fight)",
     "Secretary Birds (take notes on how you die)",
     "Drills (run drills, very disciplined)",
-    "Pygmy Hippos (hip, and they know it)"
+    "Goliath Frogs (giants, still sore about David)",
+    "Assassin Bugs (take contracts)"
    ]
   },
   "Latin America": {
@@ -308,11 +308,11 @@
     "El Silbón"
    ],
    "wildlife": [
-    "Llamas (all drama)",
     "Poison Dart Frogs (play darts, poisoned)",
+    "Howler Monkeys (howl with laughter at you)",
     "Armadillos (armed to the teeth)",
-    "Andean Condors (condescend from a great height)",
-    "Howler Monkeys (howl with laughter at you)"
+    "Vampire Bats (actual vampires)",
+    "Bullet Ants (fired like bullets)"
    ]
   },
   "Caribbean": {
@@ -344,10 +344,10 @@
    ],
    "wildlife": [
     "Monk Seals (seals that know martial arts)",
-    "Coquí Frogs (cocky little frogs)",
-    "Rock Iguanas (iguana rock you)",
     "Parrotfish (repeat everything you say)",
-    "Barracudas (bar fighters)"
+    "Sergeant Majors (fish that bark orders)",
+    "Trumpetfish (play the trumpet)",
+    "Nurse Sharks (patch you up, then bite)"
    ]
   },
   "North America": {
@@ -378,11 +378,11 @@
     "Bigfoot"
    ],
    "wildlife": [
-    "Grizzly Bears (leave grisly scenes)",
     "Bullfrogs (full of bull)",
     "Catfish (pretend to be someone else)",
-    "Moose (style their hair with mousse)",
-    "Bald Eagles (bald, and touchy about it)"
+    "Mockingbirds (mock you mercilessly)",
+    "Killdeer (birds that kill deer, and are proud of it)",
+    "Jackrabbits (carjackers)"
    ]
   },
   "Oceania": {
@@ -413,11 +413,11 @@
     "Papatuanuku's wrath"
    ],
    "wildlife": [
-    "Emus (deeply emo)",
-    "Platypuses (speak only in platitudes)",
-    "Cassowaries (give you something to worry about)",
     "Box Jellyfish (box, and they're jelly)",
-    "Kiwis (fruit-shaped and furious)"
+    "Tasmanian Devils (actual devils, horns and all)",
+    "Laughing Kookaburras (laugh while you die)",
+    "Stonefish (fish made of stone)",
+    "Sugar Gliders (one long sugar rush)"
    ]
   }
  },

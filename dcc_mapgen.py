@@ -6538,6 +6538,27 @@ def render8(fl: Floor8) -> str:
     return "\n".join(o)
 
 
+def _wedge_chars(cx, cy, r0, r1, a0, a1, x, y, size=9) -> int:
+    """How many characters of a centred label at (x, y) fit inside a ring's wedge:
+    the width of the wedge along that line, measured out from x both ways, at
+    about half the font size a character. A lower line in a diagonal wedge
+    has less room than the one above it."""
+    import math
+
+    def inside(px):
+        r = math.hypot(px - cx, y - cy)
+        turn = (math.atan2(y - cy, px - cx) - a0) % (2 * math.pi)
+        return r0 <= r <= r1 and turn <= a1 - a0
+
+    reach = []
+    for way in (-1, 1):
+        d = 0
+        while d < 300 and inside(x + way * (d + 1)):
+            d += 1
+        reach.append(d)
+    return max(6, int((2 * min(reach) - 4) / (size * 0.5)))
+
+
 def render8_svg(fl: Floor8) -> str:
     import math
     W, H = 1000, 1060
@@ -6571,7 +6592,8 @@ def render8_svg(fl: Floor8) -> str:
         o.append(_text(tx, ty + 17, f"L{z.level_range[0]}–{z.level_range[1]}", size=9, anchor="middle", fill="#444"))
         yy = ty + 29
         if z.wildlife:
-            o.append(_text(tx, yy, "+ " + _fit(wildlife_name(z.wildlife), 20), size=9, anchor="middle", fill="#2f5a1f")); yy += 12
+            room = min(22, _wedge_chars(cx, cy, r0, r1, a0, a1, tx, yy - 3) - 2)
+            o.append(_text(tx, yy, "+ " + _fit(wildlife_name(z.wildlife), room), size=9, anchor="middle", fill="#2f5a1f")); yy += 12
         if z.legendary:
             o.append(_text(tx, yy, "LEGEND: " + _fit(z.legendary, 20), size=9, weight="bold", anchor="middle", fill="#7a1f1f")); yy += 12
         if z.deckmasters:
