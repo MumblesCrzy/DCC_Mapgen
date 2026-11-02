@@ -3825,6 +3825,98 @@ class HunterTest(unittest.TestCase):
         self.assertTrue(mg.threat_suggestions(gear.replace("- Gear: ", "- ")))
 
 
+class WildlifeTest(unittest.TestCase):
+    """Floor 8's creatures aren't folklore only: any local animal with a punny
+    name can be flagged into a totem card too. Each region has a few, written up
+    as the pun ("Monk Seals (seals that know martial arts)" in the Caribbean),
+    and about a third of each ring's zones has one."""
+
+    @staticmethod
+    def _bare(text):
+        return re.sub(r"\s*\(.*\)$", "", text).lower()
+
+    def _floors(self):
+        for region in mg.FOLKLORE:
+            for size in ("small", "medium", "large"):
+                yield region, size, mg.generate(8, size, 4242, region=region, images=False)
+
+    def test_every_region_has_a_few(self):
+        for region, fk in mg.FOLKLORE.items():
+            animals = fk["wildlife"]
+            self.assertGreaterEqual(len(animals), 3, region)
+            self.assertEqual(len(set(animals)), len(animals), region)
+            for a in animals:
+                self.assertRegex(a, r"^[A-Z][^()]+ \([^()]+\)$", region)
+            folklore = {self._bare(x) for x in fk["common"] + fk["legendary"]}
+            self.assertFalse({self._bare(a) for a in animals} & folklore, region)
+        self.assertIn("Monk Seals (seals that know martial arts)",
+                      mg.FOLKLORE["Caribbean"]["wildlife"])
+        # The folklore bank is folklore: the monk seals were a real animal in it.
+        self.assertFalse([c for c in mg.FOLKLORE["Caribbean"]["common"] if "seal" in c.lower()])
+
+    def test_a_third_of_each_ring(self):
+        for region, size, res in self._floors():
+            fl, where = res.floor, f"{region} {size}"
+            per_ring = max(1, round(fl.wedges / 3))
+            bank = mg.FOLKLORE[region]["wildlife"]
+            dealt = []
+            for ring in (1, 2, 3):
+                found = [z for z in fl.zones if z.ring == ring and z.wildlife]
+                self.assertEqual(len(found), per_ring, f"{where} ring {ring}")
+                for z in found:
+                    self.assertIn(z.wildlife, bank, where)
+                    card = z.wildlife_totem
+                    self.assertEqual(card.name, mg.wildlife_name(z.wildlife), where)
+                    plain = {1: "Common", 2: "Uncommon", 3: "Rare"}[ring]
+                    rarer = {1: "Uncommon", 2: "Rare", 3: "Epic"}[ring]
+                    self.assertIn(card.rarity, (plain, rarer), where)
+                    self.assertIn(card.ability, mg.TOTEM_ABILITIES, where)
+                    dealt.append(z.wildlife)
+            # Dealt from a deck: every animal once before any comes round again.
+            first = dealt[:len(bank)]
+            self.assertEqual(len(set(first)), len(first), where)
+
+    def test_the_write_up_and_the_map_give_them(self):
+        for region, size, res in self._floors():
+            md, svg = res.markdown, dict(mg.floor_svgs(res.floor))[""]
+            self.assertIn("any local animal with a punny name can be flagged too", md)
+            for z in res.floor.zones:
+                if not z.wildlife:
+                    continue
+                lo, hi = z.level_range
+                line = f"- **Local wildlife:** {z.wildlife}, Level {lo}–{hi}"
+                self.assertIn(line, md)
+                after = md.index(line)
+                self.assertLess(md.index(f"#### {z.label} ("), after)
+                self.assertIn(f"  - Totem card: **{z.wildlife_totem.name}** [{z.wildlife_totem.rarity}]",
+                              md[after:])
+                self.assertIn(">+ " + mg._fit(mg.wildlife_name(z.wildlife), 20) + "<", svg)
+
+    def test_they_change_nothing_else_on_the_floor(self):
+        for region in ("Caribbean", "East Asia"):
+            with mock.patch.object(mg, "add_wildlife", lambda fl: None):
+                without = mg.generate(8, "large", 4242, region=region, images=False).floor
+            fl = mg.generate(8, "large", 4242, region=region, images=False).floor
+            data, theirs = mg._to_data(fl), mg._to_data(without)
+            for d in (data, theirs):
+                for z in d["zones"]:
+                    z.pop("wildlife"), z.pop("wildlife_totem")
+            self.assertEqual(data, theirs, region)
+
+    def test_an_older_floor_file_gets_the_same_wildlife(self):
+        res = mg.generate(8, "medium", 4242, region="Caribbean", images=False)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "f8" + mg.FLOOR_FILE_SUFFIX)
+            mg.save_floor_file(res, path)
+            with open(path, encoding="utf-8") as f:
+                data = json.load(f)
+            for z in data["data"]["zones"]:
+                del z["wildlife"], z["wildlife_totem"]
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(data, f)
+            self.assertEqual(mg.open_floor_file(path).markdown, res.markdown)
+
+
 class ShopsTest(unittest.TestCase):
     """Shops and prices. The books' rules are written out here: marketplaces
     from the Third Floor; a general store charges three times a specialist's

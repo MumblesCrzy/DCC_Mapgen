@@ -25,8 +25,9 @@ A procedural floor/map generator in the style of the *Dungeon Crawler Carl* book
   - **Quests:** each faction posts quests (one each on a small bubble, three on a large, the books' nine), shaped like the books' Fifth Floor ones — free a prisoner, find out who killed my son, kill someone, stay out of a building, get a loose creature back — and filled in with the bubble's own castles, rulers, rival factions, settlements and mobs.
   - **Achievements:** nine the books hand out on the Fifth Floor, leaving out the ones tied to its plot, then eight built on how a bubble works. Their boxes reach the floor's box suggestions and open in the roller.
   - Both sections say they are suggested ideas, not a definitive list.
-- **Floor 6** (The Hunting Grounds) — Floor 3's grid reskinned as jungle, with hunter parties and a bounty board.
+- **Floor 6** (The Hunting Grounds) — Floor 3's grid reskinned as jungle, with hunter parties (written up hunter by hunter; see [Hunters](#hunters)) and a bounty board.
 - **Floor 8** (Ghosts of Earth) — polar folklore map with totem cards and a deckmaster ladder.
+  - **Local wildlife:** the region's creatures aren't folklore only. Any local animal with a punny name can be flagged into a totem card too, and each region has five, written up as the pun: Monk Seals (seals that know martial arts) in the Caribbean, Robins (rob you blind) in the British Isles, Llamas (all drama) in Latin America. About a third of each ring's zones has one alongside its folklore creature, at the zone's levels and with its own totem card, dealt the way the folklore's are. The map marks it under the zone's creature ("+ Monk Seals"). The banks are each region's `wildlife` in `data/floor8.json`. They're dealt on a stream of their own, so nothing else on a floor moved, and a floor file from before them gets the ones a fresh build would.
 - **Floor 9** (Faction Wars) — the nine-slice pie around Larracos, warlords, stance paths.
 - **Floor 10** (Don't Come In Last) — seven-heat race season, garage/vehicle/upgrades.
 - **Floor 11** (A Parade of Horribles) — parade route, judges, arena boss.
@@ -1195,7 +1196,18 @@ level 50. It checks:
   them opens with the same ones;
 - a new level restats a hunter and the party's heading says so, and the build is
   shown but not edited;
-- a hunter's gear is not a sign for the sponsor's threat scan.
+- a hunter's gear is not a sign for the sponsor's threat scan;
+- no floor offers a ransom for a hunter, which the books don't.
+
+Floor 8's local wildlife has its own group:
+- every region has a few punny animals, each written up as the pun and none of them
+  one of the region's folklore creatures; the Caribbean has the Monk Seals, and its
+  folklore bank no longer does;
+- a third of each ring's zones has one, from the region's own bank, each animal once
+  before any repeats, with a totem card named for it and the ring's rarity;
+- the write-up gives each one under its zone, with its card, and the map marks it;
+- adding them changed nothing else on the floor, and a floor file saved before them
+  opens with the same ones.
 
 Floor files have their own group:
 - every pinned floor, saved and opened again, draws the same write-up and maps byte

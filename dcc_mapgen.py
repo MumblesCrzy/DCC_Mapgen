@@ -6259,6 +6259,7 @@ SIZE8_CFG = {"small": {"wedges": 4, "rivals": 2}, "medium": {"wedges": 6, "rival
 F8_RULES = [
     "Squads are unbreakable, five crawlers at most. Each squad has six empty totem slots and must fill them before it can advance.",
     "The squad leader holds twenty flags. Drop any creature (ghosts included) to 5% health or below and plant a flag: it becomes a T'Ghee totem card.",
+    "The region's creatures aren't folklore only: any local animal with a punny name can be flagged too.",
     "Totems summon for the duration printed on the card and are reusable even if the summoned monster dies.",
     "Utility cards target your own summoned totems. Snares only play while an enemy totem is out. Mystic cards act on squads, leaders, or decks.",
     "Consumable cards are gone the first time they're played, even in a practice arena. Cooldowns don't reset after practice.",
@@ -6295,6 +6296,10 @@ class Zone8:
     vending: bool = False
     key: bool = False
     key_km: Optional[int] = None
+    # A local animal with a punny name, flaggable like the folklore: "Monk Seals
+    # (seals that know martial arts)". About a third of the zones have one.
+    wildlife: Optional[str] = None
+    wildlife_totem: Optional[TotemCard] = None
 
 
 @dataclass
@@ -6423,6 +6428,43 @@ def _wedge_dir(w, W):
     return dirs[int(round(w * 8 / W)) % 8]
 
 
+def wildlife_name(text: str) -> str:
+    """ "Monk Seals (seals that know martial arts)" is Monk Seals."""
+    return re.sub(r"\s*\(.*\)$", "", text)
+
+
+def add_wildlife(fl) -> None:
+    """Put the region's punny local animals in about a third of a Floor 8's zones,
+    the same share of each ring, each with a totem card dealt the way the zone's
+    own creature's is: its rarity by ring, now and then a step rarer.
+
+    Dealt on a stream of their own after the floor is built, so adding them moved
+    nothing else on any floor. A floor file from before them, with none anywhere,
+    gets the ones a fresh build of its seed would."""
+    zones = getattr(fl, "zones", None) or []
+    if any(z.wildlife for z in zones):
+        return
+    animals = FOLKLORE.get(fl.archetype, {}).get("wildlife")
+    if not animals:
+        return
+    rng = random.Random(f"floor{fl.number}|{fl.seed}|wildlife")
+    deck = Deck(rng, animals)
+    per_ring = max(1, round(fl.wedges / 3))
+    for ring in (1, 2, 3):
+        ring_zones = [z for z in zones if z.ring == ring]
+        for z in sorted(rng.sample(ring_zones, min(per_ring, len(ring_zones))),
+                        key=lambda z: z.wedge):
+            animal = deck.draw()
+            rarity = {1: "Common", 2: "Uncommon", 3: "Rare"}[ring]
+            if rng.random() < 0.2:
+                rarity = {1: "Uncommon", 2: "Rare", 3: "Epic"}[ring]
+            z.wildlife = animal
+            z.wildlife_totem = TotemCard(
+                wildlife_name(animal), rarity,
+                rng.choice(["30 s", "45 s", "60 s", "90 s", "2 min", "3 min"]),
+                rng.choice(TOTEM_ABILITIES))
+
+
 def render8(fl: Floor8) -> str:
     c = FLOOR8_CFG
     o = [f"# Floor 8 — {fl.place} ({fl.size})", "", "## Summary", ""]
@@ -6465,6 +6507,11 @@ def render8(fl: Floor8) -> str:
             o.append("")
             o.append(f"- **Mob:** {z.mob}, Level {z.level_range[0]}–{z.level_range[1]}")
             o.append(f"  - Totem card: **{z.totem.name}** [{z.totem.rarity}] — summon {z.totem.duration}. {z.totem.ability}")
+            if z.wildlife:
+                o.append(f"- **Local wildlife:** {z.wildlife}, Level {z.level_range[0]}–{z.level_range[1]}")
+                card = z.wildlife_totem
+                if card:
+                    o.append(f"  - Totem card: **{card.name}** [{card.rarity}] — summon {card.duration}. {card.ability}")
             if z.legendary:
                 o.append(f"- **Legendary:** {z.legendary} (Level {z.legendary_level}). Flaggable at 5% like anything else, if you can get it there.")
             o.append(f"- **Ghost hazard:** {z.hazard}")
@@ -6523,6 +6570,8 @@ def render8_svg(fl: Floor8) -> str:
         o.append(_text(tx, ty + 5, _fit(z.mob, 22), size=10, anchor="middle"))
         o.append(_text(tx, ty + 17, f"L{z.level_range[0]}–{z.level_range[1]}", size=9, anchor="middle", fill="#444"))
         yy = ty + 29
+        if z.wildlife:
+            o.append(_text(tx, yy, "+ " + _fit(wildlife_name(z.wildlife), 20), size=9, anchor="middle", fill="#2f5a1f")); yy += 12
         if z.legendary:
             o.append(_text(tx, yy, "LEGEND: " + _fit(z.legendary, 20), size=9, weight="bold", anchor="middle", fill="#7a1f1f")); yy += 12
         if z.deckmasters:
@@ -8639,6 +8688,8 @@ def generate(floor: int = 1, size: str = "medium", seed: Optional[int] = None, *
         add_mayors(fl)
     if floor == 6:
         add_hunters(fl)
+    if floor == 8:
+        add_wildlife(fl)
 
     # Other crawlers are dealt on their own rng stream, after the floor is
     # built, so every floor can carry a campaign roster through one code path
@@ -8887,6 +8938,8 @@ def render_floor_data(data: dict, where: str = "the floor file") -> GenResult:
         add_mayors(fl)              # a file saved before settlements had mayors
     if number == 6 and isinstance(getattr(fl, "hunters", None), list):
         add_hunters(fl)             # or before hunter parties had members
+    if number == 8 and isinstance(getattr(fl, "zones", None), list):
+        add_wildlife(fl)            # or before Floor 8 had local wildlife
     boss_stairs = bool(data.get("boss_stairs", True))
     try:
         text = _render_floor(fl, number)
