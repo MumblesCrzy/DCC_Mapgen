@@ -3833,101 +3833,131 @@ class HunterTest(unittest.TestCase):
         self.assertTrue(mg.threat_suggestions(gear.replace("- Gear: ", "- ")))
 
 
-class WildlifeTest(unittest.TestCase):
-    """Floor 8's creatures aren't folklore only: any local animal with a punny
-    name can be flagged into a totem card too. Each region has a few, written up
-    as the pun ("Monk Seals (seals that know martial arts)" in the Caribbean),
-    and about a third of each ring's zones has one."""
+class CardRarityTest(unittest.TestCase):
+    """Floor 8's T'Ghee cards come in seven rarities: Common, Uncommon, Rare, Very
+    Rare, Mythic, Legendary and Unique. A region's Common and Uncommon creatures
+    are local animals whose names are the pun ("Monk Seals (seals that know
+    martial arts)" in the Caribbean), as are two of its Rares; everything rarer
+    is supernatural; its one Unique is a local legend. Rarer creatures live
+    farther out."""
 
-    @staticmethod
-    def _bare(text):
-        return re.sub(r"\s*\(.*\)$", "", text).lower()
+    RARITIES = ["Common", "Uncommon", "Rare", "Very Rare", "Mythic", "Legendary", "Unique"]
+    RINGS = {1: ["Common", "Uncommon"], 2: ["Rare", "Very Rare"], 3: ["Very Rare", "Mythic"]}
+    # Animals, by count, in each rarity; the rest of a rarity is supernatural.
+    ANIMALS = {"Common": 3, "Uncommon": 3, "Rare": 2}
+    PUN = re.compile(r"^[A-Z][^()]+ \([^()]+\)$")
+    # The one local legend each region's Unique is.
+    UNIQUE = {"Northern Europe": "the Kraken", "Mediterranean": "Scylla",
+              "Eastern Europe": "Baba Yaga", "British Isles": "the Loch Ness Monster",
+              "East Asia": "Bulgasari (the iron-eater)", "South Asia": "the Yeti",
+              "Middle East": "the Simurgh", "West Africa": "Anansi", "Latin America": "La Llorona",
+              "Caribbean": "the Lusca (half shark, half octopus)", "North America": "Bigfoot",
+              "Oceania": "Kurangaituku (the bird-woman)"}
 
     def _floors(self):
         for region in mg.FOLKLORE:
             for size in ("small", "medium", "large"):
                 yield region, size, mg.generate(8, size, 4242, region=region, images=False)
 
-    def test_every_region_has_a_few(self):
+    def test_every_region_fills_every_rarity(self):
+        self.assertEqual(list(mg.CARD_RARITIES), self.RARITIES)
         for region, fk in mg.FOLKLORE.items():
-            animals = fk["wildlife"]
-            self.assertGreaterEqual(len(animals), 3, region)
-            self.assertEqual(len(set(animals)), len(animals), region)
-            for a in animals:
-                self.assertRegex(a, r"^[A-Z][^()]+ \([^()]+\)$", region)
-            folklore = {self._bare(x) for x in fk["common"] + fk["legendary"]}
-            self.assertFalse({self._bare(a) for a in animals} & folklore, region)
+            tiers = fk["creatures"]
+            self.assertEqual(list(tiers), self.RARITIES, region)
+            for rarity in self.RARITIES[:5]:
+                self.assertGreaterEqual(len(tiers[rarity]), 3, f"{region} {rarity}")
+            self.assertGreaterEqual(len(tiers["Legendary"]), 5, region)
+            self.assertEqual(tiers["Unique"], [self.UNIQUE[region]], region)
+            everyone = sum(tiers.values(), [])
+            self.assertEqual(len(set(everyone)), len(everyone), f"{region}: a creature twice")
+            # Animals first, every one written up as its pun; supernatural after.
+            for rarity, n in self.ANIMALS.items():
+                for animal in tiers[rarity][:n]:
+                    self.assertRegex(animal, self.PUN, f"{region} {rarity}")
+            for rarity in ("Rare", "Very Rare", "Mythic", "Legendary", "Unique"):
+                animals = set(sum((tiers[r][:n] for r, n in self.ANIMALS.items()), []))
+                self.assertFalse(animals & set(tiers[rarity][self.ANIMALS.get(rarity, 0):]),
+                                 f"{region} {rarity}")
         self.assertIn("Monk Seals (seals that know martial arts)",
-                      mg.FOLKLORE["Caribbean"]["wildlife"])
-        # The folklore bank is folklore: the monk seals were a real animal in it.
-        self.assertFalse([c for c in mg.FOLKLORE["Caribbean"]["common"] if "seal" in c.lower()])
+                      mg.FOLKLORE["Caribbean"]["creatures"]["Uncommon"])
 
-    def test_a_third_of_each_ring(self):
+    def test_rarer_farther_out(self):
         for region, size, res in self._floors():
             fl, where = res.floor, f"{region} {size}"
-            per_ring = max(1, round(fl.wedges / 3))
-            bank = mg.FOLKLORE[region]["wildlife"]
-            dealt = []
-            for ring in (1, 2, 3):
-                found = [z for z in fl.zones if z.ring == ring and z.wildlife]
-                self.assertEqual(len(found), per_ring, f"{where} ring {ring}")
-                for z in found:
-                    self.assertIn(z.wildlife, bank, where)
-                    card = z.wildlife_totem
-                    self.assertEqual(card.name, mg.wildlife_name(z.wildlife), where)
-                    plain = {1: "Common", 2: "Uncommon", 3: "Rare"}[ring]
-                    rarer = {1: "Uncommon", 2: "Rare", 3: "Epic"}[ring]
-                    self.assertIn(card.rarity, (plain, rarer), where)
+            tiers = mg.FOLKLORE[region]["creatures"]
+            for z in fl.zones:
+                self.assertEqual([c.rarity for c in z.creatures], self.RINGS[z.ring], f"{where} {z.label}")
+                for card in z.creatures:
+                    self.assertIn(card.name, tiers[card.rarity], where)
                     self.assertIn(card.ability, mg.TOTEM_ABILITIES, where)
-                    dealt.append(z.wildlife)
-            # Dealt from a deck: every animal once before any comes round again.
-            first = dealt[:len(bank)]
-            self.assertEqual(len(set(first)), len(first), where)
+            for z in fl.zones:
+                if z.legendary:
+                    self.assertIn(z.legendary, tiers["Legendary"], where)
+            # One Unique a floor, in the outer ring, the region's own legend.
+            uniques = [z for z in fl.zones if z.unique]
+            self.assertEqual(len(uniques), 1, where)
+            z = uniques[0]
+            self.assertEqual((z.ring, z.unique), (3, self.UNIQUE[region]), where)
+            self.assertIn(z.unique_level, range(90, 100), where)
+            self.assertFalse(z.legendary and [o for o in fl.zones if o.ring == 3 and not o.legendary],
+                             f"{where}: the Unique shares a zone with a Legendary it needn't")
+            # Each rarity dealt from a deck: none comes round again before the rest.
+            for rarity in self.RARITIES[:5]:
+                dealt = [c.name for z in fl.zones for c in z.creatures if c.rarity == rarity]
+                first = dealt[:len(tiers[rarity])]
+                self.assertEqual(len(set(first)), len(first), f"{where} {rarity}")
+            for r in fl.rivals:
+                self.assertTrue(1 <= len(r.totems) <= 4, where)
+                for known in r.totems:
+                    name, rarity = re.fullmatch(r"(.+) \[(.+)\]", known).groups()
+                    self.assertIn(rarity, ("Common", "Uncommon", "Rare", "Very Rare"), where)
+                    self.assertIn(name, [mg.creature_name(c) for c in tiers[rarity]], where)
 
     def test_the_write_up_and_the_map_give_them(self):
         for region, size, res in self._floors():
             md, svg = res.markdown, dict(mg.floor_svgs(res.floor))[""]
-            self.assertIn("any local animal with a punny name can be flagged too", md)
-            # Each on the map, trimmed to fit its wedge where it has to be.
-            labels = [html.unescape(t) for t in re.findall(r'>\+ ([^<]+)<', svg)]
-            wild = [mg.wildlife_name(z.wildlife) for z in res.floor.zones if z.wildlife]
-            self.assertEqual(len(labels), len(wild), f"{region} {size}")
-            for label, name in zip(labels, wild):
-                self.assertTrue(name.startswith(label.rstrip("…")) and len(label) >= 4, label)
+            self.assertIn("Cards come in seven rarities: Common, Uncommon, Rare, Very Rare, Mythic, "
+                          "Legendary and Unique.", md)
+            self.assertNotIn("Epic", md)
             for z in res.floor.zones:
-                if not z.wildlife:
-                    continue
+                head = md.index(f"#### {z.label} (")
                 lo, hi = z.level_range
-                line = f"- **Local wildlife:** {z.wildlife}, Level {lo}–{hi}"
-                self.assertIn(line, md)
-                after = md.index(line)
-                self.assertLess(md.index(f"#### {z.label} ("), after)
-                self.assertIn(f"  - Totem card: **{z.wildlife_totem.name}** [{z.wildlife_totem.rarity}]",
-                              md[after:])
+                self.assertLess(head, md.index(f"- **Creatures** (Level {lo}–{hi}):", head))
+                for card in z.creatures:
+                    self.assertIn(f"  - **{card.rarity}:** {card.name}. Totem: summon {card.duration}. "
+                                  f"{card.ability}", md[head:])
+                if z.unique:
+                    self.assertIn(f"- **Unique:** {z.unique} (Level {z.unique_level}).", md[head:])
+            # The map: each zone's rarer creature under its label, the other after a "+",
+            # trimmed to fit its wedge where it has to be, and the Unique marked.
+            tops = [html.unescape(t) for t in re.findall(r'font-size="10"[^>]*>([^<]+)<', svg)]
+            for z in res.floor.zones:
+                self.assertIn(mg._fit(mg.creature_name(z.creatures[-1].name), 22), tops, region)
+            labels = [html.unescape(t) for t in re.findall(r'>\+ ([^<]+)<', svg)]
+            self.assertEqual(len(labels), len(res.floor.zones), f"{region} {size}")
+            for label, z in zip(labels, res.floor.zones):
+                self.assertTrue(mg.creature_name(z.creatures[0].name).startswith(label.rstrip("…")), label)
+            self.assertIn("UNIQUE: " + mg._fit(mg.creature_name(self.UNIQUE[region]), 20), html.unescape(svg))
 
-    def test_they_change_nothing_else_on_the_floor(self):
-        for region in ("Caribbean", "East Asia"):
-            with mock.patch.object(mg, "add_wildlife", lambda fl: None):
-                without = mg.generate(8, "large", 4242, region=region, images=False).floor
-            fl = mg.generate(8, "large", 4242, region=region, images=False).floor
-            data, theirs = mg._to_data(fl), mg._to_data(without)
-            for d in (data, theirs):
-                for z in d["zones"]:
-                    z.pop("wildlife"), z.pop("wildlife_totem")
-            self.assertEqual(data, theirs, region)
-
-    def test_an_older_floor_file_gets_the_same_wildlife(self):
+    def test_an_older_floor_file_gets_the_same_creatures(self):
         res = mg.generate(8, "medium", 4242, region="Caribbean", images=False)
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "f8" + mg.FLOOR_FILE_SUFFIX)
             mg.save_floor_file(res, path)
             with open(path, encoding="utf-8") as f:
                 data = json.load(f)
-            for z in data["data"]["zones"]:
-                del z["wildlife"], z["wildlife_totem"]
+            for z in data["data"]["zones"]:      # one mob a zone, as before rarities
+                card = z.pop("creatures")[0]
+                z.pop("unique"), z.pop("unique_level")
+                z["mob"], z["totem"] = card["name"], dict(card, rarity="Common")
+            keep = [r["totems"] for r in data["data"]["rivals"]]
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(data, f)
-            self.assertEqual(mg.open_floor_file(path).markdown, res.markdown)
+            back = mg.open_floor_file(path)
+        self.assertEqual(back.markdown, res.markdown)
+        self.assertEqual([r.totems for r in back.floor.rivals], keep, "a rival keeps its totems")
+        for z in back.floor.zones:
+            self.assertFalse({"mob", "totem"} & set(vars(z)))
 
 
 class SettlementAreaTest(unittest.TestCase):

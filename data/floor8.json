@@ -8,32 +8,48 @@
     "Aberdeen, Scotland",
     "Turku, Finland"
    ],
-   "common": [
-    "Draugr",
-    "Trolls",
-    "Huldra",
-    "Nøkken (river spirits)",
-    "Kelpies",
-    "Redcaps",
-    "Nisse",
-    "Mare (night hags)",
-    "Selkies",
-    "Lindworms"
-   ],
-   "legendary": [
-    "a Jötunn",
-    "the Nuckelavee",
-    "Fenrir's cub",
-    "a Draugr King",
-    "the Wild Hunt's master"
-   ],
-   "wildlife": [
-    "Hooded Crows (wear hoodies and mug people)",
-    "Musk Oxen (drenched in cheap cologne)",
-    "Killer Whales (contract killers, very professional)",
-    "Northern Pike (fish armed with pikes)",
-    "Lion's Mane Jellyfish (manes like lions, tempers to match)"
-   ]
+   "creatures": {
+    "Common": [
+     "Hooded Crows (wear hoodies and mug people)",
+     "Bank Voles (run the bank, and charge interest)",
+     "Northern Pike (fish armed with pikes)"
+    ],
+    "Uncommon": [
+     "Musk Oxen (drenched in cheap cologne)",
+     "Basking Sharks (bask on the shore, and snap at anyone in their light)",
+     "Atlantic Wolffish (wolves with fins, hunting in packs)"
+    ],
+    "Rare": [
+     "Killer Whales (contract killers, very professional)",
+     "Lion's Mane Jellyfish (manes like lions, tempers to match)",
+     "Nisse",
+     "Selkies",
+     "Huldra",
+     "Fossegrim (waterfall fiddlers)"
+    ],
+    "Very Rare": [
+     "Nøkken (river spirits)",
+     "Kelpies",
+     "Redcaps",
+     "Mare (night hags)"
+    ],
+    "Mythic": [
+     "Draugr",
+     "Trolls",
+     "Lindworms",
+     "Valkyries"
+    ],
+    "Legendary": [
+     "a Jötunn",
+     "the Nuckelavee",
+     "Fenrir's cub",
+     "a Draugr King",
+     "the Wild Hunt's master"
+    ],
+    "Unique": [
+     "the Kraken"
+    ]
+   }
   },
   "Mediterranean": {
    "places": [
@@ -43,32 +59,48 @@
     "Marseille, France",
     "Tunis, Tunisia"
    ],
-   "common": [
-    "Harpies",
-    "Satyrs",
-    "Lamia",
-    "Strix (screech owls)",
-    "Cyclopes",
-    "Gorgon spawn",
-    "Empusa",
-    "Sirens",
-    "Basilisks",
-    "Centaurs"
-   ],
-   "legendary": [
-    "a Minotaur",
-    "the Chimera",
-    "a Hydra",
-    "Scylla",
-    "a Sphinx"
-   ],
-   "wildlife": [
-    "Swordfish (fish that fence)",
-    "Praying Mantises (pray before every fight, and mean it)",
-    "Hermit Crabs (live alone and want you gone)",
-    "Sea Urchins (street urchins who pick your pocket)",
-    "Stingrays (run sting operations)"
-   ]
+   "creatures": {
+    "Common": [
+     "Hermit Crabs (live alone and want you gone)",
+     "Sea Urchins (street urchins who pick your pocket)",
+     "Bee-eaters (eat bees, and anyone who keeps them)"
+    ],
+    "Uncommon": [
+     "Praying Mantises (pray before every fight, and mean it)",
+     "Cuttlefish (cut you, then say it was for your own good)",
+     "Stingrays (run sting operations)"
+    ],
+    "Rare": [
+     "Swordfish (fish that fence)",
+     "Hammerhead Sharks (heads that are hammers, and they use them)",
+     "Satyrs",
+     "Strix (screech owls)",
+     "Harpies",
+     "Centaurs"
+    ],
+    "Very Rare": [
+     "Sirens",
+     "Lamia",
+     "Empusa",
+     "Furies"
+    ],
+    "Mythic": [
+     "Cyclopes",
+     "Gorgon spawn",
+     "Basilisks",
+     "Lestrygonians (cannibal giants)"
+    ],
+    "Legendary": [
+     "a Minotaur",
+     "the Chimera",
+     "a Hydra",
+     "a Sphinx",
+     "a Gorgon"
+    ],
+    "Unique": [
+     "Scylla"
+    ]
+   }
   },
   "Eastern Europe": {
    "places": [
@@ -78,32 +110,48 @@
     "Belgrade, Serbia",
     "Prague, Czechia"
    ],
-   "common": [
-    "Strigoi",
-    "Pricolici (wolf-ghouls)",
-    "Rusalki",
-    "Vodyanoi",
-    "Leshy",
-    "Domovoi",
-    "Vampires",
-    "Werewolves",
-    "Upyr",
-    "Vila"
-   ],
-   "legendary": [
-    "Baba Yaga",
-    "a Zmey (three-headed dragon)",
-    "Koschei the Deathless",
-    "a Vampire Voivode",
-    "the Likho"
-   ],
-   "wildlife": [
-    "Moles (double agents)",
-    "Fire Salamanders (actually on fire)",
-    "Stag Beetles (permanently on a stag night)",
-    "Kingfishers (royalty, and they expect a bow)",
-    "Beavers (eager to a fault, and never stop working)"
-   ]
+   "creatures": {
+    "Common": [
+     "Moles (double agents)",
+     "Beavers (eager to a fault, and never stop working)",
+     "Kingfishers (royalty, and they expect a bow)"
+    ],
+    "Uncommon": [
+     "Stag Beetles (permanently on a stag night)",
+     "Wallcreepers (creep along walls, and up behind you)",
+     "Eagle Owls (half eagle, half owl, all talons)"
+    ],
+    "Rare": [
+     "Fire Salamanders (actually on fire)",
+     "Wolf Spiders (spiders that hunt in packs)",
+     "Domovoi",
+     "Kikimora (house spirits gone bad)",
+     "Vila",
+     "Rusalki"
+    ],
+    "Very Rare": [
+     "Vodyanoi",
+     "Leshy",
+     "Pricolici (wolf-ghouls)",
+     "Psoglav (dog-headed men)"
+    ],
+    "Mythic": [
+     "Strigoi",
+     "Upyr",
+     "Vampires",
+     "Werewolves"
+    ],
+    "Legendary": [
+     "a Zmey (three-headed dragon)",
+     "Koschei the Deathless",
+     "a Vampire Voivode",
+     "the Likho",
+     "a Vodyanoi Tsar"
+    ],
+    "Unique": [
+     "Baba Yaga"
+    ]
+   }
   },
   "British Isles": {
    "places": [
@@ -113,32 +161,48 @@
     "Inverness, Scotland",
     "Belfast, Northern Ireland"
    ],
-   "common": [
-    "Banshees",
-    "Leprechauns",
-    "Redcaps",
-    "Black Dogs",
-    "Púca",
-    "Boggarts",
-    "Dullahan",
-    "Fomorians",
-    "Will-o'-the-wisps",
-    "Kelpies"
-   ],
-   "legendary": [
-    "the Black Shuck",
-    "a Fomorian King",
-    "the Cú Sídhe",
-    "Jenny Greenteeth",
-    "the Sluagh"
-   ],
-   "wildlife": [
-    "Badgers (badger you until you give up)",
-    "Robins (rob you blind)",
-    "Adders (add up your mistakes)",
-    "Red Kites (fly on strings)",
-    "Cuckoos (completely cuckoo)"
-   ]
+   "creatures": {
+    "Common": [
+     "Robins (rob you blind)",
+     "Cuckoos (completely cuckoo)",
+     "Bullfinches (charge like bulls)"
+    ],
+    "Uncommon": [
+     "Badgers (badger you until you give up)",
+     "Red Kites (fly on strings)",
+     "Nightjars (keep the night in a jar, and let it out on you)"
+    ],
+    "Rare": [
+     "Adders (add up your mistakes)",
+     "Swallows (swallow you whole)",
+     "Leprechauns",
+     "Púca",
+     "Will-o'-the-wisps",
+     "Boggarts"
+    ],
+    "Very Rare": [
+     "Redcaps",
+     "Black Dogs",
+     "Kelpies",
+     "Knockers (spirits of the tin pits)"
+    ],
+    "Mythic": [
+     "Banshees",
+     "Dullahan",
+     "Fomorians",
+     "Each-uisge (water horses)"
+    ],
+    "Legendary": [
+     "the Black Shuck",
+     "a Fomorian King",
+     "the Cú Sídhe",
+     "Jenny Greenteeth",
+     "the Sluagh"
+    ],
+    "Unique": [
+     "the Loch Ness Monster"
+    ]
+   }
   },
   "East Asia": {
    "places": [
@@ -148,32 +212,48 @@
     "Taipei, Taiwan",
     "Sapporo, Japan"
    ],
-   "common": [
-    "Kappa",
-    "Tengu",
-    "Oni",
-    "Kitsune",
-    "Jiangshi",
-    "Gumiho",
-    "Yuki-onna",
-    "Nue",
-    "Dokkaebi",
-    "Hungry ghosts"
-   ],
-   "legendary": [
-    "an Orochi",
-    "a Nine-Tailed Fox",
-    "the Gashadokuro",
-    "a Dragon King",
-    "a Great Oni Lord"
-   ],
-   "wildlife": [
-    "Cranes (lift heavy things, like you)",
-    "Mandarin Ducks (speak only Mandarin)",
-    "Moon Bears (moon you, then maul you)",
-    "Firefly Squid (squid that are on fire)",
-    "Spider Crabs (half spider, half crab)"
-   ]
+   "creatures": {
+    "Common": [
+     "Mandarin Ducks (speak only Mandarin)",
+     "Cranes (lift heavy things, like you)",
+     "Firefly Squid (squid that are on fire)"
+    ],
+    "Uncommon": [
+     "Pufferfish (huff and puff and blow your house down)",
+     "Horseshoe Crabs (shod like horses, and they kick)",
+     "Spider Crabs (half spider, half crab)"
+    ],
+    "Rare": [
+     "Moon Bears (moon you, then maul you)",
+     "Snakeheads (fish with snakes for heads)",
+     "Kasa-obake (umbrella ghosts)",
+     "Kappa",
+     "Dokkaebi",
+     "Hungry ghosts"
+    ],
+    "Very Rare": [
+     "Tengu",
+     "Kitsune",
+     "Jiangshi",
+     "Bakeneko (cat demons)"
+    ],
+    "Mythic": [
+     "Oni",
+     "Gumiho",
+     "Yuki-onna",
+     "Nue"
+    ],
+    "Legendary": [
+     "an Orochi",
+     "a Nine-Tailed Fox",
+     "the Gashadokuro",
+     "a Dragon King",
+     "a Great Oni Lord"
+    ],
+    "Unique": [
+     "Bulgasari (the iron-eater)"
+    ]
+   }
   },
   "South Asia": {
    "places": [
@@ -183,32 +263,48 @@
     "Lahore, Pakistan",
     "Dhaka, Bangladesh"
    ],
-   "common": [
-    "Rakshasas",
-    "Vetalas",
-    "Nagas",
-    "Bhuta",
-    "Pishacha",
-    "Churel",
-    "Yakshas",
-    "Preta",
-    "Garuda-kin",
-    "Asuras"
-   ],
-   "legendary": [
-    "Ravana's shade",
-    "a Naga Raja",
-    "a Rakshasa King",
-    "Makara",
-    "the Bhoota Vahana"
-   ],
-   "wildlife": [
-    "King Cobras (demand tribute)",
-    "Sloth Bears (win by doing nothing)",
-    "Fishing Cats (bait a hook and reel you in)",
-    "Flying Foxes (foxes with wings)",
-    "Clouded Leopards (carry their own storm cloud)"
-   ]
+   "creatures": {
+    "Common": [
+     "Barking Deer (deer that bark, and bite)",
+     "Flying Foxes (foxes with wings)",
+     "Rhinoceros Beetles (beetles with a rhino's horn and temper)"
+    ],
+    "Uncommon": [
+     "Fishing Cats (bait a hook and reel you in)",
+     "Whip Snakes (crack like whips)",
+     "Sloth Bears (win by doing nothing)"
+    ],
+    "Rare": [
+     "King Cobras (demand tribute)",
+     "Clouded Leopards (carry their own storm cloud)",
+     "Bhuta",
+     "Preta",
+     "Yakshas",
+     "Kinnaras (half-bird musicians)"
+    ],
+    "Very Rare": [
+     "Vetalas",
+     "Pishacha",
+     "Churel",
+     "Brahmarakshasas (scholar demons)"
+    ],
+    "Mythic": [
+     "Rakshasas",
+     "Nagas",
+     "Garuda-kin",
+     "Asuras"
+    ],
+    "Legendary": [
+     "Ravana's shade",
+     "a Naga Raja",
+     "a Rakshasa King",
+     "Makara",
+     "the Bhoota Vahana"
+    ],
+    "Unique": [
+     "the Yeti"
+    ]
+   }
   },
   "Middle East": {
    "places": [
@@ -218,32 +314,48 @@
     "Baghdad, Iraq",
     "Istanbul, Türkiye"
    ],
-   "common": [
-    "Ghouls",
-    "Jinn",
-    "Ifrit",
-    "Marid",
-    "Peri",
-    "Al (birth demons)",
-    "Nasnas",
-    "Roc chicks",
-    "Shaitan",
-    "Manticore cubs"
-   ],
-   "legendary": [
-    "a Roc",
-    "a Marid Sultan",
-    "the Bahamut",
-    "Zahhak",
-    "a Manticore"
-   ],
-   "wildlife": [
-    "Desert Monitors (watch everything, report everything)",
-    "Persian Cats (only speak Persian)",
-    "Sandgrouse (grouse constantly)",
-    "Deathstalker Scorpions (stalk you, specifically, to the death)",
-    "Sand Cats (made of sand, and it gets everywhere)"
-   ]
+   "creatures": {
+    "Common": [
+     "Sandgrouse (grouse constantly)",
+     "Persian Cats (only speak Persian)",
+     "Turkish Vans (cats that drive vans, badly)"
+    ],
+    "Uncommon": [
+     "Sand Cats (made of sand, and it gets everywhere)",
+     "Desert Monitors (watch everything, report everything)",
+     "Camel Spiders (spiders the size of camels)"
+    ],
+    "Rare": [
+     "Deathstalker Scorpions (stalk you, specifically, to the death)",
+     "Horned Vipers (vipers in horned helmets)",
+     "Peri",
+     "Nasnas",
+     "Roc chicks",
+     "Al (birth demons)"
+    ],
+    "Very Rare": [
+     "Ghouls",
+     "Manticore cubs",
+     "Divs (Persian demons)",
+     "Lamassu (winged bull guardians)"
+    ],
+    "Mythic": [
+     "Jinn",
+     "Ifrit",
+     "Marid",
+     "Shaitan"
+    ],
+    "Legendary": [
+     "a Roc",
+     "a Marid Sultan",
+     "the Bahamut",
+     "Zahhak",
+     "a Manticore"
+    ],
+    "Unique": [
+     "the Simurgh"
+    ]
+   }
   },
   "West Africa": {
    "places": [
@@ -253,32 +365,48 @@
     "Abidjan, Côte d'Ivoire",
     "Cotonou, Benin"
    ],
-   "common": [
-    "Adze (firefly vampires)",
-    "Asanbosam",
-    "Mami Wata's court",
-    "Anansi's children",
-    "Eloko",
-    "Obayifo",
-    "Sasabonsam",
-    "Tikoloshe",
-    "Ninki Nanka spawn",
-    "Egbere"
-   ],
-   "legendary": [
-    "the Ninki Nanka",
-    "a Sasabonsam Elder",
-    "Anansi",
-    "Mami Wata",
-    "the Grootslang"
-   ],
-   "wildlife": [
-    "Weaver Birds (weave spells)",
-    "Secretary Birds (take notes on how you die)",
-    "Drills (run drills, very disciplined)",
-    "Goliath Frogs (giants, still sore about David)",
-    "Assassin Bugs (take contracts)"
-   ]
+   "creatures": {
+    "Common": [
+     "Weaver Birds (weave spells)",
+     "Bushbabies (cry until you pick them up)",
+     "Hammerkops (birds with hammers for heads)"
+    ],
+    "Uncommon": [
+     "Secretary Birds (take notes on how you die)",
+     "Goliath Frogs (giants, still sore about David)",
+     "Drills (run drills, very disciplined)"
+    ],
+    "Rare": [
+     "Driver Ants (drive the getaway car)",
+     "Assassin Bugs (take contracts)",
+     "Aziza (forest fairies)",
+     "Anansi's children",
+     "Egbere",
+     "Eloko"
+    ],
+    "Very Rare": [
+     "Abiku (spirit children)",
+     "Adze (firefly vampires)",
+     "Tikoloshe",
+     "Obayifo"
+    ],
+    "Mythic": [
+     "Asanbosam",
+     "Sasabonsam",
+     "Mami Wata's court",
+     "Ninki Nanka spawn"
+    ],
+    "Legendary": [
+     "the Ninki Nanka",
+     "a Sasabonsam Elder",
+     "Mami Wata",
+     "the Grootslang",
+     "an Adze Queen"
+    ],
+    "Unique": [
+     "Anansi"
+    ]
+   }
   },
   "Latin America": {
    "places": [
@@ -288,32 +416,48 @@
     "Cartagena, Colombia",
     "Valparaíso, Chile"
    ],
-   "common": [
-    "Chupacabras",
-    "Nahuales",
-    "La Llorona's children",
-    "Cadejos",
-    "Curupira",
-    "Saci",
-    "Boto (river dolphins)",
-    "Alux",
-    "Cipitio",
-    "Pishtacos"
-   ],
-   "legendary": [
-    "the Chupacabra Prime",
-    "Quetzalcoatl's shade",
-    "the Mapinguari",
-    "a Cadejo Alpha",
-    "El Silbón"
-   ],
-   "wildlife": [
-    "Poison Dart Frogs (play darts, poisoned)",
-    "Howler Monkeys (howl with laughter at you)",
-    "Armadillos (armed to the teeth)",
-    "Vampire Bats (actual vampires)",
-    "Bullet Ants (fired like bullets)"
-   ]
+   "creatures": {
+    "Common": [
+     "Armadillos (armed to the teeth)",
+     "Capuchin Monkeys (friars in hooded robes)",
+     "Glass Frogs (shatter when hit, then reassemble)"
+    ],
+    "Uncommon": [
+     "Howler Monkeys (howl with laughter at you)",
+     "Spectacled Bears (wear spectacles, and make a spectacle)",
+     "Poison Dart Frogs (play darts, poisoned)"
+    ],
+    "Rare": [
+     "Vampire Bats (actual vampires)",
+     "Bullet Ants (fired like bullets)",
+     "Alux",
+     "Saci",
+     "Cipitio",
+     "Boto (river dolphins)"
+    ],
+    "Very Rare": [
+     "Cadejos",
+     "Curupira",
+     "Tunche (whistling forest spirits)",
+     "Ahuizotl (water dogs)"
+    ],
+    "Mythic": [
+     "Chupacabras",
+     "Nahuales",
+     "La Llorona's children",
+     "Pishtacos"
+    ],
+    "Legendary": [
+     "the Chupacabra Prime",
+     "Quetzalcoatl's shade",
+     "the Mapinguari",
+     "a Cadejo Alpha",
+     "El Silbón"
+    ],
+    "Unique": [
+     "La Llorona"
+    ]
+   }
   },
   "Caribbean": {
    "places": [
@@ -323,32 +467,48 @@
     "Port-au-Prince, Haiti",
     "San Juan, Puerto Rico"
    ],
-   "common": [
-    "Soucouyants",
-    "Duppies",
-    "Douens",
-    "Lagahoo",
-    "Rolling Calves",
-    "Zombies (bokor-made)",
-    "Ciguapas",
-    "Jumbies",
-    "Chupacabras",
-    "La Diablesses"
-   ],
-   "legendary": [
-    "Papa Bois",
-    "the Ol' Higue Queen",
-    "a Lagahoo Lord",
-    "the Bokor's Baron",
-    "Mama D'Leau"
-   ],
-   "wildlife": [
-    "Monk Seals (seals that know martial arts)",
-    "Parrotfish (repeat everything you say)",
-    "Sergeant Majors (fish that bark orders)",
-    "Trumpetfish (play the trumpet)",
-    "Nurse Sharks (patch you up, then bite)"
-   ]
+   "creatures": {
+    "Common": [
+     "Parrotfish (repeat everything you say)",
+     "Trumpetfish (play the trumpet)",
+     "Sergeant Majors (fish that bark orders)"
+    ],
+    "Uncommon": [
+     "Monk Seals (seals that know martial arts)",
+     "Surgeonfish (perform surgery without asking)",
+     "Lionfish (fish with lions' manes)"
+    ],
+    "Rare": [
+     "Nurse Sharks (patch you up, then bite)",
+     "Frigatebirds (birds that are warships)",
+     "Douens",
+     "Jumbies",
+     "Baccoo (bottle imps)",
+     "Ciguapas"
+    ],
+    "Very Rare": [
+     "Duppies",
+     "Rolling Calves",
+     "Moko Jumbies (stilt spirits)",
+     "Chupacabras"
+    ],
+    "Mythic": [
+     "Soucouyants",
+     "Lagahoo",
+     "Zombies (bokor-made)",
+     "La Diablesses"
+    ],
+    "Legendary": [
+     "Papa Bois",
+     "the Ol' Higue Queen",
+     "a Lagahoo Lord",
+     "the Bokor's Baron",
+     "Mama D'Leau"
+    ],
+    "Unique": [
+     "the Lusca (half shark, half octopus)"
+    ]
+   }
   },
   "North America": {
    "places": [
@@ -358,32 +518,48 @@
     "Santa Fe, New Mexico",
     "Anchorage, Alaska"
    ],
-   "common": [
-    "Wendigo",
-    "Skinwalkers",
-    "Jackalopes",
-    "Rougarou",
-    "Hodags",
-    "Mothmen",
-    "Thunderbird chicks",
-    "Sasquatch",
-    "Fearsome Critters",
-    "Goatmen"
-   ],
-   "legendary": [
-    "the Wendigo Elder",
-    "the Jersey Devil",
-    "a Thunderbird",
-    "the Mothman",
-    "Bigfoot"
-   ],
-   "wildlife": [
-    "Bullfrogs (full of bull)",
-    "Catfish (pretend to be someone else)",
-    "Mockingbirds (mock you mercilessly)",
-    "Killdeer (birds that kill deer, and are proud of it)",
-    "Jackrabbits (carjackers)"
-   ]
+   "creatures": {
+    "Common": [
+     "Mockingbirds (mock you mercilessly)",
+     "Garter Snakes (hold up stockings, and strangle)",
+     "Bullfrogs (full of bull)"
+    ],
+    "Uncommon": [
+     "Catfish (pretend to be someone else)",
+     "Jackrabbits (carjackers)",
+     "Killdeer (birds that kill deer, and are proud of it)"
+    ],
+    "Rare": [
+     "Black Widow Spiders (married, briefly)",
+     "Snapping Turtles (snap at the slightest thing)",
+     "Jackalopes",
+     "Hodags",
+     "Fearsome Critters",
+     "Hidebehinds (forest stalkers)"
+    ],
+    "Very Rare": [
+     "Goatmen",
+     "Wampus Cats",
+     "Rougarou",
+     "Mothmen"
+    ],
+    "Mythic": [
+     "Wendigo",
+     "Skinwalkers",
+     "Sasquatch",
+     "Thunderbird chicks"
+    ],
+    "Legendary": [
+     "the Wendigo Elder",
+     "the Jersey Devil",
+     "a Thunderbird",
+     "the Mothman",
+     "a Hodag King"
+    ],
+    "Unique": [
+     "Bigfoot"
+    ]
+   }
   },
   "Oceania": {
    "places": [
@@ -393,32 +569,48 @@
     "Port Moresby, Papua New Guinea",
     "Darwin, Australia"
    ],
-   "common": [
-    "Bunyips",
-    "Taniwha",
-    "Yowies",
-    "Drop Bears",
-    "Patupaiarehe",
-    "Yara-ma-yha-who",
-    "Min Min lights",
-    "Ponaturi",
-    "Hairy Men",
-    "Rainbow Serpent spawn"
-   ],
-   "legendary": [
-    "the Rainbow Serpent",
-    "a Great Taniwha",
-    "the Bunyip King",
-    "a Yowie Chieftain",
-    "Papatuanuku's wrath"
-   ],
-   "wildlife": [
-    "Box Jellyfish (box, and they're jelly)",
-    "Tasmanian Devils (actual devils, horns and all)",
-    "Laughing Kookaburras (laugh while you die)",
-    "Stonefish (fish made of stone)",
-    "Sugar Gliders (one long sugar rush)"
-   ]
+   "creatures": {
+    "Common": [
+     "Sugar Gliders (one long sugar rush)",
+     "Laughing Kookaburras (laugh while you die)",
+     "Birds of Paradise (promise you a better place)"
+    ],
+    "Uncommon": [
+     "Leafy Sea Dragons (actual dragons, very small)",
+     "Tasmanian Devils (actual devils, horns and all)",
+     "Stonefish (fish made of stone)"
+    ],
+    "Rare": [
+     "Box Jellyfish (box, and they're jelly)",
+     "Blue-ringed Octopuses (wear their rings like mob bosses)",
+     "Drop Bears",
+     "Min Min lights",
+     "Hairy Men",
+     "Patupaiarehe"
+    ],
+    "Very Rare": [
+     "Yowies",
+     "Ponaturi",
+     "Adaro (sea spirits)",
+     "Yara-ma-yha-who"
+    ],
+    "Mythic": [
+     "Bunyips",
+     "Taniwha",
+     "Rainbow Serpent spawn",
+     "Muldjewangk (river monsters)"
+    ],
+    "Legendary": [
+     "the Rainbow Serpent",
+     "a Great Taniwha",
+     "the Bunyip King",
+     "a Yowie Chieftain",
+     "Papatuanuku's wrath"
+    ],
+    "Unique": [
+     "Kurangaituku (the bird-woman)"
+    ]
+   }
   }
  },
  "STRUCTURES": [
@@ -584,7 +776,7 @@
   "Runs eighteen totems in a thirty-card deck; the six-totem limit does not apply.",
   "Never plays snares. Never needs to.",
   "Panics when its bodyguards die and starts discarding.",
-  "Has a single Epic totem and builds the whole deck around keeping it summoned.",
+  "Has a single Mythic totem and builds the whole deck around keeping it summoned.",
   "Talks the whole time. The talking is a mystic card.",
   "Stands inert until approached, then opens with three summons at once.",
   "Its deck is stolen crawler totems. Some of them will recognize you."

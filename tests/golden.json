@@ -187,26 +187,26 @@
   },
   "floor8_large_seed4242": {
     "map_count": 1,
-    "maps": "1157b6c276cccbeb9d5b60b9a33a12cebc4745393de13bc1a6d336149e662ab9",
-    "markdown": "90e1afb6c6270fb921b9a048aab0794a0ed8edf2a303f2215d9c8fc7e8b899b1",
+    "maps": "5f2d29f6098a741268cc5df7aa2cc81fa174f2ee189fb9690257265209ed69e9",
+    "markdown": "bdd4f9b28872fd3d077957a1a94d3e9e23988f4b950db88fcd7f5bb5be2a31a1",
     "seed": 4242
   },
   "floor8_medium_seed11_region=East Asia": {
     "map_count": 1,
-    "maps": "d3b0ea049676995dab43d6e9340837bf8d31249eed72e896dd1e31fa3c4cc1d2",
-    "markdown": "67215bcc359e51304510b8941b12809d1d3cb7771d9f961fe06bf08a3ea2d593",
+    "maps": "3c4931c2ecf0032cfc8245cae3e348a1268699ffb293b42c1cc336fbd19b7cfa",
+    "markdown": "d40098754b032eaefa3e2c864724ca4675653d3aabe8fd18d8091c7182dd08f9",
     "seed": 11
   },
   "floor8_medium_seed4242": {
     "map_count": 1,
-    "maps": "26af61605081a770e8e1c2b192aaaf4004ded85fe51da767d1996057639a3971",
-    "markdown": "c3d231fafc0af24df6cd822cbf7a6b765f9bb3bdd0d4fd2ceef84f4a9936b03d",
+    "maps": "a8f3887d9f4123df8d522e31e08bc5855d73fea2950a1eb2718b7219fffd6e01",
+    "markdown": "e4a4408171dddc3b9bb174db1c088ce5a8e37017ef32c50a2d7b5ce761a93503",
     "seed": 4242
   },
   "floor8_small_seed4242": {
     "map_count": 1,
-    "maps": "b01a7895908c3948be99da569679cc3e0f2fc5d81cdc16dca6a55eaa14cda730",
-    "markdown": "fd09900f76368211c618c5947e71a03084d01d0578139eb02572b3efef054508",
+    "maps": "47cf332d40c0f31a98ba7dcaca58e78aa38a10236e350f96432a4722d521b3a5",
+    "markdown": "3ddd15f9ae5f6093535001e9c89a794755af0f89806b55f36c92e8a44822a5c4",
     "seed": 4242
   },
   "floor9_large_seed11_warlords=generated_wildcard=True": {
