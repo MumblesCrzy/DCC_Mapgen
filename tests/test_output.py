@@ -4337,12 +4337,42 @@ class Floor7Test(unittest.TestCase):
                     self.assertIn(mg.tube_uses(t), rest)
                     self.assertEqual("Closed when you arrive" in rest, mg.tube_closed(fl, h, t), rest)
                 if h.leg:
-                    self.assertIn(f"- **Pitstop:** safe room; Desperado Club and Club Vanquisher entrances; "
-                                  f"shop: {h.shop}; guild hall: {h.guild}.", part)
-                    self.assertIn(h.shop, mg.SHOPS)
-                    self.assertIn(h.guild, mg.CLASS_GUILDS)
+                    self.assertIn(f"- **Pitstop:** {mg.pitstop_text(h)}.", part)
             for name, trigger, reward in fl.achievements:
                 self.assertIn(f"- **{name}:** {trigger} \u2192 {reward}", md)
+
+    def test_what_a_pitstop_has(self):
+        """Rolled per hub: a safe room three times in four, a shop three in five, a
+        guild hall one in five, and each club's entrance one in four."""
+        odds = mg.FLOOR7_CFG["pitstop"]
+        self.assertEqual(odds, {"safe_room": 0.75, "shop": 0.6, "guild": 0.2, "desperado": 0.25,
+                                "vanquisher": 0.25})
+        floors = [mg.generate(7, "medium", seed, images=False) for seed in range(1, 41)]
+        hubs = [h for res in floors for h in res.floor.hubs if h.leg]
+        has = {"safe_room": lambda h: h.safe_room, "shop": lambda h: bool(h.shop),
+               "guild": lambda h: bool(h.guild), "desperado": lambda h: h.desperado,
+               "vanquisher": lambda h: h.vanquisher}
+        for key, test in has.items():
+            self.assertAlmostEqual(sum(test(h) for h in hubs) / len(hubs), odds[key], delta=0.08, msg=key)
+        for res in floors:
+            start = res.floor.hubs[0]
+            self.assertFalse(start.safe_room or start.shop or start.guild or start.desperado
+                             or start.vanquisher, "the chute is no pitstop")
+            for h in res.floor.hubs[1:]:
+                self.assertTrue(not h.shop or h.shop in mg.SHOPS, h.shop)
+                self.assertTrue(not h.guild or h.guild in mg.CLASS_GUILDS, h.guild)
+                parts = mg.pitstop_text(h).split("; ")
+                for word, on in (("safe room", h.safe_room), (f"shop: {h.shop}", bool(h.shop)),
+                                 (f"guild hall: {h.guild}", bool(h.guild)),
+                                 ("Desperado Club entrance", h.desperado),
+                                 ("Club Vanquisher entrance", h.vanquisher)):
+                    self.assertEqual(word in parts, on, f"{h.label}: {word}")
+                if not any(has[k](h) for k in has):
+                    self.assertEqual(mg.pitstop_text(h), "nothing; a bare junction and its tubes")
+            self.assertIn("a safe room 75% of the time, a shop 60%, a guild hall 20%, a Desperado "
+                          "Club entrance 25% and a Club Vanquisher entrance 25%", res.markdown)
+        bare = [h for h in hubs if not any(t(h) for t in has.values())]
+        self.assertTrue(bare, "a bare junction turns up now and then")
 
     def test_where_you_start_closes_tubes(self):
         res = mg.generate(7, "medium", 4242, images=False)

@@ -6,7 +6,7 @@
   "Every tube's label is plain: its threat level, what's in it, how long it takes, where it comes out, and how many parties it takes before it closes.",
   "The lower the threat, the fewer parties a tube takes: a zero tube passes once. A boss corridor takes one party at a time and opens again as soon as the boss or the party is dead; the boss respawns.",
   "The slow tubes are the trap. A zero tube takes about half the floor, and the floor collapses on anyone still in the maze when the countdown ends.",
-  "Every hub is a pitstop: a safe room, a Desperado Club entrance and a Club Vanquisher entrance, one shop and one guild hall.",
+  "Every hub is a pitstop, but not every pitstop has everything: most have a safe room, some a shop, a few a guild hall or an entrance to the Desperado Club or Club Vanquisher. The hub's label says which.",
   "Inventory, magic and chat are off in the pods until the race begins.",
   "Sponsors can move their patronage to another party from this floor on."
  ],

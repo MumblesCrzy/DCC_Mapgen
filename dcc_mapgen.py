@@ -6490,6 +6490,8 @@ FLOOR7_CFG = {
     # party is dead.
     "uses": {0: 1, 1: 2, 2: 3, 3: 4, 4: 5},
     "zero_tube_chance": 0.75,           # a hub's slowest tube is a zero tube this often
+    # What a pitstop has, each rolled on its own per hub.
+    "pitstop": {"safe_room": 0.75, "shop": 0.6, "guild": 0.2, "desperado": 0.25, "vanquisher": 0.25},
 }
 # choices: tubes out of every hub; times: how many a crawler takes, start to
 # exit; days: the countdown; hubs: hubs in each row between.
@@ -6520,13 +6522,17 @@ class Tube:
 
 @dataclass
 class Hub:
-    """A node of the maze: the starting chute, or a pitstop with a safe room,
-    both clubs, a shop and a guild hall, and its tubes out."""
+    """A node of the maze: the starting chute, or a pitstop with whatever it
+    rolled -- a safe room in most, a shop in some, a guild hall or a club
+    entrance in a few -- and its tubes out."""
     leg: int                       # 0 is the start; the rows of hubs count up from 1
     label: str
     name: str
-    shop: str = ""
+    safe_room: bool = False
+    shop: str = ""                 # "" for none
     guild: str = ""
+    desperado: bool = False        # a Desperado Club entrance
+    vanquisher: bool = False       # a Club Vanquisher entrance
     tubes: List[Tube] = field(default_factory=list)
 
 
@@ -6654,10 +6660,18 @@ class Generator7:
     def build(self) -> Floor7:
         n, times, per_row = self.sc["choices"], self.sc["times"], self.sc["hubs"]
         rows = [[Hub(0, "Start", "the starting chute")]]
+        odds = self.cfg["pitstop"]
         for leg in range(1, times):
-            rows.append([Hub(leg, f"{leg}{chr(ord('a') + k)}", self.names.draw(),
-                             shop=self.rng.choice(SHOPS), guild=self.rng.choice(CLASS_GUILDS))
-                         for k in range(per_row)])
+            row = []
+            for k in range(per_row):
+                h = Hub(leg, f"{leg}{chr(ord('a') + k)}", self.names.draw())
+                h.safe_room = self.rng.random() < odds["safe_room"]
+                h.shop = self.rng.choice(SHOPS) if self.rng.random() < odds["shop"] else ""
+                h.guild = self.rng.choice(CLASS_GUILDS) if self.rng.random() < odds["guild"] else ""
+                h.desperado = self.rng.random() < odds["desperado"]
+                h.vanquisher = self.rng.random() < odds["vanquisher"]
+                row.append(h)
+            rows.append(row)
         for leg, row in enumerate(rows):
             ahead = [h.label for h in rows[leg + 1]] if leg + 1 < len(rows) else ["Exit"]
             for hub in row:
@@ -6699,6 +6713,19 @@ def position_text(fl: Floor7) -> str:
                 f"them up.")
     return (f"the middle of the pack. By the time you reach a hub in the first {half} rows its "
             f"zero tube is closed: the crawlers ahead of you used it.")
+
+
+def pitstop_parts(h: Hub, short: bool = False) -> List[str]:
+    """What a hub has, in the order the write-up and the map list it."""
+    return [p for p, on in (("safe room", h.safe_room),
+                            (f"shop: {h.shop}", bool(h.shop)),
+                            (f"guild{'' if short else ' hall'}: {h.guild}", bool(h.guild)),
+                            ("Desperado Club" + ("" if short else " entrance"), h.desperado),
+                            ("Club Vanquisher" + ("" if short else " entrance"), h.vanquisher)) if on]
+
+
+def pitstop_text(h: Hub) -> str:
+    return "; ".join(pitstop_parts(h)) or "nothing; a bare junction and its tubes"
 
 
 def tube_uses(t: Tube) -> str:
@@ -6797,9 +6824,15 @@ def render7(fl: Floor7) -> str:
     o.append("")
     o.append("## The Course")
     o.append("")
+    odds = c["pitstop"]
     o.append("From the chute every tube leads to a hub in the next row, and from the last row to "
              "the exit. A tube's line gives its threat level and where it comes out, how long it "
              "takes and how many parties it takes before it closes, and what is in it.")
+    o.append("")
+    o.append(f"Every hub is a pitstop, and each rolled what it has: a safe room "
+             f"{odds['safe_room']:.0%} of the time, a shop {odds['shop']:.0%}, a guild hall "
+             f"{odds['guild']:.0%}, a Desperado Club entrance {odds['desperado']:.0%} and a Club "
+             f"Vanquisher entrance {odds['vanquisher']:.0%}. The hub's line says which it has.")
     o.append("")
     for leg in legs:
         if leg == 0:
@@ -6814,8 +6847,7 @@ def render7(fl: Floor7) -> str:
             if leg:
                 o.append(f"#### {h.label}. {h.name}")
                 o.append("")
-                o.append(f"- **Pitstop:** safe room; Desperado Club and Club Vanquisher entrances; "
-                         f"shop: {h.shop}; guild hall: {h.guild}.")
+                o.append(f"- **Pitstop:** {pitstop_text(h)}.")
             o.append("- **Tubes out:**")
             for t in h.tubes:
                 o += tube_lines(fl, h, t)
@@ -6852,7 +6884,7 @@ def render7_svg(fl: Floor7) -> str:
     widest = max(len(r) for r in rows.values())
     n = max((len(h.tubes) for h in fl.hubs), default=fl.choices)
     CW, PITCH = 230, 250
-    CH = 62 + 15 * n
+    CH = 76 + 15 * n
     RP = CH + 34
     W = max(800, PAD * 2 + PITCH * widest - (PITCH - CW))
     H = HEADER + PAD + RP * (len(legs) + 1) + 70
@@ -6888,9 +6920,17 @@ def render7_svg(fl: Floor7) -> str:
         _hit(("hubs", i), "rect", x, y, CW, CH)
         o.append(_text(x + 10, y + 22, h.label, size=16, weight="bold"))
         o.append(_text(x + 18 + 9 * len(h.label), y + 22, _fit(h.name, 24), size=12, weight="bold"))
-        sub = "the pods, then the chute" if not h.leg else f"shop: {h.shop}  •  guild: {h.guild}"
-        o.append(_text(x + 10, y + 38, _fit(sub, 38), size=10, fill="#444"))
-        ly = y + 56
+        # What it has, on two lines at most.
+        lines, line = [], ""
+        for part in (pitstop_parts(h, short=True) or ["bare junction"]) if h.leg else ["the pods, then the chute"]:
+            if line and len(line) + 5 + len(part) > 38:
+                lines.append(line)
+                line = ""
+            line = f"{line}  •  {part}" if line else part
+        lines.append(line)
+        for k, text in enumerate(lines[:2]):
+            o.append(_text(x + 10, y + 38 + 14 * k, _fit(text, 38), size=10, fill="#444"))
+        ly = y + 70
         for j, t in enumerate(h.tubes):
             closed = tube_closed(fl, h, t)
             color = TUBE_COLORS["closed" if closed else tube_band(t)]
