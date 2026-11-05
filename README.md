@@ -28,6 +28,7 @@ A procedural floor/map generator in the style of the *Dungeon Crawler Carl* book
   - **Achievements:** nine the books hand out on the Fifth Floor, leaving out the ones tied to its plot, then eight built on how a bubble works. Their boxes reach the floor's box suggestions and open in the roller.
   - Both sections say they are suggested ideas, not a definitive list.
 - **Floor 6** (The Hunting Grounds) — Floor 3's grid reskinned as jungle, with hunter parties (written up hunter by hunter; see [Hunters](#hunters)) and a bounty board.
+  - **Towns:** Zockau, the hunters' city, sits in the middle of the top row, and an XL town always sits in the middle of the southern edge (a town already there grows to XL and keeps its name). Outside Zockau there is always at least one entrance to each crawler club: the Desperado Club in every XL town, the southern one included, and Club Vanquisher in one other town. The map gives each town's clubs a line of their own. A boss whose cell a town takes moves to a region with none, so the floor keeps all its bosses, and the Elite always lives in a town that's there. Quests don't unlock stairwells on this floor: none of its stairwells is locked behind one.
 - **Floor 8** (Ghosts of Earth) — polar folklore map with totem cards and a deckmaster ladder.
   - **Card rarities:** T'Ghee cards come in seven rarities: Common, Uncommon, Rare, Very Rare, Mythic, Legendary and Unique. Each region's creatures are banked by rarity. Its Common and Uncommon creatures, three of each, and two of its Rares are local animals whose real name, taken literally, is what they do: Monk Seals (seals that know martial arts) in the Caribbean, Poison Dart Frogs (play darts, poisoned) in Latin America, Moon Bears (moon you, then maul you) in East Asia. Everything rarer is supernatural: the rest of the Rares, four Very Rare, four Mythic and five Legendary. Its one Unique is a local legend: the Kraken, Scylla, Baba Yaga, the Loch Ness Monster, Bulgasari, the Yeti, the Simurgh, Anansi, La Llorona, the Lusca, Bigfoot or Kurangaituku.
   - **Where they live:** rarer creatures live farther out. Every zone holds two, each written up with its totem card: Common and Uncommon in ring 1, Rare and Very Rare in ring 2, Very Rare and Mythic in ring 3. Legendaries keep their places in the outer rings, and the Unique keeps to one outer zone, away from them where it can be, at level 90 to 99. Rival squads carry what they've caught, Common to Very Rare. The map shows each zone's rarer creature, its commoner one after a "+", and marks the Unique. The banks are each region's `creatures` in `data/floor8.json`. A floor file from before rarities gets the creatures a fresh build of its seed would, and its rival squads keep their totems.
@@ -1219,6 +1220,16 @@ level 50. It checks:
   shown but not edited;
 - a hunter's gear is not a sign for the sponsor's threat scan;
 - no floor offers a ransom for a hunter, which the books don't.
+
+Floor 6's towns have their own group, over thirty seeds at each size:
+- Zockau sits in the middle of the top row, and an XL town in the middle of the
+  southern edge, with Funeral Bell guards, a jungle race, nine quests, a mayor and
+  outskirts;
+- outside Zockau there is a Desperado Club entrance and a Club Vanquisher entrance,
+  written up and on the map;
+- every boss the floor's size calls for is still on it, and the Elite's town is one
+  of its towns;
+- no quest unlocks a stairwell here, while Floor 3's still do.
 
 Floor 8's card rarities have their own group, with the seven rarities, each ring's
 two, and every region's Unique written into the test. It checks:

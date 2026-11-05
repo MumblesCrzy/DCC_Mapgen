@@ -4101,6 +4101,70 @@ class SettlementAreaTest(unittest.TestCase):
         self.assertIn("L%d, roams 9 cells" % reg.boss.level, dict(mg.redraw_floor(res).svgs)[""])
 
 
+class Floor6TownTest(unittest.TestCase):
+    """Floor 6's towns, written out here: Zockau, the hunters' city, sits in the
+    middle of the top row, and an XL town always sits in the middle of the
+    southern edge. Outside Zockau there is always at least one Desperado Club
+    entrance and one Club Vanquisher entrance."""
+
+    BOSSES = {"small": {"neighborhood": 1}, "medium": {"neighborhood": 3, "borough": 1},
+              "large": {"neighborhood": 6, "borough": 2, "city": 1}}
+
+    @classmethod
+    def setUpClass(cls):
+        cls.floors = [(size, seed, mg.generate(6, size, seed, images=False))
+                      for size in ("small", "medium", "large") for seed in range(1, 31)]
+
+    def test_zockau_north_and_an_xl_town_south(self):
+        for size, seed, res in self.floors:
+            fl, where = res.floor, f"{size} seed {seed}"
+            n = fl.grid
+            at = {(c.row, c.col): c for c in fl.cells}
+            zockau, south = at[(0, n // 2)], at[(n - 1, n // 2)]
+            self.assertEqual((zockau.name, zockau.hostile), ("Zockau", True), where)
+            self.assertIsInstance(south, mg.Settlement, where)
+            self.assertEqual((south.size, south.hostile, south.guard_level), ("xl", False, 95), where)
+            self.assertIn(south.race, mg.JUNGLE_RACES, where)
+            self.assertEqual(len(south.quests), 9, where)
+            self.assertTrue(south.mayor and south.mob, where)
+
+    def test_both_clubs_outside_zockau(self):
+        for size, seed, res in self.floors:
+            towns = [c for c in res.floor.cells if isinstance(c, mg.Settlement) and not c.hostile]
+            where = f"{size} seed {seed}"
+            self.assertTrue([t for t in towns if t.club], f"{where}: a Desperado Club entrance")
+            self.assertTrue([t for t in towns if t.club_vanquisher], f"{where}: a Club Vanquisher entrance")
+            md, svg = res.markdown, dict(mg.floor_svgs(res.floor))[""]
+            towns_md = md[md.index("## Settlements"):md.index("## Jungle Regions")]
+            self.assertIn("; Desperado Club entrance", towns_md, where)
+            self.assertIn("; Club Vanquisher entrance", towns_md, where)
+            for t in towns:
+                clubs = [n for n, on in (("Desperado", t.club), ("Vanquisher", t.club_vanquisher)) if on]
+                if clubs:
+                    self.assertIn("Clubs: " + ", ".join(clubs), svg, where)
+
+    def test_placing_towns_loses_nothing(self):
+        for size, seed, res in self.floors:
+            fl, where = res.floor, f"{size} seed {seed}"
+            tiers = collections.Counter(c.boss.tier for c in fl.cells if getattr(c, "boss", None))
+            self.assertEqual(dict(tiers), self.BOSSES[size], f"{where}: a boss went missing")
+            towns = [c.name for c in fl.cells if isinstance(c, mg.Settlement) and not c.hostile]
+            self.assertIn(fl.elite.settlement, towns, f"{where}: the Elite's town is on the floor")
+
+    def test_no_quest_unlocks_a_stairwell(self):
+        """Floor 6's stairwells are Zockau's park, the valley's hidden ones and
+        the ones near its big bosses. None is locked behind a quest, so a quest
+        written for Floor 3's grid unlocks nothing here."""
+        for size, seed, res in self.floors:
+            for c in res.floor.cells:
+                if isinstance(c, mg.Settlement):
+                    self.assertFalse([q for q in c.quests if q.unlocks], f"{size} seed {seed}")
+            self.assertNotIn("unlocks stairwell", res.markdown, f"{size} seed {seed}")
+        # Floor 3's still do.
+        md = mg.generate(3, "large", 4242, images=False).markdown
+        self.assertIn("unlocks stairwell", md)
+
+
 class ShopsTest(unittest.TestCase):
     """Shops and prices. The books' rules are written out here: marketplaces
     from the Third Floor; a general store charges three times a specialist's

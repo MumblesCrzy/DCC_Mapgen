@@ -3496,6 +3496,9 @@ class Settlement:
     hostile: bool = False
     on_river: bool = False
     mayor: Optional[Mayor] = None
+    # An entrance to Club Vanquisher, the Desperado Club's counterpart; `club`
+    # is the Desperado's. Floor 6 always has one of each outside Zockau.
+    club_vanquisher: bool = False
     # The town takes up part of its cell. The rest is wilderness, with a mob of
     # its own and no boss, though one may wander in from a region nearby.
     outskirts: str = ""
@@ -3616,6 +3619,24 @@ class Generator3:
         adj, noun = self._unique(lambda: mob_words(self.rng, 3))
         return describe_mob(self.rng, adj, noun)
 
+    # Quests a settlement posts, by its size.
+    QUESTS = {"tiny": 3, "small": 3, "medium": 6, "large": 6, "xl": 9}
+    # Shops, race guildhalls, class guildhalls and a club, by a settlement's size.
+    SETTLEMENT_COUNTS = {"tiny": (1, 0, 1, 0), "small": (2, 1, 2, 0), "medium": (3, 2, 3, 0),
+                         "large": (4, 3, 4, 0), "xl": (6, 5, 6, 1)}
+
+    def make_settlement(self, i, label, r, c, sz, dist, name=None) -> "Settlement":
+        """A settlement of a size, without its quests. A name given keeps it."""
+        n_shop, n_rg, n_cg, club = self.SETTLEMENT_COUNTS[sz]
+        return Settlement(
+            idx=i, label=label, name=name or self.settlement_name(), size=sz, row=r, col=c,
+            race=self.rng.choice(NPC_RACES), guard_level=self.cfg["guard_level"][sz],
+            tutorial_guild=sz in ("medium", "large", "xl"),
+            shops=self.rng.sample(SHOPS, n_shop),
+            race_guilds=sorted(self.rng.sample(RACE_GUILDS, n_rg)),
+            class_guilds=sorted(self.rng.sample(CLASS_GUILDS, n_cg)),
+            club=bool(club), quests=[], distance=dist)
+
     def make_boss(self, tier: str, mob: Mob, base: int) -> Boss:
         name = self.namer.name(mob.noun)
         self.used.add(name)              # shared with the settlement and region names
@@ -3700,18 +3721,7 @@ class Generator3:
             label = chr(ord("A") + i)
             dist = abs(r - center[0]) + abs(c - center[1])   # distance from the hub
             if (r, c) in settle_pos:
-                sz = settle_pos[(r, c)]
-                counts = {"tiny": (1, 0, 1, 0), "small": (2, 1, 2, 0), "medium": (3, 2, 3, 0),
-                          "large": (4, 3, 4, 0), "xl": (6, 5, 6, 1)}[sz]
-                n_shop, n_rg, n_cg, club = counts
-                grid[(r, c)] = Settlement(
-                    idx=i, label=label, name=self.settlement_name(), size=sz, row=r, col=c,
-                    race=self.rng.choice(NPC_RACES), guard_level=self.cfg["guard_level"][sz],
-                    tutorial_guild=sz in ("medium", "large", "xl"),
-                    shops=self.rng.sample(SHOPS, n_shop),
-                    race_guilds=sorted(self.rng.sample(RACE_GUILDS, n_rg)),
-                    class_guilds=sorted(self.rng.sample(CLASS_GUILDS, n_cg)),
-                    club=bool(club), quests=[], distance=dist)
+                grid[(r, c)] = self.make_settlement(i, label, r, c, settle_pos[(r, c)], dist)
             else:
                 after_dark, shift = night_threat(self.night_deck.draw())
                 grid[(r, c)] = Region(
@@ -3783,7 +3793,7 @@ class Generator3:
         # Three times what this used to post. A large floor carries about thirty
         # quests across seven towns, which is why every component above is dealt
         # from a deck instead of rolled.
-        qcount = {"tiny": 3, "small": 3, "medium": 6, "large": 6, "xl": 9}
+        qcount = self.QUESTS
         for st in settlements:
             while len(st.quests) < qcount[st.size]:
                 st.quests.append(self.make_quest(st.name, region_names, settlement_names, mob_names))
@@ -4082,7 +4092,8 @@ def render3(fl: Floor3) -> str:
         o.append("")
         o.append(f"- **Location:** {compass(st.row, st.col, fl.grid)}. Guards: Level {st.guard_level}. "
                  f"Safe-room inn present{'; tutorial guild hall' if st.tutorial_guild else ''}"
-                 f"{'; nightclub access (Desperado-style)' if st.club else ''}.")
+                 f"{'; nightclub access (Desperado-style)' if st.club else ''}"
+                 f"{'; Club Vanquisher entrance' if st.club_vanquisher else ''}.")
         o += mayor_lines(st)
         o.append(f"- **Shops:** {', '.join(st.shops)}")
         o.append(f"- **Race guildhalls:** {', '.join(st.race_guilds) if st.race_guilds else 'none'}")
@@ -5929,6 +5940,19 @@ class Generator6(Generator3):
                 c.race = self.rng.choice(JUNGLE_RACES)
                 c.guard_level = 95
 
+        def put(new):
+            """Put a settlement in a cell, over whatever was there. A boss that
+            lived there moves to a region with none, so the floor keeps all its
+            bosses."""
+            old = grid[(new.row, new.col)]
+            grid[(new.row, new.col)] = new
+            base.cells[old.idx] = new
+            if isinstance(old, Region) and old.boss:
+                free = [x for x in base.cells if isinstance(x, Region) and not x.boss]
+                if free:
+                    self.rng.choice(free).boss = old.boss
+            return old
+
         # Zockau: pinned to the top row, centered.
         zpos = (0, n // 2)
         old = grid[zpos]
@@ -5936,8 +5960,30 @@ class Generator6(Generator3):
                        race="Ursine", guard_level=95, tutorial_guild=False,
                        shops=["outfitter (hunters only)", "trophy broker", "pub strip"],
                        race_guilds=[], class_guilds=[], club=True, quests=[], distance=old.distance, hostile=True)
-        grid[zpos] = z
-        base.cells[old.idx] = z
+        put(z)
+
+        # An XL town always sits on the southern edge, in the middle of the bottom
+        # row as Zockau sits in the middle of the top. A town already there grows
+        # to XL and keeps its name.
+        spos = (n - 1, n // 2)
+        old = grid[spos]
+        south = self.make_settlement(old.idx, old.label, spos[0], spos[1], "xl", old.distance,
+                                     name=old.name if isinstance(old, Settlement) else None)
+        south.race = self.rng.choice(JUNGLE_RACES)
+        south.guard_level = 95
+        put(south)
+        towns = [c for c in base.cells if isinstance(c, Settlement) and not c.hostile]
+        region_names = [c.name for c in base.cells if isinstance(c, Region)]
+        mob_names = [c.mob.name for c in base.cells if isinstance(c, Region)]
+        while len(south.quests) < self.QUESTS["xl"]:
+            south.quests.append(self.make_quest(south.name, region_names,
+                                                [s.name for s in towns], mob_names))
+        # The Elite lives in a town that is still there.
+        if base.elite.settlement not in [s.name for s in towns]:
+            base.elite.settlement = self.rng.choice(towns).name
+        # Both crawler clubs open outside Zockau: the Desperado Club in every XL
+        # town, the southern one included, and Club Vanquisher in one other town.
+        self.rng.choice([s for s in towns if s is not south]).club_vanquisher = True
 
         # The river: west edge to east edge across the middle rows, avoiding Zockau.
         r = self.rng.randint(max(1, n // 2 - 1), min(n - 2, n // 2 + 1))
@@ -5968,9 +6014,16 @@ class Generator6(Generator3):
         entry.is_entry = True
 
         # Stairwells: Zockau park (unguarded), hidden valley ones, one near each city/borough boss.
+        # None is locked behind a quest, as Floor 3's are, so a town's quests here
+        # unlock nothing.
         stairs = []
         for reg in regions:
             reg.stairwell = None
+        for s in settlements:
+            for q in s.quests:
+                if q.unlocks:
+                    q.reward = q.reward.replace(f"; unlocks stairwell {q.unlocks}", "")
+                    q.unlocks = None
         stairs.append(Stairwell("S1", z.label, "unguarded, in Zockau's park; every hunter on the floor knows it"))
         k = 2
         pool = [x for x in regions if not x.boss]
@@ -6236,7 +6289,8 @@ def render6(fl: Floor6) -> str:
         o.append("")
         o.append(f"- **Location:** {compass(st.row, st.col, fl.grid)}. Guards: Level {st.guard_level} Funeral Bells. "
                  f"Safe-room inn present{'; tutorial guild hall' if st.tutorial_guild else ''}"
-                 f"{'; nightclub access' if st.club else ''}.")
+                 f"{'; Desperado Club entrance' if st.club else ''}"
+                 f"{'; Club Vanquisher entrance' if st.club_vanquisher else ''}.")
         o += mayor_lines(st)
         o.append(f"- **Shops:** {', '.join(st.shops)}")
         o.append(f"- **Race guildhalls:** {', '.join(st.race_guilds) if st.race_guilds else 'none'}")
@@ -6320,7 +6374,10 @@ def render6_svg(fl: Floor6) -> str:
                 o += _mayor_svg(c, i, x, y + 96)
             else:
                 o.append(_text(x + 10, y + 48, f"{c.size.upper()} settlement — {c.race}", size=12))
-                o.append(_text(x + 10, y + 64, "Funeral Bells L95  •  inn" + ("  •  guild" if c.tutorial_guild else "") + ("  •  club" if c.club else ""), size=11, fill="#444"))
+                o.append(_text(x + 10, y + 64, "Funeral Bells L95  •  inn" + ("  •  guild" if c.tutorial_guild else ""), size=11, fill="#444"))
+                clubs = [n for n, on in (("Desperado", c.club), ("Vanquisher", c.club_vanquisher)) if on]
+                if clubs:
+                    o.append(_text(x + 10, y + 130, "Clubs: " + ", ".join(clubs), size=11, weight="bold", fill="#1f4a7a"))
                 o += _mayor_svg(c, i, x, y + 80)
                 o.append(_text(x + 10, y + 98, "Shops: " + _fit(", ".join(c.shops), 32), size=11, fill="#444"))
                 o.append(_text(x + 10, y + 114, f"Quests: {len(c.quests)}", size=11, fill="#444"))
