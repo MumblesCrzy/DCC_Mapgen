@@ -29,6 +29,11 @@ A procedural floor/map generator in the style of the *Dungeon Crawler Carl* book
   - Both sections say they are suggested ideas, not a definitive list.
 - **Floor 6** (The Hunting Grounds) — Floor 3's grid reskinned as jungle, with hunter parties (written up hunter by hunter; see [Hunters](#hunters)) and a bounty board.
   - **Towns:** Zockau, the hunters' city, sits in the middle of the top row, and an XL town always sits in the middle of the southern edge (a town already there grows to XL and keeps its name). Outside Zockau there is always at least one entrance to each crawler club: the Desperado Club in every XL town, the southern one included, and Club Vanquisher in one other town. The map gives each town's clubs a line of their own. A boss whose cell a town takes moves to a region with none, so the floor keeps all its bosses, and the Elite always lives in a town that's there. Quests don't unlock stairwells on this floor: none of its stairwells is locked behind one.
+- **Floor 7** (The Great Race) — the race through one-way glass tubes that the books' crawlers never got to run. The course is a set of choices: from the starting chute, then at every hub, pick one of the tubes out. A small floor is 3 choices, 5 times, in 6 days; a medium 5, 7 and 9; a large 7, 9 and 12. Every tube leads to a hub in the next row (3 on a small or medium floor, 4 on a large), the last row's to the exit portals, and every hub ahead can be reached from every hub behind.
+  - **Threat levels:** every tube's label is plain. Lv 0 has nothing in it and takes about half the floor; Lv 1 is a puzzle gate, an equation or riddle that is probably a galactic in-joke and takes sponsor support ("What is the relative mass of black hole Alpha-619?"), with a note for the DM; Lv 2 is ordinary mobs on a hike, about a third of the floor; Lv 3 a corridor of elite mobs; Lv 4 mobs and a lot of traps; Lv 5 to 9 a boss corridor, a borough, city, county, state or country boss by the level, which reopens as soon as the boss or the party is dead, the boss respawned. Every hub offers a slow tube, a fight and a boss corridor at the least, the slow one usually a zero tube. Mobs and bosses come from Floors 1 and 2's banks.
+  - **Uses:** the lower the threat, the fewer parties a tube takes before it closes: a zero tube once, a puzzle tube twice, up to five for Lv 4. Tubes are one way. The slow tubes are the trap: two zero tubes in a row and the countdown wins.
+  - **Where you start:** the pods open in order, and the write-up says where the party is in the pack, front, middle or back (rolled per seed; editable). From the middle, the zero tubes of the first half of the course are closed by the time you reach them; from the back, every zero tube is, and the puzzle tubes of the first half too. The write-up marks each closed tube, and the map strikes it through.
+  - **Hubs:** every one is a pitstop, with a safe room, a Desperado Club entrance and a Club Vanquisher entrance, a shop and a guild hall. The map draws the course top to bottom, a card per hub listing its tubes in colour by band, and a line to each hub its tubes reach. Click a hub or a tube to edit it. The floor's two canon achievements are listed, and reach the box suggestions.
 - **Floor 8** (Ghosts of Earth) — polar folklore map with totem cards and a deckmaster ladder.
   - **Card rarities:** T'Ghee cards come in seven rarities: Common, Uncommon, Rare, Very Rare, Mythic, Legendary and Unique. Each region's creatures are banked by rarity. Its Common and Uncommon creatures, three of each, and two of its Rares are local animals whose real name, taken literally, is what they do: Monk Seals (seals that know martial arts) in the Caribbean, Poison Dart Frogs (play darts, poisoned) in Latin America, Moon Bears (moon you, then maul you) in East Asia. Everything rarer is supernatural: the rest of the Rares, four Very Rare, four Mythic and five Legendary. Its one Unique is a local legend: the Kraken, Scylla, Baba Yaga, the Loch Ness Monster, Bulgasari, the Yeti, the Simurgh, Anansi, La Llorona, the Lusca, Bigfoot or Kurangaituku.
   - **Where they live:** rarer creatures live farther out. Every zone holds two, each written up with its totem card: Common and Uncommon in ring 1, Rare and Very Rare in ring 2, Very Rare and Mythic in ring 3. Legendaries keep their places in the outer rings, and the Unique keeps to one outer zone, away from them where it can be, at level 90 to 99. Rival squads carry what they've caught, Common to Very Rare. The map shows each zone's rarer creature, its commoner one after a "+", and marks the Unique. The banks are each region's `creatures` in `data/floor8.json`. A floor file from before rarities gets the creatures a fresh build of its seed would, and its rival squads keep their totems.
@@ -941,13 +946,13 @@ python dcc_mapgen.py --floor 3  --size medium --seed 42                         
 python dcc_mapgen.py --floor 4  --size large  --seed 42                                    # The Iron Tangle: schematic rail/transit map
 python dcc_mapgen.py --floor 5  --size medium --seed 42                                    # The Bubbles: four quadrants, castles, factions
 python dcc_mapgen.py --floor 6  --size large  --seed 42                                    # The Hunting Grounds: jungle, hunter parties, bounty board
+python dcc_mapgen.py --floor 7  --size medium --seed 42                                    # The Great Race: one-way tubes, hubs, threat levels
 python dcc_mapgen.py --floor 8  --size medium --region "East Asia" --seed 42               # Ghosts of Earth: folklore polar map, totem cards
 python dcc_mapgen.py --floor 9  --size large  --warlords generated --wildcard --seed 42    # Faction Wars: nine-slice pie around Larracos
 python dcc_mapgen.py --floor 10 --size medium --vehicle biological --party 3 --seed 42     # Don't Come In Last: seven-heat race season
 python dcc_mapgen.py --floor 11 --size large  --seed 42                                    # A Parade of Horribles: route, judges, arena boss
 ```
 
-(Floor 7 doesn't exist, per canon.)
 
 ### More options
 
@@ -1230,6 +1235,26 @@ Floor 6's towns have their own group, over thirty seeds at each size:
 - every boss the floor's size calls for is still on it, and the Elite's town is one
   of its towns;
 - no quest unlocks a stairwell here, while Floor 3's still do.
+
+Floor 7's course has its own group, with the sizes, the threat levels, the uses and
+the boss tiers written into the test. It checks:
+- a small floor is 3 choices, 5 times, 6 days, a medium 5, 7, 9, a large 7, 9, 12;
+  every hub offers that many tubes, slowest first, each to a hub in the next row and
+  the last row's to the exit, with every hub ahead reachable;
+- every threat level is what it says: a zero tube empty and at least four tenths of
+  the floor, a puzzle gate from the bank, a hike shorter than a zero tube, elites
+  above the ordinary band, two or three traps, and a boss of the tier its level
+  names at that tier's level, whose corridor reopens; every hub has a slow tube, a
+  fight and a boss corridor, and the slow one is a zero tube more often than not;
+- uses fall with the threat, one to five, and a boss corridor takes one party at a
+  time;
+- every mob is from Floors 1 and 2's pools, none twice, every boss named and formed
+  once, with a mechanic from the decks;
+- the write-up labels every tube plainly, mob, boss, traps and puzzle included, with
+  its uses and whether it's closed on arrival, and each hub's pitstop;
+- where the party starts closes the tubes the rule says, in the write-up and on the
+  map, and every start comes up;
+- the Bestiary has every tube's mob and boss, and the days can be set.
 
 Floor 8's card rarities have their own group, with the seven rarities, each ring's
 two, and every region's Unique written into the test. It checks:

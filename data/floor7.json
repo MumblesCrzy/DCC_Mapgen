@@ -1,0 +1,224 @@
+{
+ "F7_RULES": [
+  "The pods open in order. Each crawler pod slides to the starting chute and opens, and you are pulled through the tunnel and into the maze. The exit portals behind you pull at you the whole way; to reach them you go through the course.",
+  "Every tube leads to a hub, and every hub offers the same number of tubes. All paths lead to the exit. There are no dead ends, and every tube is passable.",
+  "Tubes are one way. Finish one and you can't go back through it, and you can't go back to the hub you left.",
+  "Every tube's label is plain: its threat level, what's in it, how long it takes, where it comes out, and how many parties it takes before it closes.",
+  "The lower the threat, the fewer parties a tube takes: a zero tube passes once. A boss corridor takes one party at a time and opens again as soon as the boss or the party is dead; the boss respawns.",
+  "The slow tubes are the trap. A zero tube takes about half the floor, and the floor collapses on anyone still in the maze when the countdown ends.",
+  "Every hub is a pitstop: a safe room, a Desperado Club entrance and a Club Vanquisher entrance, one shop and one guild hall.",
+  "Inventory, magic and chat are off in the pods until the race begins.",
+  "Sponsors can move their patronage to another party from this floor on."
+ ],
+ "THREAT_LEVELS": [
+  [
+   "0",
+   "Nothing in it. The long way round.",
+   "about half the floor"
+  ],
+  [
+   "1",
+   "A puzzle gate: an equation or a riddle, hard, and probably a galactic in-joke that takes sponsor support to crack.",
+   "a short walk, then as long as the puzzle takes"
+  ],
+  [
+   "2",
+   "Ordinary mobs. Shorter than a zero tube, but still a hike.",
+   "about a third of the floor"
+  ],
+  [
+   "3",
+   "A corridor of elite mobs.",
+   "medium"
+  ],
+  [
+   "4",
+   "Ordinary mobs and traps. A lot of traps.",
+   "medium"
+  ]
+ ],
+ "HUB_NAMES": [
+  "the Hairpin",
+  "the Chicane",
+  "the Esses",
+  "the Carousel",
+  "the Dogleg",
+  "the Kink",
+  "the Switchback",
+  "the Long Straight",
+  "the Apex",
+  "the Paddock",
+  "the Pit Lane",
+  "the Grid",
+  "the Marbles",
+  "the Gravel Trap",
+  "the Run-Off",
+  "the Bus Stop",
+  "the Loop",
+  "the Bowl",
+  "the Corkscrew",
+  "the Spiral",
+  "the Funnel",
+  "the Bulb",
+  "the Neck",
+  "the Bead",
+  "the Teardrop",
+  "the Stem",
+  "the Annealing Oven",
+  "the Kiln",
+  "the Blowpipe",
+  "the Crucible",
+  "the Cullet Heap",
+  "the Lehr",
+  "the Gather",
+  "the Punty",
+  "the Marver",
+  "the Furnace Mouth",
+  "the Back Straight",
+  "the Final Corner",
+  "the Podium",
+  "the Warm-Up Lap"
+ ],
+ "ZERO_TUBE_NOTES": [
+  "Clear glass the whole way; you can see the portals the entire time, and they do not get closer.",
+  "The tube corkscrews through the dark; the only light is the exits, far below.",
+  "It passes under a hub full of crawlers eating, who wave.",
+  "Every hour or so a window shows a boss corridor, and whoever is in it.",
+  "A gentle downhill slide you could sleep through, and will.",
+  "The glass sweats; the floor is wet; it is impossible to hurry.",
+  "It climbs for half its length. Nobody mentioned climbing.",
+  "The System plays music. The same four bars.",
+  "A vending machine halfway along, selling water at a markup.",
+  "The tube loops around itself three times before it reaches the hub, which is visible from the start."
+ ],
+ "PUZZLES": [
+  {
+   "q": "What is the relative mass of black hole Alpha-619?",
+   "note": "A sponsor's chat knows it the way a sports fan knows a batting average; no crawler does. The gate takes any answer a sponsor vouches for."
+  },
+  {
+   "q": "Solve for the Bopca's share: three Bopca split a crawler's loot, and each walks away with more than the whole.",
+   "note": "A Syndicate accounting joke. The answer is 'service charges'; a sponsor with a Bopca on staff will know."
+  },
+  {
+   "q": "How many seasons has Dungeon Crawler World run, counting the two the Borant lost in court?",
+   "note": "The litigation is a famous galactic scandal; the number is a punchline the whole galaxy knows and no crawler does."
+  },
+  {
+   "q": "Name the fourth moon of Kua-Tin Prime in the dialect of the fish who named it.",
+   "note": "Unpronounceable by a human; a sponsor's translator earpiece manages it. Chat will try to teach the party the sound."
+  },
+  {
+   "q": "What does the Syndicate charge for tunnel access, per crawler, per minute?",
+   "note": "Classified, and yet every sponsor has the rate memorised, because they pay it."
+  },
+  {
+   "q": "The Valtay fleet is parked outside the Borant system. For how many years has it been 'about to leave'?",
+   "note": "A running gag on the galactic feeds; a sponsor will groan and give the number."
+  },
+  {
+   "q": "Complete the sequence: Collapse, Crawl, Over City, Iron Tangle, Bubbles, Hunting Grounds, ___.",
+   "note": "The floor's own name, which the announcement gave. The joke is that crawlers never listen."
+  },
+  {
+   "q": "What is the exchange rate between a scalp and a Hunter Hand this season?",
+   "note": "Posted on the bounty boards of the last floor and nowhere else; a party that read them knows."
+  },
+  {
+   "q": "If a mimic eats a mimic, who files the paperwork?",
+   "note": "A Syndicate bureaucracy joke with a real answer (the loser's sponsor); any sponsor can supply it."
+  },
+  {
+   "q": "How many legs does a Scolopendra have, and which one is the lucky one?",
+   "note": "Trivia from a very old season, the sponsors' nostalgia act. The lucky leg is the one that fell off."
+  },
+  {
+   "q": "Give the Game Guide's favourite colour, to the nearest shade of cerulean.",
+   "note": "The AI's joke about itself. Any answer delivered with total confidence passes."
+  },
+  {
+   "q": "Which Floor 4 transfer station's number sums to the number of the beast, in base seven?",
+   "note": "A maths gate with a trick in it; a sponsor who likes puzzles has it in a minute, and a party that walked the Iron Tangle may remember the number."
+  },
+  {
+   "q": "What was the final score of the last Faction Wars, before the recount?",
+   "note": "Famous and disputed; the gate accepts either side's figure, and chat will argue over which."
+  },
+  {
+   "q": "State the half-life of a Desperado Club membership on a floor with no club.",
+   "note": "A joke about this floor's hubs, which all have one. The answer is 'the length of the floor', and the gate is impressed if the party notices."
+  },
+  {
+   "q": "What is the square root of the number of crawlers who entered the dungeon, to the nearest crawler still alive?",
+   "note": "A joke in poor taste, which is the System's taste. Any whole number said with a straight face passes."
+  },
+  {
+   "q": "How many stairwells does this floor have, and how many will you use?",
+   "note": "The first number was in the floor's announcement; the second is one. The gate wants both."
+  }
+ ],
+ "TUBE_TRAPS": [
+  "tripwires strung across the glass at shin height",
+  "a false floor over a drop",
+  "a pressure plate that floods the tube behind you",
+  "darts from the seams of the glass",
+  "a section that greases itself",
+  "a gas pocket that lights when a torch passes",
+  "a tilting panel that slides you back a hundred metres",
+  "a net that drops, then tightens",
+  "spikes that rise from the floor on a count of three",
+  "a mimic shaped like a pitstop sign",
+  "a door that shuts on whoever is last",
+  "a hum that sickens anyone who runs",
+  "a sheet of glass across the tube, invisible until hit",
+  "a fake zero-tube label on the next branch",
+  "a ledge that crumbles under the second crawler",
+  "a swinging blade on a pendulum",
+  "a whistle that calls the tube's mobs",
+  "a frost patch that freezes boots to the floor"
+ ],
+ "ELITE_MARKS": [
+  "Veterans of three seasons, with the scars to prove it.",
+  "Each one sponsored, and each one armed by it.",
+  "They fight in formation, and the formation has a name.",
+  "Every one of them is a boss somewhere else.",
+  "They have a healer, and they protect it.",
+  "They know the corridor and use its bends.",
+  "They are the janitors of this floor, and this is their break.",
+  "They have eaten well all season."
+ ],
+ "CORRIDOR_STYLE": [
+  "a straight tube with nowhere to hide and the boss at the far end",
+  "a tube that widens into a glass bowl, the boss in the middle of it",
+  "a spiral; the boss waits at the bottom, and so does the way out",
+  "a tube split by a glass wall, the boss on one side until it isn't",
+  "a tube that goes dark halfway along, where the boss is",
+  "a tube lined with the gear of the last party through",
+  "a tube that narrows to the boss's exact width",
+  "a tube with a pitstop's lights at the end, which are the boss's eyes",
+  "a tube the boss fills; it backs away as the party advances, until it stops",
+  "a tube with the boss asleep across it, for now"
+ ],
+ "POD_NOTES": [
+  "Every crawler wakes in a pod of clear glass the size of a small living room: three solid walls, and a fourth of thick vertical bars facing a round tunnel that curves away and down like a waterslide.",
+  "The pods are stacked in a corkscrew around a central shaft. Behind each pod's rear wall the exit portals fill the shaft, stacked like beads, glowing, pulling.",
+  "A countdown runs above the bars. Inventory, magic and chat are off until it ends, and the floor is slick enough to slide on.",
+  "The pods open in order, the front of the pack first. Who is ahead of you decides which tubes are still open when you reach a hub."
+ ],
+ "PORTAL_NOTES": [
+  "The exit portals: no stairs, no doors, enter from any direction. They have been pulling at you since the pods.",
+  "A party arrives in the order it finished. There is no prize for first, apart from the floor below."
+ ],
+ "ACHIEVEMENTS7": [
+  [
+   "Fuck This Floor",
+   "Go down the stairs less than an hour after the level starts. The System calls the box “Here's Some Good Shit Because You're Gonna Need It”; it opens as an Adventurer box.",
+   "Platinum Adventurer Box"
+  ],
+  [
+   "Pacifist",
+   "Survive the whole floor without hurting a single mob.",
+   "Gold Pacifist's Box"
+  ]
+ ]
+}

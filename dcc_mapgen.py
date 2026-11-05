@@ -42,7 +42,14 @@ Floor 6 (the Hunting Grounds) is Floor 3's grid in jungle, with Zockau pinned
 north, a river, hunter parties (3/6/10 detailed), a thorn wall, and a bounty
 board.
 
-Floor 7 is skipped (per canon). Floor 8 (the Ghosts of Earth) is one region as
+Floor 7 (the Great Race) is a one-way maze of glass tubes between hubs, run
+as a race: at every hub a choice of tubes labelled by threat (an empty tube
+that takes half the floor, a puzzle gate, mobs, elites, traps, or a boss
+corridor from borough up), a pitstop at every hub, and the exit portals pulling
+the whole way. Size sets the choices, the rows and the days (3/5/6, 5/7/9,
+7/9/12).
+
+Floor 8 (the Ghosts of Earth) is one region as
 a polar map: 3 rings x 4/6/8 wedges of folklore mobs with T'Ghee totem cards,
 a Phase 2 deckmaster ladder, rival squads, and card loot. --region picks the
 folklore archetype.
@@ -171,7 +178,7 @@ def _load_bank(name: str) -> dict:
         sys.exit(f"missing word bank: {path}")
 
 
-for _bank in ("common", "floor1_2", "floor3", "floor4", "floor5", "floor6", "floor8", "floor9", "floor10", "floor11"):
+for _bank in ("common", "floor1_2", "floor3", "floor4", "floor5", "floor6", "floor7", "floor8", "floor9", "floor10", "floor11"):
     globals().update(_load_bank(_bank))
 MOB_QUIRKS = [tuple(x) for x in MOB_QUIRKS]   # (text, danger modifier)
 
@@ -1693,6 +1700,8 @@ def floor_bosses(fl) -> List[Boss]:
     out = []
     for attr in ("neighborhoods", "cells"):
         out += [c.boss for c in getattr(fl, attr, None) or [] if getattr(c, "boss", None)]
+    for h in fl.hubs if isinstance(fl, Floor7) else []:            # floor 7
+        out += [t.boss for t in h.tubes if t.boss]
     for group in ("borough_bosses", "city_bosses"):
         out += list((getattr(fl, group, None) or {}).values())
     for q in getattr(fl, "quadrants", None) or []:
@@ -2220,6 +2229,12 @@ def floor_bestiary(fl) -> List[MobBuild]:
         boss(castle.boss if castle else None, f"the {q.name} castle", q.mob.noun)
         for g in castle.guardians if castle else []:
             boss(g, f"the {q.name} quadrant", q.mob.noun)
+    for h in fl.hubs if isinstance(fl, Floor7) else []:            # floor 7
+        for t in h.tubes:
+            where = f"tube {h.label} \u2192 {t.to}"
+            if t.mob:
+                mob(t.mob, t.level_range, where)
+            boss(t.boss, where)
     for z in getattr(fl, "zones", None) or []:                     # floor 8
         for card in z.creatures:
             out.append(build_mob(creature_name(card.name), _middle(z.level_range),
@@ -3344,6 +3359,8 @@ def floor_svg(fl, boss_stairs: bool) -> str:
         return render9_svg(fl)
     if isinstance(fl, Floor8):
         return render8_svg(fl)
+    if isinstance(fl, Floor7):
+        return render7_svg(fl)
     if isinstance(fl, Floor6):
         return render6_svg(fl)
     if isinstance(fl, Floor5):
@@ -6451,6 +6468,451 @@ def render6_svg(fl: Floor6) -> str:
 
 
 # ===========================================================================
+# FLOOR 7 — THE GREAT RACE
+# A race through one-way glass tubes: hubs with pitstops, tubes labelled by
+# threat, and the exit portals pulling the whole way.
+# ===========================================================================
+
+FLOOR7_CFG = {
+    "mob_band": (45, 65),               # what a tube's ordinary mobs run
+    "elite_bonus": 8,                   # an elite corridor's mobs, over the band
+    # A boss corridor's boss, by its threat level: the tiers from borough up.
+    "boss_tier": {5: "borough", 6: "city", 7: "county", 8: "state", 9: "country"},
+    "boss_level": {"borough": 70, "city": 78, "county": 85, "state": 92, "country": 99},
+    # How long a tube takes, as a share of the floor's hours, by threat level: a
+    # zero tube about half the floor, a hike about a third, a corridor a tenth.
+    # A puzzle tube is a short walk and then however long the puzzle takes; a
+    # boss corridor is the fight.
+    "hours": {0: (0.42, 0.55), 1: (0.03, 0.06), 2: (0.25, 0.35), 3: (0.08, 0.14),
+              4: (0.08, 0.14), "boss": (0.015, 0.03)},
+    # Parties a tube takes before it closes: the lower the threat, the fewer. A
+    # boss corridor takes one at a time and opens again when the boss or the
+    # party is dead.
+    "uses": {0: 1, 1: 2, 2: 3, 3: 4, 4: 5},
+    "zero_tube_chance": 0.75,           # a hub's slowest tube is a zero tube this often
+}
+# choices: tubes out of every hub; times: how many a crawler takes, start to
+# exit; days: the countdown; hubs: hubs in each row between.
+SIZE7_CFG = {"small": {"choices": 3, "times": 5, "days": 6, "hubs": 3},
+             "medium": {"choices": 5, "times": 7, "days": 9, "hubs": 3},
+             "large": {"choices": 7, "times": 9, "days": 12, "hubs": 4}}
+# Which boss corridors a hub leans to: borough most often, country rarely.
+BOSS_LEVEL_WEIGHTS = {5: 5, 6: 4, 7: 3, 8: 2, 9: 1}
+
+
+@dataclass
+class Tube:
+    """One tube out of a hub: its threat level, where it comes out, how long it
+    takes and how many parties it takes before it closes, and what is in it."""
+    label: str
+    threat: int
+    to: str                        # the hub it comes out in, or "Exit"
+    hours: int
+    uses: int                      # 0 for a boss corridor: one party at a time, and it reopens
+    note: str = ""                 # a zero tube's glass, or what makes an elite corridor's mobs elite
+    puzzle: str = ""               # a puzzle gate's question
+    puzzle_note: str = ""          # and what the DM should know about it
+    mob: Optional[Mob] = None      # threat 2 to 4
+    level_range: Tuple[int, int] = (0, 0)
+    traps: List[str] = field(default_factory=list)      # threat 4
+    boss: Optional[Boss] = None    # threat 5 to 9
+
+
+@dataclass
+class Hub:
+    """A node of the maze: the starting chute, or a pitstop with a safe room,
+    both clubs, a shop and a guild hall, and its tubes out."""
+    leg: int                       # 0 is the start; the rows of hubs count up from 1
+    label: str
+    name: str
+    shop: str = ""
+    guild: str = ""
+    tubes: List[Tube] = field(default_factory=list)
+
+
+@dataclass
+class Floor7:
+    size: str
+    name: str
+    days: int
+    choices: int
+    times: int
+    position: str                  # where the party starts in the pack: front, middle or back
+    hubs: List[Hub]
+    achievements: list
+    seed: int
+    number: int = 7
+    other_crawlers: List[CrawlerTeam] = field(default_factory=list)
+
+
+class Generator7:
+    FLOOR = 7
+
+    def __init__(self, size, seed, days=None):
+        self.rng = random.Random(f"floor{self.FLOOR}|{seed}")
+        self.seed = seed
+        self.size = size
+        self.cfg = FLOOR7_CFG
+        self.sc = SIZE7_CFG[size]
+        self.days = days or self.sc["days"]
+        self.hours = self.days * 24
+        # The mobs and bosses are Floors 1 and 2's: the same pools, named the
+        # same way, with the same guards against a repeat.
+        self.mech_decks = make_mechanic_decks(self.rng)
+        self.namer = BossNamer(self.rng, NBHD_ADJ)
+        self.used_mobs = set()
+        self.used_forms = set()
+        self.names = Deck(self.rng, HUB_NAMES)
+        self.zero_notes = Deck(self.rng, ZERO_TUBE_NOTES)
+        self.puzzles = Deck(self.rng, PUZZLES)
+        self.corridors = Deck(self.rng, CORRIDOR_STYLE)
+        self.elite_marks = Deck(self.rng, ELITE_MARKS)
+
+    def make_mob(self, elite: bool = False) -> Mob:
+        for _ in range(100):
+            adj, noun = mob_words(self.rng, 1)
+            if (adj, noun) not in self.used_mobs:
+                break
+        self.used_mobs.add((adj, noun))
+        return describe_mob(self.rng, f"Elite {adj}" if elite else adj, noun)
+
+    def make_boss(self, level: int) -> Boss:
+        tier = self.cfg["boss_tier"][level]
+        adj, noun = mob_words(self.rng, 1)
+        name = self.namer.name(noun)
+        lo, hi = {"borough": (15, 30), "city": (30, 60)}.get(tier, (60, 100))
+        for _ in range(200):
+            sz = self.rng.randint(lo, hi)
+            form = self.rng.choice(BOSS_FORMS).format(
+                size=sz, a_size=("an" if sz in (8, 11, 18) or 80 <= sz < 90 else "a"),
+                noun_l=noun.lower(), noun_sing=singular(noun).lower())
+            if form not in self.used_forms:
+                break
+        self.used_forms.add(form)
+        return Boss(name, tier, self.cfg["boss_level"][tier], form,
+                    boss_mechanics(self.mech_decks, tier), self.corridors.draw(), False)
+
+    def band(self, elite: bool = False) -> Tuple[int, int]:
+        lo, hi = self.cfg["mob_band"]
+        a = self.rng.randint(lo, hi - 4)
+        b = a + self.rng.randint(2, 4)
+        bonus = self.cfg["elite_bonus"] if elite else 0
+        return (a + bonus, b + bonus)
+
+    def levels(self) -> List[int]:
+        """The threat levels of one hub's tubes, slowest first: a slow tube, a
+        fight and a boss corridor at the least, and more of each as the size
+        allows, so every hub is the same choice -- the long way, the fight, or
+        the boss. The slowest is usually a zero tube."""
+        n = self.sc["choices"]
+        bosses = 1 if n < 7 else 2
+        fights = min(2, (n - bosses) // 2)
+        slow = n - bosses - fights
+        out = []
+        pool = [0, 1, 2]
+        first = 0 if self.rng.random() < self.cfg["zero_tube_chance"] else self.rng.choice([1, 2])
+        out.append(first)
+        pool.remove(first)
+        for _ in range(slow - 1):
+            pick = self.rng.choice(pool or [0, 1, 2])
+            if pick in pool:
+                pool.remove(pick)
+            out.append(pick)
+        pool = [3, 4]
+        for _ in range(fights):
+            pick = self.rng.choice(pool or [3, 4])
+            if pick in pool:
+                pool.remove(pick)
+            out.append(pick)
+        pool = list(BOSS_LEVEL_WEIGHTS)
+        for _ in range(bosses):
+            pick = self.rng.choices(pool, weights=[BOSS_LEVEL_WEIGHTS[p] for p in pool])[0]
+            pool.remove(pick)
+            out.append(pick)
+        return sorted(out)
+
+    def make_tube(self, level: int, to: str) -> Tube:
+        lo, hi = self.cfg["hours"][level if level < 5 else "boss"]
+        hours = max(1, int(round(self.rng.uniform(lo, hi) * self.hours)))
+        t = Tube(f"Lv {level} → {to}", level, to, hours, self.cfg["uses"].get(level, 0))
+        if level == 0:
+            t.note = self.zero_notes.draw()
+        elif level == 1:
+            p = self.puzzles.draw()
+            t.puzzle, t.puzzle_note = p["q"], p["note"]
+        elif level in (2, 3, 4):
+            t.mob = self.make_mob(elite=level == 3)
+            t.level_range = self.band(elite=level == 3)
+            if level == 3:
+                t.note = self.elite_marks.draw()
+            if level == 4:
+                t.traps = self.rng.sample(TUBE_TRAPS, self.rng.randint(2, 3))
+        else:
+            t.boss = self.make_boss(level)
+        return t
+
+    def build(self) -> Floor7:
+        n, times, per_row = self.sc["choices"], self.sc["times"], self.sc["hubs"]
+        rows = [[Hub(0, "Start", "the starting chute")]]
+        for leg in range(1, times):
+            rows.append([Hub(leg, f"{leg}{chr(ord('a') + k)}", self.names.draw(),
+                             shop=self.rng.choice(SHOPS), guild=self.rng.choice(CLASS_GUILDS))
+                         for k in range(per_row)])
+        for leg, row in enumerate(rows):
+            ahead = [h.label for h in rows[leg + 1]] if leg + 1 < len(rows) else ["Exit"]
+            for hub in row:
+                # Every tube out comes out in a different hub ahead while there
+                # are hubs to spare, so every hub ahead is reachable from every
+                # hub behind; then the tubes are dealt their threats, slowest
+                # first.
+                order = self.rng.sample(ahead, len(ahead))
+                dests = [order[i % len(order)] for i in range(n)]
+                hub.tubes = [self.make_tube(level, to) for level, to in zip(self.levels(), dests)]
+        position = self.rng.choices(["front", "middle", "back"], weights=[1, 2, 1])[0]
+        return Floor7(size=self.size, name="The Great Race", days=self.days, choices=n, times=times,
+                      position=position, hubs=[h for row in rows for h in row],
+                      achievements=[list(a) for a in ACHIEVEMENTS7], seed=self.seed)
+
+
+def tube_closed(fl: Floor7, hub: Hub, t: Tube) -> bool:
+    """Whether a tube is already closed when the party reaches its hub: the
+    crawlers ahead of them in the pack have used it up. From the front of the
+    pack nothing is; from the middle, the zero tubes of the first half of the
+    course; from the back, every zero tube, and the puzzle tubes of the first
+    half."""
+    half = (fl.times + 1) // 2
+    if fl.position == "front":
+        return False
+    if fl.position == "back":
+        return t.threat == 0 or (t.threat == 1 and hub.leg < half)
+    return t.threat == 0 and hub.leg < half
+
+
+def position_text(fl: Floor7) -> str:
+    half = (fl.times + 1) // 2
+    where = fl.position if fl.position in ("front", "back") else "middle"
+    if where == "front":
+        return "the front of the pack. Every tube is open when you reach it."
+    if where == "back":
+        return (f"the back of the pack. Every zero tube is closed before you reach it, and so "
+                f"are the puzzle tubes of the first {half} rows: the crawlers ahead of you used "
+                f"them up.")
+    return (f"the middle of the pack. By the time you reach a hub in the first {half} rows its "
+            f"zero tube is closed: the crawlers ahead of you used it.")
+
+
+def tube_uses(t: Tube) -> str:
+    if t.boss or t.uses <= 0:
+        return "one party at a time; it reopens when the boss or the party is dead, and the boss respawns"
+    return f"{t.uses} use{'' if t.uses == 1 else 's'}"
+
+
+def tube_short(t: Tube) -> str:
+    """What is in a tube, in a few words, for the map."""
+    if t.boss:
+        return f"{t.boss.tier} boss {t.boss.name}"
+    if t.threat == 0:
+        return "empty, long"
+    if t.threat == 1:
+        return "puzzle gate"
+    what = t.mob.name if t.mob else "mobs"
+    if t.threat == 3:
+        return f"elites: {what}"
+    return f"{what} + traps" if t.traps else what
+
+
+def tube_lines(fl: Floor7, hub: Hub, t: Tube, indent: str = "  ") -> List[str]:
+    """A tube in the write-up: its label, plainly, and what is in it."""
+    head = f"{indent}- **Lv {t.threat} → {t.to}** — {t.hours} h"
+    if t.threat == 1:
+        head += " and the puzzle"
+    head += f", {tube_uses(t)}."
+    closed = " **Closed when you arrive.**" if tube_closed(fl, hub, t) else ""
+    o = []
+    if t.boss:
+        b = t.boss
+        o.append(f"{head} {b.tier.title()} boss: {b.name} (Level {b.level}).{closed}")
+        o.append(f"{indent}  - Form: {b.form}.")
+        o.append(f"{indent}  - Corridor: {b.chamber}.")
+        o.append(f"{indent}  - Mechanic: {b.mechanic}")
+        o.append(f"{indent}  - Drops: a {boss_box(b.tier, fl.number)}")
+    elif t.threat == 0:
+        o.append(f"{head} Nothing in it, and it's long. {t.note}{closed}")
+    elif t.threat == 1:
+        o.append(f"{head} A puzzle gate: “{t.puzzle}”{closed}")
+        o.append(f"{indent}  - *{t.puzzle_note}*")
+    else:
+        lo, hi = t.level_range
+        what = f"{t.mob.name}, Level {lo}–{hi}" if t.mob else "mobs"
+        if t.threat == 3:
+            o.append(f"{head} A corridor of elites: {what}. {t.note}{closed}")
+        elif t.threat == 4:
+            o.append(f"{head} {what}, and traps: {'; '.join(t.traps)}.{closed}")
+        else:
+            o.append(f"{head} {what}; a hike.{closed}")
+        if t.mob:
+            o.append(f"{indent}  - {t.mob.quirk}")
+            o.append(f"{indent}  - *{t.mob.description}*")
+    return o
+
+
+def render7(fl: Floor7) -> str:
+    c = FLOOR7_CFG
+    hours = fl.days * 24
+    rows = {}
+    for h in fl.hubs:
+        rows.setdefault(h.leg, []).append(h)
+    legs = sorted(rows)
+    tubes = [t for h in fl.hubs for t in h.tubes]
+    bosses = [t for t in tubes if t.boss]
+    zeros = [t.hours for t in tubes if t.threat == 0]
+    per_row = max((len(rows[leg]) for leg in legs if leg), default=0)
+    o = [f"# Floor 7 — {fl.name} ({fl.size})", "", "## Summary", ""]
+    o.append(f"- **Countdown:** {fl.days} days ({hours} hours). The floor collapses on anyone still in the maze.")
+    o.append(f"- **The course:** {fl.times} choices of {fl.choices} tubes: the starting chute, "
+             f"{len(legs) - 1} rows of {per_row} hubs, then the exit portals. {len(fl.hubs)} hubs, "
+             f"{len(tubes)} tubes, {len(bosses)} of them boss corridors.")
+    o.append(f"- **Your start:** {position_text(fl)}")
+    if zeros:
+        o.append(f"- **The zero tubes:** {min(zeros)}–{max(zeros)} hours each, about half the floor, "
+                 f"and each passes once. Two in a row and the countdown wins.")
+    o.append(f"- **Seed:** {fl.seed}")
+    o.append("")
+    o.append("## Floor Rules")
+    o.append("")
+    for r in F7_RULES:
+        o.append(f"- {r}")
+    o.append("")
+    o.append("## Threat Levels")
+    o.append("")
+    o.append("Every tube's label says which it is.")
+    o.append("")
+    o.append("| Lv | What's in it | How long | Uses |")
+    o.append("|---:|---|---|---|")
+    for level, what, how_long in THREAT_LEVELS:
+        o.append(f"| {level} | {what} | {how_long} | {c['uses'].get(int(level), 0)} |")
+    tiers = ", ".join(f"{lv} {tier}" for lv, tier in c["boss_tier"].items())
+    o.append(f"| 5–9 | A boss, by tier: {tiers}. | short: the fight | one party at a time; it "
+             f"reopens when the boss or the party is dead, and the boss respawns |")
+    o.append("")
+    o.append("## The Course")
+    o.append("")
+    o.append("From the chute every tube leads to a hub in the next row, and from the last row to "
+             "the exit. A tube's line gives its threat level and where it comes out, how long it "
+             "takes and how many parties it takes before it closes, and what is in it.")
+    o.append("")
+    for leg in legs:
+        if leg == 0:
+            o.append("### The start")
+            o.append("")
+            for note in POD_NOTES:
+                o.append(f"- {note}")
+        else:
+            o.append(f"### Row {leg}")
+            o.append("")
+        for h in rows[leg]:
+            if leg:
+                o.append(f"#### {h.label}. {h.name}")
+                o.append("")
+                o.append(f"- **Pitstop:** safe room; Desperado Club and Club Vanquisher entrances; "
+                         f"shop: {h.shop}; guild hall: {h.guild}.")
+            o.append("- **Tubes out:**")
+            for t in h.tubes:
+                o += tube_lines(fl, h, t)
+            o.append("")
+    o.append("### The exit portals")
+    o.append("")
+    for note in PORTAL_NOTES:
+        o.append(f"- {note}")
+    o.append("")
+    if fl.achievements:
+        o.append("## Achievements")
+        o.append("")
+        o.append("The two the books hand out for this floor.")
+        o.append("")
+        for name, trigger, reward in fl.achievements:
+            o.append(f"- **{name}:** {trigger} → {reward}")
+        o.append("")
+    o.extend(crawler_section(fl))
+    return "\n".join(o)
+
+
+TUBE_COLORS = {"slow": "#2e7d32", "fight": "#b36b00", "boss": "#8a1a1a", "closed": "#999999"}
+
+
+def tube_band(t: Tube) -> str:
+    return "boss" if t.threat >= 5 else "fight" if t.threat >= 3 else "slow"
+
+
+def render7_svg(fl: Floor7) -> str:
+    rows = {}
+    for h in fl.hubs:
+        rows.setdefault(h.leg, []).append(h)
+    legs = sorted(rows)
+    widest = max(len(r) for r in rows.values())
+    n = max((len(h.tubes) for h in fl.hubs), default=fl.choices)
+    CW, PITCH = 230, 250
+    CH = 62 + 15 * n
+    RP = CH + 34
+    W = max(800, PAD * 2 + PITCH * widest - (PITCH - CW))
+    H = HEADER + PAD + RP * (len(legs) + 1) + 70
+    o = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" font-family="Helvetica, Arial, sans-serif">',
+         f'<rect width="{W}" height="{H}" fill="#f6f2ea"/>',
+         _text(PAD, 32, f"Floor 7 — {fl.name}", size=22, weight="bold"),
+         _text(PAD, 54, f"{fl.days} days  •  {fl.times} choices of {fl.choices} tubes  •  "
+                        f"start: the {fl.position} of the pack  •  seed {fl.seed}", size=12, fill="#555")]
+    # Where every card is: the rows top to bottom, each centred.
+    at = {}
+    for leg in legs:
+        row = rows[leg]
+        x0 = (W - (PITCH * len(row) - (PITCH - CW))) / 2
+        y = HEADER + PAD + leg * RP
+        for k, h in enumerate(row):
+            at[h.label] = (x0 + k * PITCH, y)
+    at["Exit"] = ((W - CW) / 2, HEADER + PAD + len(legs) * RP)
+    # The tubes, as lines under the cards: one to each hub a card's tubes reach.
+    for h in fl.hubs:
+        x, y = at[h.label]
+        seen = []
+        for t in h.tubes:
+            if t.to in seen or t.to not in at:
+                continue
+            seen.append(t.to)
+            tx, ty = at[t.to]
+            o.append(f'<line x1="{x + CW / 2:.1f}" y1="{y + CH}" x2="{tx + CW / 2:.1f}" y2="{ty}" '
+                     f'stroke="#bbb" stroke-width="2"/>')
+    for i, h in enumerate(fl.hubs):
+        x, y = at[h.label]
+        fill, stroke = ("#e9e2d0", "#555") if h.leg else ("#d9d6cf", "#2e8b57")
+        o.append(f'<rect x="{x:.1f}" y="{y}" width="{CW}" height="{CH}" fill="{fill}" stroke="{stroke}" stroke-width="2"/>')
+        _hit(("hubs", i), "rect", x, y, CW, CH)
+        o.append(_text(x + 10, y + 22, h.label, size=16, weight="bold"))
+        o.append(_text(x + 18 + 9 * len(h.label), y + 22, _fit(h.name, 24), size=12, weight="bold"))
+        sub = "the pods, then the chute" if not h.leg else f"shop: {h.shop}  •  guild: {h.guild}"
+        o.append(_text(x + 10, y + 38, _fit(sub, 38), size=10, fill="#444"))
+        ly = y + 56
+        for j, t in enumerate(h.tubes):
+            closed = tube_closed(fl, h, t)
+            color = TUBE_COLORS["closed" if closed else tube_band(t)]
+            uses = "reopens" if t.boss or t.uses <= 0 else f"×{t.uses}"
+            o.append(_text(x + 10, ly, _fit(f"Lv {t.threat} → {t.to}  {t.hours} h  {uses}  {tube_short(t)}", 40),
+                           size=10, fill=color, style="text-decoration:line-through" if closed else ""))
+            _hit(("hubs", i, "tubes", j), "rect", x + 6, ly - 11, CW - 12, 14)
+            ly += 15
+    ex, ey = at["Exit"]
+    o.append(f'<rect x="{ex:.1f}" y="{ey}" width="{CW}" height="54" fill="#222"/>')
+    o.append(_text(ex + CW / 2, ey + 24, "EXIT PORTALS", size=14, weight="bold", anchor="middle", fill="#fff"))
+    o.append(_text(ex + CW / 2, ey + 42, "no stairs, no doors; they pull", size=10, anchor="middle", fill="#ddd"))
+    ky = ey + 54 + 28
+    o.append(_text(PAD, ky, "Green: slow tubes (Lv 0–2).  Amber: fights (Lv 3–4).  Red: boss corridors "
+                   "(Lv 5–9).  Struck through: closed when you arrive.", size=11))
+    o.append(_text(PAD, ky + 18, "Each line: level → where it comes out, hours, parties it takes (×) or "
+                   "that it reopens, and what's in it. Rows run top to bottom, start to exit.", size=11, fill="#555"))
+    o.append("</svg>")
+    return "\n".join(o)
+
+
+# ===========================================================================
 # FLOOR 8 — THE GHOSTS OF EARTH
 # One region: a polar map of three rings x N wedges around a starting
 # structure, folklore mobs as T'Ghee totems, a Phase 2 deckmaster ladder.
@@ -7800,7 +8262,7 @@ def keep_ways(nb: Neighborhood, crossings, chambers, rng):
 # or printing. Callers decide what to do with the result.
 # ===========================================================================
 
-FLOORS = (1, 2, 3, 4, 5, 6, 8, 9, 10, 11)
+FLOORS = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11)
 
 # For the front ends, the desktop app and the web page.
 #
@@ -7815,6 +8277,7 @@ FLOOR_OPTIONS = {
     4:  {"days"},
     5:  {"days"},
     6:  {"scaling", "days"},
+    7:  {"days"},
     8:  {"days", "region"},
     9:  {"days", "floor9"},
     10: {"floor10"},
@@ -7832,6 +8295,7 @@ FLOOR_LABELS = {
     4: "4 - The Iron Tangle",
     5: "5 - The Bubbles",
     6: "6 - The Hunting Grounds",
+    7: "7 - The Great Race",
     8: "8 - Ghosts of Earth",
     9: "9 - Faction Wars",
     10: "10 - Don't Come In Last",
@@ -7853,7 +8317,7 @@ def map_title(suffix: str) -> str:
 # The section of each floor's write-up that tells in words what its main map
 # shows, for anyone who can't see the map.
 MAP_SECTIONS = {1: "Layout", 2: "Layout", 3: "Layout", 4: "Colored Lines",
-                5: "Quadrants", 6: "Layout", 8: "Phase 1 — Zones", 9: "Teams",
+                5: "Quadrants", 6: "Layout", 7: "The Course", 8: "Phase 1 — Zones", 9: "Teams",
                 10: "Heats", 11: "The Route"}
 
 
@@ -7924,7 +8388,7 @@ _COUNT_WORD = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five", 6: "six",
 def _render_floor(fl, floor: int) -> str:
     """Markdown for a built floor. Kept beside the build dispatch so the two lists
     of floors cannot drift apart."""
-    renderers = {3: render3, 4: render4, 5: render5, 6: render6, 8: render8,
+    renderers = {3: render3, 4: render4, 5: render5, 6: render6, 7: render7, 8: render8,
                  9: render9, 10: render10, 11: render11}
     text = renderers.get(floor, render)(fl)
     # What's switched on, and the loot boxes, exist on every floor, so their
@@ -7991,6 +8455,11 @@ def _where_phrases(rng, fl, count: int) -> List[str]:
     nbhds = getattr(fl, "neighborhoods", None)
     if nbhds:
         return [f"in neighborhood {nb.label}" for nb in _pick_distinct(rng, nbhds, count)]
+    # Floor 7: a hub, by its label and its name. (Floor 4 has hubs too: its
+    # rail hubs, which are not places a team is reported at.)
+    hubs = [h for h in fl.hubs if h.leg] if isinstance(fl, Floor7) else []
+    if hubs:
+        return [f"at hub {h.label}, {h.name}" for h in _pick_distinct(rng, hubs, count)]
     # Floor 5: a quadrant and a starting site, where the crawlers are locked in
     # until their castle falls. A group lands at a site as often as crawlers
     # start there, and no two groups share one while there are sites to spare.
@@ -8923,6 +9392,8 @@ def generate(floor: int = 1, size: str = "medium", seed: Optional[int] = None, *
         fl = Generator9(size, seed, days, warlords, wildcard, winner, runner_up).build()
     elif floor == 8:
         fl = Generator8(size, seed, days, region).build()
+    elif floor == 7:
+        fl = Generator7(size, seed, days).build()
     elif floor == 6:
         fl = Generator6(size, scaling, seed, days).build()
     elif floor == 5:
@@ -9244,7 +9715,10 @@ EDIT_LOCKED_IN = {("Quadrant", "name"),
                   ("RailLine", "yard"), ("Floor6", "thorn_side"),
                   ("Zone8", "stairwell"), ("Zone8", "key"), ("Zone8", "vending"),
                   # One team on Floor 9 is the party's, and one holds King's Point.
-                  ("Team", "is_party_team"), ("Team", "kings_point")}
+                  ("Team", "is_party_team"), ("Team", "kings_point"),
+                  # A Floor 7 tube's threat and where it comes out, and the course's shape.
+                  ("Tube", "threat"), ("Tube", "to"), ("Hub", "leg"),
+                  ("Floor7", "choices"), ("Floor7", "times")}
 # Rows whose leading cells are links, by the group they are in: a corridor runs
 # between two rooms, a named train stops at a line and a station, a Floor 9
 # stairwell sits in a team's slot, a crossing joins a room to one next door, and
@@ -9531,7 +10005,7 @@ def main(argv=None):
             pass
 
     p = argparse.ArgumentParser(description="Dungeon Crawler Carl floor generator (floors 1-2).")
-    p.add_argument("--floor", type=int, choices=[1, 2, 3, 4, 5, 6, 8, 9, 10, 11], default=1)
+    p.add_argument("--floor", type=int, choices=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], default=1)
     p.add_argument("--size", choices=list(SIZE_CFG), default="medium",
                    help="huge/giant/massive/continent are floors 1-2 only: multiple Cities "
                         "(County/State/Country/Continent), each its own large-sized City with "

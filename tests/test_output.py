@@ -204,7 +204,7 @@ class FloorFileTest(unittest.TestCase):
         self.assertIn('data.janitor (a Mob) needs "noun"', msg)
         self.assertIn("newer DCC Mapgen", attempt(lambda d: d.__setitem__("version", 99)))
         self.assertIn("not a DCC Mapgen floor file", attempt(lambda d: d.pop("format")))
-        self.assertIn("does not make", attempt(lambda d: d.__setitem__("floor", 7)))
+        self.assertIn("does not make", attempt(lambda d: d.__setitem__("floor", 12)))
         with open(path, "w", encoding="utf-8") as f:
             f.write(good[:-40])
         with self.assertRaises(mg.MapgenError) as cm:
@@ -961,6 +961,19 @@ class MapClickTest(unittest.TestCase):
                       (lambda t, x, y: t.startswith("Arena roster: "), ("formers",))]
             for i, (_, ev) in enumerate(fl.route_events):
                 wanted.append((lambda t, x, y, w=mg._fit(ev, 44): t == w, ("route_events", i)))
+            self._picks(res, "", wanted, where)
+
+    def test_floor_7(self):
+        for where, res in self._cases(7):
+            fl, wanted = res.floor, []
+            hits = mg.map_hits(fl, "")
+            for i, h in enumerate(fl.hubs):
+                card = next(a for a in hits if a.path == ("hubs", i))
+                inside = lambda x, y, c=card: c.contains(x, y)
+                wanted.append((lambda t, x, y, n=mg._fit(h.name, 24), f=inside: t == n and f(x, y), ("hubs", i)))
+                for j, tube in enumerate(h.tubes):
+                    wanted.append((lambda t, x, y, s=f"Lv {tube.threat} \u2192 {tube.to} ", f=inside:
+                                   t.startswith(s) and f(x, y), ("hubs", i, "tubes", j)))
             self._picks(res, "", wanted, where)
 
     def test_a_part_names_the_map_that_shows_it_up_close(self):
@@ -4165,6 +4178,217 @@ class Floor6TownTest(unittest.TestCase):
         self.assertIn("unlocks stairwell", md)
 
 
+class Floor7Test(unittest.TestCase):
+    """The Great Race, with its rules written out here. A small floor is 3
+    choices, 5 times, 6 days; a medium 5, 7, 9; a large 7, 9, 12. Threat 0 is an
+    empty tube that takes about half the floor, 1 a puzzle gate, 2 ordinary mobs
+    on a hike, 3 a corridor of elites, 4 mobs and a lot of traps, 5 to 9 a boss
+    from borough up, whose corridor reopens when the boss or the party is dead.
+    Tubes are one way and their labels plain; the lower the threat, the fewer
+    parties a tube takes. Mobs and bosses are Floors 1 and 2's."""
+
+    SIZES = {"small": (3, 5, 6), "medium": (5, 7, 9), "large": (7, 9, 12)}
+    USES = {0: 1, 1: 2, 2: 3, 3: 4, 4: 5}
+    TIERS = {5: "borough", 6: "city", 7: "county", 8: "state", 9: "country"}
+
+    @classmethod
+    def setUpClass(cls):
+        cls.floors = {(size, seed): mg.generate(7, size, seed, images=False)
+                      for size in cls.SIZES for seed in (1, 2, 4242)}
+
+    @staticmethod
+    def _rows(fl):
+        rows = {}
+        for h in fl.hubs:
+            rows.setdefault(h.leg, []).append(h)
+        return [rows[k] for k in sorted(rows)]
+
+    @staticmethod
+    def _section(md, h):
+        """A hub's part of the write-up."""
+        head = md.index(f"#### {h.label}. {h.name}" if h.leg else "### The start")
+        end = min(x for x in (md.find("\n### ", head + 1), md.find("\n#### ", head + 1)) if x > 0)
+        return md[head:end]
+
+    def test_the_sizes(self):
+        for (size, seed), res in self.floors.items():
+            fl, where = res.floor, f"{size} seed {seed}"
+            choices, times, days = self.SIZES[size]
+            self.assertEqual((fl.choices, fl.times, fl.days), (choices, times, days), where)
+            rows = self._rows(fl)
+            self.assertEqual(len(rows), times, f"{where}: a row of hubs for every choice but the last")
+            self.assertEqual([h.label for h in rows[0]], ["Start"], where)
+            for k, row in enumerate(rows):
+                ahead = {h.label for h in rows[k + 1]} if k + 1 < len(rows) else {"Exit"}
+                for h in row:
+                    self.assertEqual(len(h.tubes), choices, f"{where} {h.label}")
+                    self.assertEqual([t.threat for t in h.tubes], sorted(t.threat for t in h.tubes), where)
+                    self.assertTrue({t.to for t in h.tubes} <= ahead, f"{where} {h.label}: a tube goes back")
+                    if len(ahead) <= choices:
+                        self.assertEqual({t.to for t in h.tubes}, ahead, f"{where} {h.label}: every hub ahead")
+                    for t in h.tubes:
+                        self.assertEqual(t.label, f"Lv {t.threat} \u2192 {t.to}", where)
+            self.assertIn(f"- **Countdown:** {days} days ({days * 24} hours).", res.markdown)
+            self.assertIn(f"{times} choices of {choices} tubes", res.markdown)
+            self.assertIn("## The Course", res.markdown)
+
+    def test_what_each_threat_level_is(self):
+        band = mg.FLOOR7_CFG["mob_band"]
+        for (size, seed), res in self.floors.items():
+            fl = res.floor
+            hours = fl.days * 24
+            for h in fl.hubs:
+                where = f"{size} seed {seed} {h.label}"
+                levels = [t.threat for t in h.tubes]
+                self.assertTrue(any(lv <= 2 for lv in levels) and any(lv in (3, 4) for lv in levels)
+                                and any(lv >= 5 for lv in levels), f"{where}: a slow tube, a fight and a boss")
+                self.assertEqual(len(set(levels)), len(levels), f"{where}: a level twice")
+                for t in h.tubes:
+                    w = f"{where} Lv {t.threat}"
+                    if t.threat == 0:
+                        self.assertTrue(t.note and not t.mob and not t.boss and not t.puzzle, w)
+                        self.assertGreaterEqual(t.hours, 0.4 * hours, f"{w}: half the floor")
+                    elif t.threat == 1:
+                        self.assertIn(t.puzzle, [q["q"] for q in mg.PUZZLES], w)
+                        self.assertTrue(t.puzzle_note and not t.mob and not t.boss, w)
+                        self.assertLess(t.hours, 0.1 * hours, w)
+                    elif t.threat == 2:
+                        self.assertTrue(t.mob and not t.traps and not t.boss, w)
+                        self.assertFalse(t.mob.adj.startswith("Elite"), w)
+                        self.assertTrue(band[0] <= t.level_range[0] <= t.level_range[1] <= band[1], w)
+                        self.assertTrue(0.2 * hours <= t.hours <= 0.4 * hours, f"{w}: a hike, under a zero tube")
+                    elif t.threat == 3:
+                        self.assertTrue(t.mob and t.mob.adj.startswith("Elite ") and not t.traps, w)
+                        self.assertGreaterEqual(t.level_range[0], band[0] + mg.FLOOR7_CFG["elite_bonus"], w)
+                        self.assertIn(t.note, mg.ELITE_MARKS, w)
+                        self.assertTrue(0.05 * hours <= t.hours <= 0.2 * hours, w)
+                    elif t.threat == 4:
+                        self.assertTrue(t.mob and 2 <= len(t.traps) <= 3 and not t.boss, w)
+                        self.assertTrue(set(t.traps) <= set(mg.TUBE_TRAPS), w)
+                        self.assertTrue(0.05 * hours <= t.hours <= 0.2 * hours, w)
+                    else:
+                        self.assertIn(t.threat, self.TIERS, w)
+                        self.assertEqual(t.boss.tier, self.TIERS[t.threat], w)
+                        self.assertEqual(t.boss.level, mg.FLOOR7_CFG["boss_level"][t.boss.tier], w)
+                        self.assertEqual(t.uses, 0, f"{w}: reopens")
+                        self.assertLess(t.hours, 0.05 * hours, w)
+                        self.assertIn(t.boss.chamber, mg.CORRIDOR_STYLE, w)
+        # A hub's slowest tube is usually a zero tube, but not always.
+        hubs = [h for res in self.floors.values() for h in res.floor.hubs]
+        slowest = [min(t.threat for t in h.tubes) for h in hubs]
+        self.assertGreater(slowest.count(0) / len(slowest), 0.5)
+        self.assertTrue(1 in slowest and 2 in slowest)
+
+    def test_uses_fall_with_the_threat(self):
+        self.assertEqual(mg.FLOOR7_CFG["uses"], self.USES)
+        self.assertEqual(list(self.USES.values()), sorted(set(self.USES.values())))
+        for (size, seed), res in self.floors.items():
+            for h in res.floor.hubs:
+                for t in h.tubes:
+                    if t.threat < 5:
+                        self.assertEqual(t.uses, self.USES[t.threat], f"{size} seed {seed} {h.label}")
+            self.assertIn("one party at a time; it reopens when the boss or the party is dead, and "
+                          "the boss respawns", res.markdown)
+
+    def test_mobs_and_bosses_are_floors_1_and_2s(self):
+        tags = list(mg.FLOOR_MOB_TAGS["1"])
+
+        def pool(bank):
+            use = [x for x in tags if bank.get(x)] or list(bank)
+            return {w for x in use for w in bank[x]}
+        adjs, nouns = pool(mg.MOB_ADJ), pool(mg.MOB_NOUN)
+        for (size, seed), res in self.floors.items():
+            where, names, bosses = f"{size} seed {seed}", set(), []
+            for h in res.floor.hubs:
+                for t in h.tubes:
+                    if t.mob:
+                        adj = t.mob.adj[len("Elite "):] if t.mob.adj.startswith("Elite ") else t.mob.adj
+                        self.assertIn(adj, adjs, f"{where}: {t.mob.name}")
+                        self.assertIn(t.mob.noun, nouns, f"{where}: {t.mob.name}")
+                        self.assertNotIn(t.mob.name, names, f"{where}: {t.mob.name} twice")
+                        names.add(t.mob.name)
+                    if t.boss:
+                        bosses.append(t.boss)
+            self.assertEqual(len({b.name for b in bosses}), len(bosses), f"{where}: a boss named twice")
+            self.assertEqual(len({b.form for b in bosses}), len(bosses), f"{where}: a form twice")
+            for b in bosses:
+                self.assertIn(b.mechanic.split(" ")[0], {m.split(" ")[0] for m in
+                              mg.BOSS_MECHANICS["any"] + mg.BOSS_MECHANICS["grand"]}, where)
+
+    def test_the_write_up_labels_every_tube_plainly(self):
+        for (size, seed), res in self.floors.items():
+            fl, md = res.floor, res.markdown
+            for h in fl.hubs:
+                part = self._section(md, h)
+                for t in h.tubes:
+                    line = f"- **Lv {t.threat} \u2192 {t.to}** \u2014 {t.hours} h"
+                    self.assertIn(line, part, f"{size} seed {seed} {h.label}")
+                    at = part.index(line)
+                    rest = part[at:part.index("\n", at)]
+                    if t.boss:
+                        self.assertIn(f"{t.boss.tier.title()} boss: {t.boss.name} (Level {t.boss.level})", rest)
+                        self.assertIn(f"- Drops: a {mg.boss_box(t.boss.tier, 7)}", part)
+                    elif t.mob:
+                        self.assertIn(f"{t.mob.name}, Level {t.level_range[0]}\u2013{t.level_range[1]}", rest)
+                    elif t.threat == 1:
+                        self.assertIn(t.puzzle, rest)
+                    for trap in t.traps:
+                        self.assertIn(trap, rest)
+                    self.assertIn(mg.tube_uses(t), rest)
+                    self.assertEqual("Closed when you arrive" in rest, mg.tube_closed(fl, h, t), rest)
+                if h.leg:
+                    self.assertIn(f"- **Pitstop:** safe room; Desperado Club and Club Vanquisher entrances; "
+                                  f"shop: {h.shop}; guild hall: {h.guild}.", part)
+                    self.assertIn(h.shop, mg.SHOPS)
+                    self.assertIn(h.guild, mg.CLASS_GUILDS)
+            for name, trigger, reward in fl.achievements:
+                self.assertIn(f"- **{name}:** {trigger} \u2192 {reward}", md)
+
+    def test_where_you_start_closes_tubes(self):
+        res = mg.generate(7, "medium", 4242, images=False)
+        fl = res.floor
+        half = (fl.times + 1) // 2
+        for position in ("front", "middle", "back"):
+            fl.position = position
+            for h in fl.hubs:
+                for t in h.tubes:
+                    want = {"front": False,
+                            "middle": t.threat == 0 and h.leg < half,
+                            "back": t.threat == 0 or (t.threat == 1 and h.leg < half)}[position]
+                    self.assertEqual(mg.tube_closed(fl, h, t), want, f"{position} {h.label} Lv {t.threat}")
+            again = mg.redraw_floor(res)
+            self.assertIn(f"- **Your start:** the {position} of the pack.", again.markdown)
+            closed = sum(mg.tube_closed(fl, h, t) for h in fl.hubs for t in h.tubes)
+            self.assertEqual(again.markdown.count("Closed when you arrive"), closed, position)
+            self.assertEqual(dict(again.svgs)[""].count("line-through"), closed, position)
+        positions = {mg.generate(7, "small", seed, images=False).floor.position for seed in range(1, 25)}
+        self.assertEqual(positions, {"front", "middle", "back"})
+
+    def test_the_bestiary_has_every_tube(self):
+        for (size, seed), res in self.floors.items():
+            fl = res.floor
+            names = {b.name for b in mg.floor_bestiary(fl)}
+            tubes = [t for h in fl.hubs for t in h.tubes]
+            for t in tubes:
+                if t.mob:
+                    self.assertIn(t.mob.name, names, f"{size} seed {seed}")
+                if t.boss:
+                    self.assertIn(t.boss.name, names, f"{size} seed {seed}")
+            self.assertEqual(len(mg.floor_bosses(fl)), sum(1 for t in tubes if t.boss), f"{size} seed {seed}")
+            self.assertEqual(mg.MOB_BUILDS["party_levels"]["7"], [65, 73])
+
+    def test_days_can_be_set(self):
+        res = mg.generate(7, "small", 4242, days=10, images=False)
+        self.assertEqual(res.floor.days, 10)
+        zeros = [t.hours for h in res.floor.hubs for t in h.tubes if t.threat == 0]
+        self.assertTrue(zeros and all(0.4 * 240 <= z <= 0.56 * 240 for z in zeros), zeros)
+        md = res.markdown
+        self.assertIn("## Threat Levels", md)
+        for level, uses in self.USES.items():
+            self.assertTrue(re.search(rf"^\| {level} \| .+ \| {uses} \|$", md, re.M), level)
+        self.assertIn("| 5\u20139 | A boss, by tier: 5 borough, 6 city, 7 county, 8 state, 9 country.", md)
+
+
 class ShopsTest(unittest.TestCase):
     """Shops and prices. The books' rules are written out here: marketplaces
     from the Third Floor; a general store charges three times a specialist's
@@ -6576,7 +6800,7 @@ class OptionValidationTest(unittest.TestCase):
     def test_rejects_bad_combinations(self):
         for kwargs, expected in [
             ({"floor": 3, "size": "continent"}, "floor 1-2 only"),
-            ({"floor": 7, "size": "small"}, "floor must be one of"),
+            ({"floor": 12, "size": "small"}, "floor must be one of"),
             ({"floor": 1, "size": "enormous"}, "size must be one of"),
             ({"floor": 1, "size": "small", "stair_chance": 1.5}, "stair chance"),
             ({"floor": 1, "size": "small", "borough_boss_rate": -1}, "borough boss rate"),
