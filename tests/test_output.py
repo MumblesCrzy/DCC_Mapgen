@@ -4283,6 +4283,45 @@ class Floor7Test(unittest.TestCase):
         self.assertGreater(slowest.count(0) / len(slowest), 0.5)
         self.assertTrue(1 in slowest and 2 in slowest)
 
+    def test_a_puzzle_gate_is_no_threat_sign(self):
+        """A gate's question is a joke about the galaxy, not what the floor holds:
+        one about a poison cloud is no sign of poison on the floor."""
+        md = mg.generate(7, "large", 4242, images=False).markdown
+        body = mg.floor_body(md)
+        kept, skip = [], False
+        for line in body.splitlines():
+            if "A puzzle gate:" in line:
+                skip = True
+                continue
+            if skip and line.startswith("    "):
+                continue
+            skip = False
+            kept.append(line)
+        cut = chr(10).join(kept)
+        self.assertNotEqual(cut, body)
+        self.assertEqual(mg.threat_suggestions(body), mg.threat_suggestions(cut))
+        gate = "  - **Lv 1 to 2a** -- 9 km (6 mi), 2 h at pace and then the puzzle, 2 uses. A puzzle gate: "
+        lines = chr(10).join(gate + "“What was in Scolopendra's poison cloud?”" + chr(10)
+                             + "    - *Poison, fire and cold, nine ways; a sponsor knows them.*" for _ in range(4))
+        self.assertEqual(mg.threat_suggestions(lines), [])
+
+    def test_no_floor_asks_a_puzzle_twice(self):
+        """A large floor has a puzzle tube at every hub, so the bank has to hold
+        more puzzles than a large floor has hubs, and they are dealt."""
+        qs = [p["q"] for p in mg.PUZZLES]
+        self.assertEqual(len(set(qs)), len(qs), "a question twice in the bank")
+        self.assertTrue(all(p["q"].strip() and p["note"].strip() for p in mg.PUZZLES))
+        large = mg.SIZE7_CFG["large"]
+        hubs = 1 + (large["times"] - 1) * large["hubs"]
+        self.assertGreaterEqual(len(qs), hubs + 5, "the bank is short for a large floor")
+        for size in ("small", "medium", "large"):
+            for seed in range(1, 13):
+                asked = [t.puzzle for h in mg.generate(7, size, seed, images=False).floor.hubs
+                         for t in h.tubes if t.threat == 1]
+                self.assertEqual(len(set(asked)), len(asked), f"{size} seed {seed} asks one twice")
+                if size == "large":
+                    self.assertEqual(len(asked), hubs, f"{size} seed {seed}: a puzzle tube at every hub")
+
     def test_uses_fall_with_the_threat(self):
         self.assertEqual(mg.FLOOR7_CFG["uses"], self.USES)
         self.assertEqual(list(self.USES.values()), sorted(set(self.USES.values())))

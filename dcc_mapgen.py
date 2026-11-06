@@ -1366,7 +1366,7 @@ def threat_suggestions(text: str, top: int = 3) -> List[ThreatSign]:
     threats = LOOT_BOXES["benefactor"]["threats"]
     owners, phrase_re = _sign_index()
     hits = {key: [] for key in threats}
-    in_code = in_layout = in_mayor = False
+    in_code = in_layout = in_mayor = in_puzzle = False
     for line in text.splitlines():
         if line.strip().startswith("```"):
             in_code = not in_code
@@ -1381,7 +1381,10 @@ def threat_suggestions(text: str, top: int = 3) -> List[ThreatSign]:
         # Nor is a hunter's gear: an enchantment names what it is good against,
         # not what the floor holds.
         gear = line.lstrip().startswith(("- Gear: ", "- Smuggled in: "))
-        if in_code or in_layout or in_mayor or gear or not line.strip():
+        # Nor a Floor 7 puzzle gate's question, or its note: a joke about the
+        # galaxy, not what the floor holds.
+        in_puzzle = "A puzzle gate:" in line or (in_puzzle and line.startswith("    "))
+        if in_code or in_layout or in_mayor or gear or in_puzzle or not line.strip():
             continue
         found = {}                                  # threat -> its matches on this line
         matches = [m for m in _WORD.finditer(line) if m.group(0).lower() in owners]
@@ -6572,6 +6575,9 @@ class Generator7:
         self.used_forms = set()
         self.names = Deck(self.rng, HUB_NAMES)
         self.zero_notes = Deck(self.rng, ZERO_TUBE_NOTES)
+        # Dealt, so a floor never asks the same question twice: the bank holds
+        # more puzzles than a large floor has hubs, and a hub has one puzzle
+        # tube at most.
         self.puzzles = Deck(self.rng, PUZZLES)
         self.corridors = Deck(self.rng, CORRIDOR_STYLE)
         self.elite_marks = Deck(self.rng, ELITE_MARKS)

@@ -155,6 +155,178 @@
   {
    "q": "How many stairwells does this floor have, and how many will you use?",
    "note": "The first number was in the floor's announcement; the second is one. The gate wants both."
+  },
+  {
+   "q": "A Syndicate Standard Day is thirty hours and how many seconds?",
+   "note": "Seventeen and a half. Every sponsor's wetware keeps Syndicate time; the gate takes 17.5, and docks nothing for saying 'and a half' with contempt."
+  },
+  {
+   "q": "How many Earth years is a cycle?",
+   "note": "A solar, the Syndicate's year, runs about 2.25 Earth years. A sponsor who has been 'twelve cycles in the business' will do the sum for the party, bitterly."
+  },
+  {
+   "q": "How many star systems does the Syndicate hold, to the nearest billion?",
+   "note": "More than three billion. The joke is that nobody has ever finished counting; the gate takes three, four, or 'more than three, the Council says'."
+  },
+  {
+   "q": "Name the Prime Minister of the Syndicate Council.",
+   "note": "Prime Minister Glory. No crawler has a reason to know it; every viewer does, the way everyone knows who is in charge and nobody likes it."
+  },
+  {
+   "q": "In what Earth year did Borant's first prep team land?",
+   "note": "1937, the year The Hobbit came out, which the Game Guides enjoy pointing out is not a coincidence. A sponsor with a Game Guide's memoir on the shelf has it."
+  },
+  {
+   "q": "Mordecai began preparing for this crawl in which Earth year, and what did he steal?",
+   "note": "1964, and a pile of James Bond tapes from a Blockbuster Video. He has told the story on every talk show in the galaxy; chat will finish it for the party."
+  },
+  {
+   "q": "How often does the Borant Corporation host a Dungeon Crawler World?",
+   "note": "Once every seven to fifteen seasons. The gate takes any number in the range; a sponsor who holds Borant stock knows it to the season."
+  },
+  {
+   "q": "What is the Desperado Club's tagline?",
+   "note": "'So fun it hurts.' It is over every entrance the party has walked past without reading; a sponsor with a membership of their own will sigh."
+  },
+  {
+   "q": "What is the Desperado Club's logo?",
+   "note": "A stylised knife dripping blood. The gate accepts a drawing, and grades it."
+  },
+  {
+   "q": "What is Club Vanquisher's marketplace called?",
+   "note": "Comforting Supplies. The clerics and paladins who shop there find the name dignified; everyone else finds it the funniest thing on the Iron Tangle."
+  },
+  {
+   "q": "On the Iron Tangle, Club Vanquisher is found at transfer stations whose numbers end in which digit?",
+   "note": "Nine. A party that rode the Tangle may remember; a cleric's sponsor certainly does."
+  },
+  {
+   "q": "The Syndicate's logo is a set of interwoven loops. What are the loops?",
+   "note": "The wormholes that tie the Syndicate together; the named trains of the Iron Tangle trace it. A sponsor sees the logo on everything they own."
+  },
+  {
+   "q": "What is the slur the kua-tin tried to have banned, and what came of it?",
+   "note": "'Mudskipper'; the motion failed and made the word famous. The gate is being rude on purpose, and a sponsor will say it and then apologise to the production."
+  },
+  {
+   "q": "Name the most fearsome creature in prehistoric kua-tin mythology.",
+   "note": "The Pollyslog, which is also a Fourth Floor mob, which tells you something about kua-tin mythology. Anyone who has met a kua-tin knows."
+  },
+  {
+   "q": "How tall is the average kua-tin?",
+   "note": "About two feet; sixty-one centimetres. Zev would prefer the gate not ask."
+  },
+  {
+   "q": "What do Bopca smell of?",
+   "note": "Wet moss. Every crawler has smelled it; the gate wants it said out loud, in a safe room, with the Bopca listening."
+  },
+  {
+   "q": "By how much can a Bopca Protector's price for a personal space be haggled down?",
+   "note": "Up to a quarter, 25%. Bopca are miserly by nature, and the sponsors who have paid for their crawlers' rooms know the figure to the credit."
+  },
+  {
+   "q": "How many basic starter species does the Syndicate seed a candidate planet with?",
+   "note": "Six; the skyfowl are one. A sponsor from a seeded world may be one of the six and take the question personally."
+  },
+  {
+   "q": "What do skyfowl sit on instead of chairs?",
+   "note": "Perches. The Over City's shops sell them silk robes to stay aloft, which is the gate's follow-up if the party is smug about the first answer."
+  },
+  {
+   "q": "Which floors of the dungeon come into existence at the same moment?",
+   "note": "Three, six, nine, twelve, fifteen and eighteen, as Zev once let slip; the gate takes the list. Why is a question for a deeper floor."
+  },
+  {
+   "q": "Scolopendra's poison cloud attacked in how many ways at once?",
+   "note": "Nine: a Nine Tier attack, as the Over City's legends have it. A sponsor who followed that season says it louder."
+  },
+  {
+   "q": "What does a Saccathian's face do when it is amused?",
+   "note": "The tentacles trumpet. A Saccathian sponsor will demonstrate, which is the gate's point."
+  },
+  {
+   "q": "Which Syndicate race went bankrupt in a past season and keeps its Faction Wars seat anyway?",
+   "note": "The Naga of the Blood Sultanate, bankrupted by the crawler Drakea; they hold a legacy seat. Carl's kerchief is named for her, which a party that reads item cards may notice."
+  },
+  {
+   "q": "What percentage of an Ursine is bear?",
+   "note": "Forty-nine, by the System's own description; the other fifty-one is a racist uncle who works for the IRS. The gate wants both numbers."
+  },
+  {
+   "q": "Who hosts Dungeon Crawler After Hours?",
+   "note": "Odette, 'the most-beloved interviewer and program host in the history of the galaxy', a former crawler. A party that has been on the show knows; for one that hasn't, a sponsor will book it."
+  },
+  {
+   "q": "What does OIPAN stand for?",
+   "note": "The Open Intellect Pacifist Action Network, a tax-exempt charity with a weekly program called Shadow Boxer. The joke is that the name is longer than the membership."
+  },
+  {
+   "q": "On which floor does a crawler stop being the host company's property?",
+   "note": "The Tenth: citizenship on arrival, by Syndicate law. Every viewer knows it; no crawler is told until it matters."
+  },
+  {
+   "q": "A crawler with an Intelligence below what number fails the Tutorial, and what becomes of them?",
+   "note": "Two; they are classed as a dungeon familiar. A sponsor has seen it happen on the feeds and is not proud of having laughed."
+  },
+  {
+   "q": "How many times a floor may a crawler be pulled out to guest on a Syndicate show?",
+   "note": "One to three, from the Second Floor on. The production's own rule; a PR agent will confirm it with visible irritation."
+  },
+  {
+   "q": "How many stairwells did the Sixth Floor have, and how many does this one?",
+   "note": "2,344 and 1,172: each floor halves them. The pattern is the trick; a party that has listened to the announcements can count down from the First Floor's 75,000."
+  },
+  {
+   "q": "How many days did crawlers get on the Fourth Floor?",
+   "note": "Ten; and five, six, eight, fifteen and seventeen on the floors around it. A sponsor keeps the calendar; the gate wants the Fourth."
+  },
+  {
+   "q": "Larracos is the capital of the disputed lands. What shape is the city?",
+   "note": "An inverted cone dug into the ground, the castle at the bottom. Every Faction Wars broadcast opens on it."
+  },
+  {
+   "q": "Name the Syndicate's largest stock exchange.",
+   "note": "The I.R.F. A sponsor's broker will answer before the sponsor does."
+  },
+  {
+   "q": "What is the Syndicate's unit of money, and what is the card called?",
+   "note": "Credits, on credit chits. Crawlers deal in gold and have never seen a chit; every viewer has one in a pocket."
+  },
+  {
+   "q": "Who oversees Dungeon Crawler World for the Syndicate Council?",
+   "note": "The Crawl Council, a subcommittee. The gate is checking whether the party has ever read a contract."
+  },
+  {
+   "q": "What did the Plenty introduce that made Borant's communication relays worthless?",
+   "note": "The tunneling system that carries the crawl to every screen in the galaxy. A sponsor watches through it; Borant seeds conspiracy theories about it; the gate enjoys the irony."
+  },
+  {
+   "q": "The Game Guides' newsletter stopped arriving. Why?",
+   "note": "Borant cut it to save money, and so never told the guides the season was opening two years early. Mordecai has mentioned it. Repeatedly."
+  },
+  {
+   "q": "What are the lowest and highest known levels of a Bopca Protector?",
+   "note": "Twenty-one and sixty-three. A sponsor who has argued with one over a room upgrade knows which end they got."
+  },
+  {
+   "q": "How many crawlers were on the Second Floor when its countdown started?",
+   "note": "1,292,526, by the System's count. The gate takes it to the nearest ten thousand; the figure sat in the corner of every sponsor's screen for six days."
+  },
+  {
+   "q": "What is the first word of every floor's introductory announcement?",
+   "note": "'Hello' -- 'Hello, Crawlers!' The gate's cheapest question, and the one most parties get wrong by overthinking it."
+  },
+  {
+   "q": "In the volcano level's mythology, who ruled the Over City before the Cataclysm?",
+   "note": "The skyfowl, under magistrates, governors, a chancellor and a king in Larracos. The city elves still think so; a sponsor who follows the lore will too."
+  },
+  {
+   "q": "What must a changeling do before it can take a species' shape?",
+   "note": "Touch it. Mordecai's answer; the gate accepts 'touch', 'tag', or the obscene gesture a changeling sponsor will suggest."
+  },
+  {
+   "q": "Every kua-tin wears a badge about one organisation. Which?",
+   "note": "The Bloom: the badge says whether or not they belong. Politics the galaxy follows and crawlers never see."
   }
  ],
  "TUBE_TRAPS": [
