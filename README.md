@@ -71,6 +71,12 @@ porters and signalmen but still turns up the occasional Hazard-Pay Shark. To add
 drop it under the tag it belongs to; to give a floor a new habitat, add the tag to both
 banks and list it for that floor.
 
+A mob's quirk and the System's description of it come from `MOB_QUIRKS` and
+`SYSTEM_DESC` in the same file, 120 descriptions, and a floor deals them: no two mobs
+on a floor share a description until the bank runs out, nor a quirk until its bank
+does. The land around a Floor 3 or 6 settlement, dealt on its own stream, leaves out
+what the floor's own mobs already have.
+
 `BOSS_MECHANICS` is split the same way, into `any` and `grand`. Neighborhood bosses
 draw only from `any`; borough, city and top-tier bosses take one `grand` mechanic —
 the arena-scale ones that reshape a room — plus one ordinary one. A floor deals them

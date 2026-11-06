@@ -370,14 +370,51 @@ def mob_words(rng, floor: int) -> Tuple[str, str]:
     return pick(MOB_ADJ), pick(MOB_NOUN)
 
 
-def describe_mob(rng, adj: str, noun: str) -> Mob:
-    """The System's write-up of one mob. Shared by every floor that has mobs."""
-    quirk, mod = rng.choice(MOB_QUIRKS)
-    desc = rng.choice(SYSTEM_DESC).format(
-        a=article(adj), b=f"{adj.lower()} {singular(noun).lower()}",
-        noun=noun, noun_l=noun.lower(), adj_l=adj.lower(),
-        noun_sing=singular(noun).lower())
-    return Mob(adj, noun, quirk, mod, desc)
+def mob_decks(rng, used=()) -> Tuple["Deck", "Deck"]:
+    """A floor's decks of quirks and descriptions: each dealt out once before
+    any comes round again, so a floor repeats neither until the bank runs out.
+    `used` is Mobs already on the floor: a second deck (the outskirts', on its
+    own stream) deals what they haven't got first, then the rest."""
+    quirks = {m.quirk for m in used}
+    templates = {description_template(m) for m in used}
+    return (_deck_fresh_first(rng, MOB_QUIRKS, lambda q: q[0] in quirks),
+            _deck_fresh_first(rng, SYSTEM_DESC, lambda t: t in templates))
+
+
+def _deck_fresh_first(rng, items, stale) -> "Deck":
+    """A deck of all the items, dealing the ones `stale` is false for first.
+    Leaving the stale ones out altogether made a deck of one when a floor had
+    used all but one quirk, and every mob after it got that quirk."""
+    deck = Deck(rng, items)
+    fresh = [x for x in items if not stale(x)]
+    rest = [x for x in items if stale(x)]
+    rng.shuffle(fresh)
+    rng.shuffle(rest)
+    deck._pile = rest + fresh            # dealt from the end: the fresh ones first
+    return deck
+
+
+def _desc_fields(adj: str, noun: str) -> dict:
+    return dict(a=article(adj), b=f"{adj.lower()} {singular(noun).lower()}",
+                noun=noun, noun_l=noun.lower(), adj_l=adj.lower(),
+                noun_sing=singular(noun).lower())
+
+
+def description_template(m: Mob) -> Optional[str]:
+    """Which of SYSTEM_DESC a mob's description came from, or None if it was
+    edited into something else. A janitor's is the template with "Janitor mob."
+    in front, so the end of the description is what is matched."""
+    fields = _desc_fields(m.adj, m.noun)
+    return next((t for t in SYSTEM_DESC if m.description.endswith(t.format(**fields))), None)
+
+
+def describe_mob(rng, adj: str, noun: str, decks=None) -> Mob:
+    """The System's write-up of one mob. Shared by every floor that has mobs.
+    A floor hands over its decks, so its mobs share no quirk or description
+    while the banks last; without them the two are rolled."""
+    quirk, mod = decks[0].draw() if decks else rng.choice(MOB_QUIRKS)
+    template = decks[1].draw() if decks else rng.choice(SYSTEM_DESC)
+    return Mob(adj, noun, quirk, mod, template.format(**_desc_fields(adj, noun)))
 
 
 def grid_label(i: int) -> str:
@@ -853,6 +890,7 @@ class Generator:
         self.borough_boss_rate = borough_boss_rate
         self.used_mobs = set()
         self.mech_decks = make_mechanic_decks(self.rng)
+        self.mob_decks = mob_decks(self.rng)
         self.namer = BossNamer(self.rng, NBHD_ADJ)
         # Loot and features are dealt, not rolled. Both banks used to be fifteen
         # entries sampled independently per cell, so a large floor 3 covered 18
@@ -885,7 +923,7 @@ class Generator:
             if (adj, noun) not in self.used_mobs:
                 break
         self.used_mobs.add((adj, noun))
-        return describe_mob(self.rng, adj, noun)
+        return describe_mob(self.rng, adj, noun, self.mob_decks)
 
     def make_boss(self, tier: str, mob: Mob, base_level: int) -> Boss:
         name = self.namer.name(mob.noun)
@@ -3312,7 +3350,6 @@ def render_room_svg(nb: Neighborhood, fl: Floor) -> str:
     for j, r in enumerate(nb.rooms):
         x, y = pos[r.id]
         hit(("rooms", j), "circle", x, y, 14)
-        hit(("rooms", j), "rect", x - 16, y - 29, 32, 15)        # its id, above
         if r.kind == "Boss Chamber":
             o.extend(_boss_marker(x, y, "neighborhood", ""))
         elif r.kind == "Hidden Passage":
@@ -3327,6 +3364,11 @@ def render_room_svg(nb: Neighborhood, fl: Floor) -> str:
             o.append(f'<circle cx="{x}" cy="{y}" r="9" fill="#cfcac0" stroke="#666" stroke-width="1.5"/>')
             o.append(_text(x, y + 4, r.kind[0], size=10, weight="bold", anchor="middle"))
         o.append(_text(x, y - 16, r.id, size=11, weight="bold", anchor="middle"))
+    # The ids' hits after every marker's, so a click on an id picks its room
+    # even where another room's marker sits under it.
+    for j, r in enumerate(nb.rooms):
+        x, y = pos[r.id]
+        hit(("rooms", j), "rect", x - 16, y - 29, 32, 15)        # its id, above
 
     ly = list_top
     o.append(_text(30, ly, "Rooms:", size=13, weight="bold"))
@@ -3608,6 +3650,7 @@ class Generator3:
         self.days_override = days
         self.used = set()
         self.mech_decks = make_mechanic_decks(self.rng)
+        self.mob_decks = mob_decks(self.rng)
         self.namer = BossNamer(self.rng, RUIN_ADJ)
         # Dealt rather than rolled, for the reasons in Generator.
         self.loot_deck = Deck(self.rng, LOOT_THEMES)
@@ -3637,7 +3680,7 @@ class Generator3:
 
     def make_mob(self) -> Mob:
         adj, noun = self._unique(lambda: mob_words(self.rng, 3))
-        return describe_mob(self.rng, adj, noun)
+        return describe_mob(self.rng, adj, noun, self.mob_decks)
 
     # Quests a settlement posts, by its size.
     QUESTS = {"tiny": 3, "small": 3, "medium": 6, "large": 6, "xl": 9}
@@ -3943,6 +3986,9 @@ def add_outskirts(fl) -> None:
         return
     rng = random.Random(f"floor{fl.number}|{fl.seed}|outskirts")
     deck = Deck(rng, JUNGLE_OUTSKIRTS if fl.number == 6 else SETTLEMENT_OUTSKIRTS)
+    # Their own decks, leaving out what the floor's mobs already have.
+    decks = mob_decks(rng, [m for c in fl.cells for m in (getattr(c, "mob", None), getattr(c, "second_mob", None)) if m]
+                      + [fl.janitor])
     band = (FLOOR6_CFG if fl.number == 6 else FLOOR3_CFG)["mob_band"]
     used = {m.name for c in fl.cells for m in (getattr(c, "mob", None), getattr(c, "second_mob", None)) if m}
     used.add(fl.janitor.name)
@@ -3953,7 +3999,7 @@ def add_outskirts(fl) -> None:
             adj, noun = mob_words(rng, fl.number)
             if f"{adj} {noun}" not in used:
                 break
-        mob = describe_mob(rng, adj, noun)
+        mob = describe_mob(rng, adj, noun, decks)
         used.add(mob.name)
         levels = grid_level_range(rng, band, fl.scaling, s.distance, max_dist)
         outskirts = deck.draw()
@@ -4464,6 +4510,7 @@ class Generator4:
         self.days_override = days
         self.used = set()
         self.mech_decks = make_mechanic_decks(self.rng)
+        self.mob_decks = mob_decks(self.rng)
 
     def _unique(self, fn):
         for _ in range(100):
@@ -4475,7 +4522,7 @@ class Generator4:
 
     def make_mob(self) -> Mob:
         adj, noun = self._unique(lambda: mob_words(self.rng, 4))
-        return describe_mob(self.rng, adj, noun)
+        return describe_mob(self.rng, adj, noun, self.mob_decks)
 
     def build(self) -> Floor4:
         n_lines = self.sc["lines"]
@@ -5492,6 +5539,7 @@ class Generator5:
         self.days_override = days
         self.used = set()
         self.mech_decks = make_mechanic_decks(self.rng)
+        self.mob_decks = mob_decks(self.rng)
         self.namer = BossNamer(self.rng, CASTLE_ADJ)
 
     def _unique(self, fn):
@@ -5504,7 +5552,7 @@ class Generator5:
 
     def make_mob(self, noun) -> Mob:
         adj, _ = mob_words(self.rng, 5)       # the quadrant supplies the noun
-        return describe_mob(self.rng, adj, noun)
+        return describe_mob(self.rng, adj, noun, self.mob_decks)
 
     def _form(self, mob: Mob) -> str:
         return self.rng.choice(BOSS_FORMS).format(
@@ -5568,8 +5616,8 @@ class Generator5:
             lr = (a, a + self.rng.randint(5, 8))
             fac = next((f for f in factions if f.home == q), None)
             if fac:
-                settlement = (f"{self.rng.choice(SETTLEMENT_PREFIX)}{self.rng.choice(SETTLEMENT_SUFFIX)}, "
-                              f"a {fac.name} settlement with a safe-room inn")
+                town = self._unique(lambda: self.rng.choice(SETTLEMENT_PREFIX) + self.rng.choice(SETTLEMENT_SUFFIX))
+                settlement = f"{town}, a {fac.name} settlement with a safe-room inn"
             else:
                 settlement = "No living settlement; one abandoned safe room near the entry point"
             quadrants.append(Quadrant(
@@ -5947,7 +5995,7 @@ class Generator6(Generator3):
 
     def make_mob(self) -> Mob:
         adj, noun = self._unique(lambda: mob_words(self.rng, 6))
-        return describe_mob(self.rng, adj, noun)
+        return describe_mob(self.rng, adj, noun, self.mob_decks)
 
     def build(self) -> Floor6:
         base = super().build()
@@ -6570,6 +6618,7 @@ class Generator7:
         # The mobs and bosses are Floors 1 and 2's: the same pools, named the
         # same way, with the same guards against a repeat.
         self.mech_decks = make_mechanic_decks(self.rng)
+        self.mob_decks = mob_decks(self.rng)
         self.namer = BossNamer(self.rng, NBHD_ADJ)
         self.used_mobs = set()
         self.used_forms = set()
@@ -6588,7 +6637,7 @@ class Generator7:
             if (adj, noun) not in self.used_mobs:
                 break
         self.used_mobs.add((adj, noun))
-        return describe_mob(self.rng, f"Elite {adj}" if elite else adj, noun)
+        return describe_mob(self.rng, f"Elite {adj}" if elite else adj, noun, self.mob_decks)
 
     def make_boss(self, level: int) -> Boss:
         tier = self.cfg["boss_tier"][level]
@@ -8278,12 +8327,17 @@ def keep_ways(nb: Neighborhood, crossings, chambers, rng):
     and what moved."""
     import types
     plain = [r.id for r in nb.rooms if r.kind not in NO_CROSSING and r.kind != "Entrance"]
-    taken, moved = set(), []
+    # A way keeps its room whenever that room is still one it can be in, so
+    # those rooms are reserved before any way that has to move picks a fresh
+    # one: a mover may not take a room another way was keeping.
+    kept = {old for old, kind, *_ in crossings if kind != "Entrance" and old in plain}
+    kept |= {old for old, *_ in chambers if old in plain}
+    taken, moved = set(kept), []
 
     def place(old, entrance):
         if entrance:
             rid = nb.rooms[0].id
-        elif old in plain and old not in taken:
+        elif old in kept:
             rid = old
         else:
             fresh = [r for r in plain if r not in taken]

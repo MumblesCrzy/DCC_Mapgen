@@ -2677,7 +2677,8 @@ def selftest() -> int:
     check("double-click for Rooms - neighborhood B" in tip, f"pointing at a neighborhood says a double-click goes to its rooms ({tip!r})")
     near = type("Event", (), {"x": x, "y": y})
     labels = [label for label, _ in view.menu_items(near)]
-    check(labels[:1] == ["Edit Neighborhood B — The Sunken Sewers"]
+    b_name = app.result.floor.neighborhoods[1].name
+    check(labels[:1] == [f"Edit Neighborhood B — {b_name}"]
           and labels[1:] == ["Open Rooms - neighborhood B"], f"right-clicking it offers both ({labels})")
     for ev in ("<ButtonPress-1>", "<ButtonRelease-1>", "<ButtonPress-1>", "<ButtonRelease-1>"):
         canvas.event_generate(ev, x=x, y=y)
@@ -2714,6 +2715,7 @@ def selftest() -> int:
     md = os.path.join(tempfile.mkdtemp(prefix="dcc_selftest_"), "floor1.md")
     with open(md, "w", encoding="utf-8") as f:
         f.write(app.result.markdown)
+    b_ways = [there for _, there in app.result.floor.neighborhoods[1].crossings]
     real_open, real_label, real_err = filedialog.askopenfilename, globals()["_ask_label"], messagebox.showerror
     errs_seen = []
     filedialog.askopenfilename = lambda **kw: md
@@ -2726,7 +2728,8 @@ def selftest() -> int:
         filedialog.askopenfilename, messagebox.showerror = real_open, real_err
         globals()["_ask_label"] = real_label
     rerolled = app.result.markdown
-    check(not errs_seen and rerolled.startswith("### B.") and "crossing west into A1" in rerolled
+    check(not errs_seen and rerolled.startswith("### B.") and b_ways
+          and all(f"into {there} (" in rerolled for there in b_ways)
           and "boss chamber (" in rerolled and "<polyline" in app.result.svgs[0][1],
           f"re-rolled rooms keep their crossings and their way into the boss's chamber {errs_seen[:1]}")
 

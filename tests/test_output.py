@@ -566,7 +566,9 @@ class WebPageTest(unittest.TestCase):
         self.assertEqual(json.loads(self.api.save_floor(""))["text"],
                          mg._floor_json(mg.floor_file_data(mg.generate(5, "medium", 4242))) + "\n")
         done = self._apply(castle, [["name", "Castle Mumbles"]], rename=[True])
-        self.assertEqual(done["status"], "Changed Name, and 1 other mention.")
+        others = len(mg.find_text(mg.generate(5, "medium", 4242).floor, old)) - 1
+        self.assertGreater(others, 0)
+        self.assertEqual(done["status"], f"Changed Name, and {others} other mention{'' if others == 1 else 's'}.")
         self.assertNotIn(old, done["markdown"])
         self.assertIn("Castle Mumbles", done["maps"][0]["svg"])
         self.assertEqual(done["undo"], 1)
@@ -1183,7 +1185,7 @@ class CrossingTest(unittest.TestCase):
                 json.dump(data, f)
             old = mg.open_floor_file(path)
         self.assertTrue(all(not nb.crossings and not nb.chamber_ways for nb in old.floor.neighborhoods))
-        self.assertNotIn("crossing", old.markdown)
+        self.assertNotIn("; crossing ", old.markdown)      # a room can be "a tunnel crossing"
         self.assertNotIn("boss chamber (", old.markdown)
         self.assertNotIn("Reached from", old.markdown)
         self.assertNotIn("<polyline", dict(old.svgs)["_room_A"])
@@ -1341,7 +1343,10 @@ class ReRollTest(unittest.TestCase):
                            capture_output=True, text=True, encoding="utf-8",
                            env=dict(os.environ, PYTHONIOENCODING="utf-8"))
         self.assertEqual(r.returncode, 0, r.stderr)
-        self.assertIn("crossing north into B1", r.stdout)
+        f_nb = next(nb for nb in self.res.floor.neighborhoods if nb.label == "F")
+        self.assertTrue(f_nb.crossings)
+        for _, there in f_nb.crossings:
+            self.assertIn(f"into {there} (", r.stdout)
 
 
 class ScreenReaderTest(unittest.TestCase):
@@ -3302,6 +3307,59 @@ class BestiaryTest(unittest.TestCase):
             for s in pattern["dump"]:
                 self.assertEqual(b.stats[s], 1, f"{b.poor}: {b.stats}")
         self.assertTrue(0.07 <= poor / len(builds) <= 0.19, poor)
+
+    def test_a_floor_deals_its_descriptions_and_quirks(self):
+        """The System's write-up of a mob comes from a bank five times the size
+        it was, 120 descriptions, dealt so that a floor repeats none until the
+        bank runs out; the quirks the same, from theirs. The outskirts of a
+        Floor 3 or 6 settlement, dealt on their own stream, leave out what the
+        floor's own mobs have."""
+        self.assertGreaterEqual(len(mg.SYSTEM_DESC), 120)
+        self.assertEqual(len(set(mg.SYSTEM_DESC)), len(mg.SYSTEM_DESC))
+        fields = dict(a="a", b="feral goblin", noun="Goblins", noun_l="goblins", adj_l="feral",
+                      noun_sing="goblin")
+        for t in mg.SYSTEM_DESC:
+            t.format(**fields)
+
+        def mobs(v, out):
+            if isinstance(v, mg.Mob):
+                out.append(v)
+            elif dataclasses.is_dataclass(v) and not isinstance(v, type):
+                for x in vars(v).values():
+                    mobs(x, out)
+            elif isinstance(v, dict):
+                for x in v.values():
+                    mobs(x, out)
+            elif isinstance(v, (list, tuple)):
+                for x in v:
+                    mobs(x, out)
+            return out
+        for floor, size in ((1, "large"), (2, "huge"), (3, "large"), (4, "large"), (5, "large"),
+                            (6, "large"), (7, "large")):
+            fl = mg.generate(floor, size, 4242, images=False).floor
+            found = mobs(fl, [])
+            self.assertGreater(len(found), 10, f"floor {floor}")
+            self.assertNotIn(None, [mg.description_template(m) for m in found],
+                             f"floor {floor}: a description from nowhere")
+            # The land around a settlement is dealt from a deck of its own, after
+            # the floor's: what the floor's mobs haven't got comes first.
+            out = [c.mob for c in getattr(fl, "cells", None) or []
+                   if isinstance(c, mg.Settlement) and c.mob]
+            own = [m for m in found if not any(m is o for o in out)]
+            for bank, key in ((mg.SYSTEM_DESC, mg.description_template),
+                              ([q for q, _ in mg.MOB_QUIRKS], lambda m: m.quirk)):
+                for group in (own, out):
+                    keys = [key(m) for m in group]
+                    most = -(-len(group) // len(bank))      # ceil
+                    for k in set(keys):
+                        self.assertLessEqual(keys.count(k), most, f"floor {floor}: {str(k)[:40]}")
+                spare = len(bank) - len({key(m) for m in own})
+                if out and spare >= len(out):
+                    self.assertFalse({key(m) for m in out} & {key(m) for m in own},
+                                     f"floor {floor}: the outskirts repeat the floor")
+        # Without a floor's decks, a description is rolled, and still one of the bank's.
+        m = mg.describe_mob(random.Random(3), "Feral", "Goblins")
+        self.assertIsNotNone(mg.description_template(m))
 
     def test_the_head_noun_decides_the_type(self):
         cases = {"Goblin Shamankas": "caster", "Tunnel Trolls": "brute", "Mole Rats": "swarm",
