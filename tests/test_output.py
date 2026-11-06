@@ -4180,10 +4180,11 @@ class Floor6TownTest(unittest.TestCase):
 
 class Floor7Test(unittest.TestCase):
     """The Great Race, with its rules written out here. A small floor is 3
-    choices, 5 times, 6 days; a medium 5, 7, 9; a large 7, 9, 12. Threat 0 is an
-    empty tube that takes about half the floor, 1 a puzzle gate, 2 ordinary mobs
-    on a hike, 3 a corridor of elites, 4 mobs and a lot of traps, 5 to 9 a boss
-    from borough up, whose corridor reopens when the boss or the party is dead.
+    choices, 5 times, 6 days; a medium 5, 7, 9; a large 7, 9, 12. Tubes are
+    measured by distance, walked at 5 km/h (3 mph). Threat 0 is an empty tube
+    that runs about half the floor, 1 a puzzle gate, 2 ordinary mobs on a hike,
+    3 a corridor of elites, 4 mobs and a lot of traps, 5 to 9 a boss from
+    borough up, whose corridor reopens when the boss or the party is dead.
     Tubes are one way and their labels plain; the lower the threat, the fewer
     parties a tube takes. Mobs and bosses are Floors 1 and 2's."""
 
@@ -4234,9 +4235,10 @@ class Floor7Test(unittest.TestCase):
 
     def test_what_each_threat_level_is(self):
         band = mg.FLOOR7_CFG["mob_band"]
+        self.assertEqual(mg.FLOOR7_CFG["pace_kmh"], 5)
         for (size, seed), res in self.floors.items():
             fl = res.floor
-            hours = fl.days * 24
+            hours = fl.days * 24 * 5                      # the countdown, in km walked
             for h in fl.hubs:
                 where = f"{size} seed {seed} {h.label}"
                 levels = [t.threat for t in h.tubes]
@@ -4245,33 +4247,35 @@ class Floor7Test(unittest.TestCase):
                 self.assertEqual(len(set(levels)), len(levels), f"{where}: a level twice")
                 for t in h.tubes:
                     w = f"{where} Lv {t.threat}"
+                    self.assertEqual(mg.tube_hours(t), max(1, round(t.km / 5)), w)
+                    self.assertEqual(mg.tube_miles(t), max(1, round(t.km / 1.609)), w)
                     if t.threat == 0:
                         self.assertTrue(t.note and not t.mob and not t.boss and not t.puzzle, w)
-                        self.assertGreaterEqual(t.hours, 0.4 * hours, f"{w}: half the floor")
+                        self.assertGreaterEqual(t.km, 0.4 * hours, f"{w}: half the floor")
                     elif t.threat == 1:
                         self.assertIn(t.puzzle, [q["q"] for q in mg.PUZZLES], w)
                         self.assertTrue(t.puzzle_note and not t.mob and not t.boss, w)
-                        self.assertLess(t.hours, 0.1 * hours, w)
+                        self.assertLess(t.km, 0.05 * hours, f"{w}: a short walk")
                     elif t.threat == 2:
                         self.assertTrue(t.mob and not t.traps and not t.boss, w)
                         self.assertFalse(t.mob.adj.startswith("Elite"), w)
                         self.assertTrue(band[0] <= t.level_range[0] <= t.level_range[1] <= band[1], w)
-                        self.assertTrue(0.2 * hours <= t.hours <= 0.4 * hours, f"{w}: a hike, under a zero tube")
+                        self.assertTrue(0.2 * hours <= t.km <= 0.4 * hours, f"{w}: a hike, under a zero tube")
                     elif t.threat == 3:
                         self.assertTrue(t.mob and t.mob.adj.startswith("Elite ") and not t.traps, w)
                         self.assertGreaterEqual(t.level_range[0], band[0] + mg.FLOOR7_CFG["elite_bonus"], w)
                         self.assertIn(t.note, mg.ELITE_MARKS, w)
-                        self.assertTrue(0.05 * hours <= t.hours <= 0.2 * hours, w)
+                        self.assertTrue(0.05 * hours <= t.km <= 0.2 * hours, w)
                     elif t.threat == 4:
                         self.assertTrue(t.mob and 2 <= len(t.traps) <= 3 and not t.boss, w)
                         self.assertTrue(set(t.traps) <= set(mg.TUBE_TRAPS), w)
-                        self.assertTrue(0.05 * hours <= t.hours <= 0.2 * hours, w)
+                        self.assertTrue(0.05 * hours <= t.km <= 0.2 * hours, w)
                     else:
                         self.assertIn(t.threat, self.TIERS, w)
                         self.assertEqual(t.boss.tier, self.TIERS[t.threat], w)
                         self.assertEqual(t.boss.level, mg.FLOOR7_CFG["boss_level"][t.boss.tier], w)
                         self.assertEqual(t.uses, 0, f"{w}: reopens")
-                        self.assertLess(t.hours, 0.05 * hours, w)
+                        self.assertLess(t.km, 0.02 * hours, f"{w}: a short corridor, then the fight")
                         self.assertIn(t.boss.chamber, mg.CORRIDOR_STYLE, w)
         # A hub's slowest tube is usually a zero tube, but not always.
         hubs = [h for res in self.floors.values() for h in res.floor.hubs]
@@ -4321,7 +4325,8 @@ class Floor7Test(unittest.TestCase):
             for h in fl.hubs:
                 part = self._section(md, h)
                 for t in h.tubes:
-                    line = f"- **Lv {t.threat} \u2192 {t.to}** \u2014 {t.hours} h"
+                    line = (f"- **Lv {t.threat} \u2192 {t.to}** \u2014 {t.km} km ({mg.tube_miles(t)} mi), "
+                            f"{mg.tube_hours(t)} h at pace")
                     self.assertIn(line, part, f"{size} seed {seed} {h.label}")
                     at = part.index(line)
                     rest = part[at:part.index("\n", at)]
@@ -4410,9 +4415,10 @@ class Floor7Test(unittest.TestCase):
     def test_days_can_be_set(self):
         res = mg.generate(7, "small", 4242, days=10, images=False)
         self.assertEqual(res.floor.days, 10)
-        zeros = [t.hours for h in res.floor.hubs for t in h.tubes if t.threat == 0]
-        self.assertTrue(zeros and all(0.4 * 240 <= z <= 0.56 * 240 for z in zeros), zeros)
+        zeros = [t.km for h in res.floor.hubs for t in h.tubes if t.threat == 0]
+        self.assertTrue(zeros and all(0.4 * 1200 <= z <= 0.56 * 1200 for z in zeros), zeros)
         md = res.markdown
+        self.assertIn("- **Pace:** 5 km/h (3 mph). The countdown is 1,200 km of walking;", md)
         self.assertIn("## Threat Levels", md)
         for level, uses in self.USES.items():
             self.assertTrue(re.search(rf"^\| {level} \| .+ \| {uses} \|$", md, re.M), level)

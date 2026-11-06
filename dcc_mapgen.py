@@ -6479,12 +6479,14 @@ FLOOR7_CFG = {
     # A boss corridor's boss, by its threat level: the tiers from borough up.
     "boss_tier": {5: "borough", 6: "city", 7: "county", 8: "state", 9: "country"},
     "boss_level": {"borough": 70, "city": 78, "county": 85, "state": 92, "country": 99},
-    # How long a tube takes, as a share of the floor's hours, by threat level: a
-    # zero tube about half the floor, a hike about a third, a corridor a tenth.
-    # A puzzle tube is a short walk and then however long the puzzle takes; a
-    # boss corridor is the fight.
-    "hours": {0: (0.42, 0.55), 1: (0.03, 0.06), 2: (0.25, 0.35), 3: (0.08, 0.14),
-              4: (0.08, 0.14), "boss": (0.015, 0.03)},
+    "pace_kmh": 5,                      # walking pace: 5 km/h, 3 mph
+    # How far a tube runs, as a share of the floor's walking distance (the
+    # countdown at pace), by threat level: a zero tube about half the floor, a
+    # hike about a third, a corridor a tenth. A puzzle tube is a short walk and
+    # then however long the puzzle takes; a boss corridor a short one and then
+    # the fight.
+    "share": {0: (0.42, 0.55), 1: (0.01, 0.03), 2: (0.25, 0.35), 3: (0.08, 0.14),
+              4: (0.08, 0.14), "boss": (0.005, 0.015)},
     # Parties a tube takes before it closes: the lower the threat, the fewer. A
     # boss corridor takes one at a time and opens again when the boss or the
     # party is dead.
@@ -6504,12 +6506,12 @@ BOSS_LEVEL_WEIGHTS = {5: 5, 6: 4, 7: 3, 8: 2, 9: 1}
 
 @dataclass
 class Tube:
-    """One tube out of a hub: its threat level, where it comes out, how long it
-    takes and how many parties it takes before it closes, and what is in it."""
+    """One tube out of a hub: its threat level, where it comes out, how far it
+    runs and how many parties it takes before it closes, and what is in it."""
     label: str
     threat: int
     to: str                        # the hub it comes out in, or "Exit"
-    hours: int
+    km: int                        # how far it runs; the hours come from the pace
     uses: int                      # 0 for a boss corridor: one party at a time, and it reopens
     note: str = ""                 # a zero tube's glass, or what makes an elite corridor's mobs elite
     puzzle: str = ""               # a puzzle gate's question
@@ -6561,7 +6563,7 @@ class Generator7:
         self.cfg = FLOOR7_CFG
         self.sc = SIZE7_CFG[size]
         self.days = days or self.sc["days"]
-        self.hours = self.days * 24
+        self.km = self.days * 24 * self.cfg["pace_kmh"]      # the countdown, walked
         # The mobs and bosses are Floors 1 and 2's: the same pools, named the
         # same way, with the same guards against a repeat.
         self.mech_decks = make_mechanic_decks(self.rng)
@@ -6638,9 +6640,9 @@ class Generator7:
         return sorted(out)
 
     def make_tube(self, level: int, to: str) -> Tube:
-        lo, hi = self.cfg["hours"][level if level < 5 else "boss"]
-        hours = max(1, int(round(self.rng.uniform(lo, hi) * self.hours)))
-        t = Tube(f"Lv {level} → {to}", level, to, hours, self.cfg["uses"].get(level, 0))
+        lo, hi = self.cfg["share"][level if level < 5 else "boss"]
+        km = max(1, int(round(self.rng.uniform(lo, hi) * self.km)))
+        t = Tube(f"Lv {level} → {to}", level, to, km, self.cfg["uses"].get(level, 0))
         if level == 0:
             t.note = self.zero_notes.draw()
         elif level == 1:
@@ -6728,6 +6730,22 @@ def pitstop_text(h: Hub) -> str:
     return "; ".join(pitstop_parts(h)) or "nothing; a bare junction and its tubes"
 
 
+KM_PER_MILE = 1.609
+
+
+def tube_hours(t: Tube) -> int:
+    """How long a tube takes to walk, at the floor's pace."""
+    return max(1, round(t.km / FLOOR7_CFG["pace_kmh"]))
+
+
+def tube_miles(t: Tube) -> int:
+    return max(1, round(t.km / KM_PER_MILE))
+
+
+def tube_length(t: Tube) -> str:
+    return f"{t.km} km ({tube_miles(t)} mi), {tube_hours(t)} h at pace"
+
+
 def tube_uses(t: Tube) -> str:
     if t.boss or t.uses <= 0:
         return "one party at a time; it reopens when the boss or the party is dead, and the boss respawns"
@@ -6750,9 +6768,11 @@ def tube_short(t: Tube) -> str:
 
 def tube_lines(fl: Floor7, hub: Hub, t: Tube, indent: str = "  ") -> List[str]:
     """A tube in the write-up: its label, plainly, and what is in it."""
-    head = f"{indent}- **Lv {t.threat} → {t.to}** — {t.hours} h"
+    head = f"{indent}- **Lv {t.threat} → {t.to}** — {tube_length(t)}"
     if t.threat == 1:
-        head += " and the puzzle"
+        head += " and then the puzzle"
+    elif t.boss:
+        head += " and then the fight"
     head += f", {tube_uses(t)}."
     closed = " **Closed when you arrive.**" if tube_closed(fl, hub, t) else ""
     o = []
@@ -6792,17 +6812,23 @@ def render7(fl: Floor7) -> str:
     legs = sorted(rows)
     tubes = [t for h in fl.hubs for t in h.tubes]
     bosses = [t for t in tubes if t.boss]
-    zeros = [t.hours for t in tubes if t.threat == 0]
+    zeros = [t for t in tubes if t.threat == 0]
+    pace = c["pace_kmh"]
     per_row = max((len(rows[leg]) for leg in legs if leg), default=0)
     o = [f"# Floor 7 — {fl.name} ({fl.size})", "", "## Summary", ""]
     o.append(f"- **Countdown:** {fl.days} days ({hours} hours). The floor collapses on anyone still in the maze.")
     o.append(f"- **The course:** {fl.times} choices of {fl.choices} tubes: the starting chute, "
              f"{len(legs) - 1} rows of {per_row} hubs, then the exit portals. {len(fl.hubs)} hubs, "
              f"{len(tubes)} tubes, {len(bosses)} of them boss corridors.")
+    o.append(f"- **Pace:** {pace} km/h ({round(pace / KM_PER_MILE)} mph). The countdown is "
+             f"{hours * pace:,} km of walking; every tube's hours are at that pace, with its "
+             f"fight or puzzle on top.")
     o.append(f"- **Your start:** {position_text(fl)}")
     if zeros:
-        o.append(f"- **The zero tubes:** {min(zeros)}–{max(zeros)} hours each, about half the floor, "
-                 f"and each passes once. Two in a row and the countdown wins.")
+        o.append(f"- **The zero tubes:** {min(t.km for t in zeros)}–{max(t.km for t in zeros)} km each "
+                 f"({min(tube_hours(t) for t in zeros)}–{max(tube_hours(t) for t in zeros)} hours at "
+                 f"pace), about half the floor, and each passes once. Two in a row and the countdown "
+                 f"wins.")
     o.append(f"- **Seed:** {fl.seed}")
     o.append("")
     o.append("## Floor Rules")
@@ -6814,7 +6840,7 @@ def render7(fl: Floor7) -> str:
     o.append("")
     o.append("Every tube's label says which it is.")
     o.append("")
-    o.append("| Lv | What's in it | How long | Uses |")
+    o.append("| Lv | What's in it | How far | Uses |")
     o.append("|---:|---|---|---|")
     for level, what, how_long in THREAT_LEVELS:
         o.append(f"| {level} | {what} | {how_long} | {c['uses'].get(int(level), 0)} |")
@@ -6826,8 +6852,8 @@ def render7(fl: Floor7) -> str:
     o.append("")
     odds = c["pitstop"]
     o.append("From the chute every tube leads to a hub in the next row, and from the last row to "
-             "the exit. A tube's line gives its threat level and where it comes out, how long it "
-             "takes and how many parties it takes before it closes, and what is in it.")
+             "the exit. A tube's line gives its threat level and where it comes out, how far it "
+             "runs and how many parties it takes before it closes, and what is in it.")
     o.append("")
     o.append(f"Every hub is a pitstop, and each rolled what it has: a safe room "
              f"{odds['safe_room']:.0%} of the time, a shop {odds['shop']:.0%}, a guild hall "
@@ -6891,8 +6917,9 @@ def render7_svg(fl: Floor7) -> str:
     o = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" font-family="Helvetica, Arial, sans-serif">',
          f'<rect width="{W}" height="{H}" fill="#f6f2ea"/>',
          _text(PAD, 32, f"Floor 7 — {fl.name}", size=22, weight="bold"),
-         _text(PAD, 54, f"{fl.days} days  •  {fl.times} choices of {fl.choices} tubes  •  "
-                        f"start: the {fl.position} of the pack  •  seed {fl.seed}", size=12, fill="#555")]
+         _text(PAD, 54, f"{fl.days} days  •  {fl.times} choices of {fl.choices} tubes  •  pace "
+                        f"{FLOOR7_CFG['pace_kmh']} km/h  •  start: the {fl.position} of the pack  •  "
+                        f"seed {fl.seed}", size=12, fill="#555")]
     # Where every card is: the rows top to bottom, each centred.
     at = {}
     for leg in legs:
@@ -6935,7 +6962,7 @@ def render7_svg(fl: Floor7) -> str:
             closed = tube_closed(fl, h, t)
             color = TUBE_COLORS["closed" if closed else tube_band(t)]
             uses = "reopens" if t.boss or t.uses <= 0 else f"×{t.uses}"
-            o.append(_text(x + 10, ly, _fit(f"Lv {t.threat} → {t.to}  {t.hours} h  {uses}  {tube_short(t)}", 40),
+            o.append(_text(x + 10, ly, _fit(f"Lv {t.threat} → {t.to}  {t.km} km  {uses}  {tube_short(t)}", 40),
                            size=10, fill=color, style="text-decoration:line-through" if closed else ""))
             _hit(("hubs", i, "tubes", j), "rect", x + 6, ly - 11, CW - 12, 14)
             ly += 15
@@ -6946,8 +6973,8 @@ def render7_svg(fl: Floor7) -> str:
     ky = ey + 54 + 28
     o.append(_text(PAD, ky, "Green: slow tubes (Lv 0–2).  Amber: fights (Lv 3–4).  Red: boss corridors "
                    "(Lv 5–9).  Struck through: closed when you arrive.", size=11))
-    o.append(_text(PAD, ky + 18, "Each line: level → where it comes out, hours, parties it takes (×) or "
-                   "that it reopens, and what's in it. Rows run top to bottom, start to exit.", size=11, fill="#555"))
+    o.append(_text(PAD, ky + 18, f"Each line: level → where it comes out, km (at {FLOOR7_CFG['pace_kmh']} km/h), "
+                   "parties it takes (×) or that it reopens, and what's in it. Rows run top to bottom.", size=11, fill="#555"))
     o.append("</svg>")
     return "\n".join(o)
 
