@@ -3316,6 +3316,9 @@ class BestiaryTest(unittest.TestCase):
         floor's own mobs have."""
         self.assertGreaterEqual(len(mg.SYSTEM_DESC), 120)
         self.assertEqual(len(set(mg.SYSTEM_DESC)), len(mg.SYSTEM_DESC))
+        self.assertGreaterEqual(len(mg.MOB_QUIRKS), 100)
+        self.assertEqual(len({q for q, _ in mg.MOB_QUIRKS}), len(mg.MOB_QUIRKS))
+        self.assertTrue(all(mod in (-1, 0, 1) for _, mod in mg.MOB_QUIRKS))
         fields = dict(a="a", b="feral goblin", noun="Goblins", noun_l="goblins", adj_l="feral",
                       noun_sing="goblin")
         for t in mg.SYSTEM_DESC:

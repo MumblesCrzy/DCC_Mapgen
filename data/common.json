@@ -79,6 +79,326 @@
   [
    "Mistake anyone in a hat for their leader. Briefly.",
    -1
+  ],
+  [
+   "Climb walls and ceilings; the fight starts above you.",
+   1
+  ],
+  [
+   "Ambush from the water's edge and drag what they catch under.",
+   1
+  ],
+  [
+   "Shriek for reinforcements at half health. Kill fast or kill many.",
+   1
+  ],
+  [
+   "Throw whatever is loose, including each other.",
+   1
+  ],
+  [
+   "Burrow and surface behind the rear rank.",
+   1
+  ],
+  [
+   "Their bite numbs; three bites and a limb stops answering.",
+   1
+  ],
+  [
+   "Mimic a crawler's voice calling for help from the next room.",
+   1
+  ],
+  [
+   "Shrug off the first spell cast at them each fight.",
+   1
+  ],
+  [
+   "Grapple and hold; a held crawler is a shield for the rest.",
+   1
+  ],
+  [
+   "Carry their dead off mid-fight. Nobody knows why, and the dead come back.",
+   1
+  ],
+  [
+   "Smash light sources first. They see fine in the dark.",
+   1
+  ],
+  [
+   "Grow a size larger for each of their own that dies nearby.",
+   1
+  ],
+  [
+   "Leave a trail of slick that sends a running crawler sprawling.",
+   1
+  ],
+  [
+   "Spread a rot that rusts metal gear a notch per hour of contact.",
+   1
+  ],
+  [
+   "Hunt by heat; a crawler who has just cast a spell shines.",
+   1
+  ],
+  [
+   "Target the healer first, every time, with uncanny accuracy.",
+   1
+  ],
+  [
+   "Chew through doors. Barring a room buys a minute, not an hour.",
+   1
+  ],
+  [
+   "Fling spores that cloud the minimap for a floor-hour.",
+   1
+  ],
+  [
+   "Fight to the death and take twice as long to die as they should.",
+   1
+  ],
+  [
+   "Hit harder the longer a crawler stands still. Keep moving.",
+   1
+  ],
+  [
+   "Knock weapons loose on a solid hit and kick them away.",
+   1
+  ],
+  [
+   "Coat their claws in something that stops healing for a minute.",
+   1
+  ],
+  [
+   "Breed. Clear a lair and come back an hour later to see.",
+   1
+  ],
+  [
+   "Bowl through a line; the ones behind the front rank get trampled.",
+   1
+  ],
+  [
+   "Latch on and feed; pulling one off hurts more than letting it finish.",
+   1
+  ],
+  [
+   "Call down the floor's weather, or something that passes for it, on a party in the open.",
+   1
+  ],
+  [
+   "Wear scavenged armor over the vitals. Aim low.",
+   1
+  ],
+  [
+   "Carry a torch into anything flammable and stand in it.",
+   1
+  ],
+  [
+   "Will not cross running water. Rivers and drains are walls to them.",
+   0
+  ],
+  [
+   "Hibernate in piles. Step over them quietly and they stay a pile.",
+   0
+  ],
+  [
+   "Obsessed with counting. Scatter coins and they must pick every one up.",
+   0
+  ],
+  [
+   "Honor a flag of truce for exactly as long as it takes them to count the party.",
+   0
+  ],
+  [
+   "Only fight in doorways. Cross a room's middle and they wait at the next door.",
+   0
+  ],
+  [
+   "Migrate along the same route every day; the route is on the map if you know to look.",
+   0
+  ],
+  [
+   "Collect the gear of the dead and wear it, badly.",
+   0
+  ],
+  [
+   "Sing while hunting. The song gets faster as they close.",
+   0
+  ],
+  [
+   "Share one sense of smell. What one has sniffed, all have.",
+   0
+  ],
+  [
+   "Repeat the last words they heard. Usually those words were 'run.'",
+   0
+  ],
+  [
+   "Treat a crawler on their knees as surrendered, for about ten seconds.",
+   0
+  ],
+  [
+   "Leave a marked crawler alone for a day after a loss, then come for them specifically.",
+   0
+  ],
+  [
+   "Sleep standing, in rows, like a bad parade. They wake all at once.",
+   0
+  ],
+  [
+   "Dig pits in the main corridor and wait in the side ones.",
+   0
+  ],
+  [
+   "Cannot see a crawler who is not moving, and will walk into them.",
+   0
+  ],
+  [
+   "Avoid anything the color of their last meal. This changes.",
+   0
+  ],
+  [
+   "Groom each other after a kill, for a full minute, with their backs turned.",
+   0
+  ],
+  [
+   "Keep a pet. The pet is worse than they are, and loose.",
+   0
+  ],
+  [
+   "Loot their own kills before the body cools, then argue over it.",
+   0
+  ],
+  [
+   "Answer to a bell somewhere on the floor. Find the bell.",
+   0
+  ],
+  [
+   "Fight each other when no crawler is in sight. Patience thins them.",
+   0
+  ],
+  [
+   "Flinch from mirrors and anything polished enough to pass for one.",
+   0
+  ],
+  [
+   "Hold grudges by face. A mask resets them.",
+   0
+  ],
+  [
+   "Go quiet when a boss is near, which is the only warning a boss gives.",
+   0
+  ],
+  [
+   "Bury what they kill. A fresh mound means they're close and full.",
+   0
+  ],
+  [
+   "Climb to high ground and throw insults before anything else.",
+   0
+  ],
+  [
+   "Starve if kept moving for an hour; they stop to eat, then catch up.",
+   0
+  ],
+  [
+   "Confuse a loud noise for a mating call, and respond at length.",
+   0
+  ],
+  [
+   "Walk the walls of their territory on a timer. Inside the loop is theirs.",
+   0
+  ],
+  [
+   "Cannot stand the smell of safe room cooking, which carries a corridor.",
+   0
+  ],
+  [
+   "Blinded by bright light for a few seconds. A flash buys a doorway.",
+   -1
+  ],
+  [
+   "Freeze at a sudden loud bang. The second one does nothing.",
+   -1
+  ],
+  [
+   "Drop everything to chase a thrown shiny object, every time, as if the first time.",
+   -1
+  ],
+  [
+   "Lose interest in anything that stops bleeding. Bandage and back away.",
+   -1
+  ],
+  [
+   "Allergic to the floor's own flora; a handful of it clears a corridor.",
+   -1
+  ],
+  [
+   "Will not enter a room with a fire burning in it.",
+   -1
+  ],
+  [
+   "Tire fast. Two minutes of running and they lie down where they are.",
+   -1
+  ],
+  [
+   "Easily led: walk them into another mob's territory and leave.",
+   -1
+  ],
+  [
+   "Afraid of their own reflection in a blade. Polish helps.",
+   -1
+  ],
+  [
+   "Nearsighted. Anything beyond twenty feet is scenery to them.",
+   -1
+  ],
+  [
+   "Fall over when struck on the left side. Nobody has worked out why.",
+   -1
+  ],
+  [
+   "Obey anyone holding one of their young, until the young is returned.",
+   -1
+  ],
+  [
+   "Take a long time to turn around. Flank wide.",
+   -1
+  ],
+  [
+   "Mistake a dropped coat for a crawler and fight it for a while.",
+   -1
+  ],
+  [
+   "Distracted by music. A hummed tune slows them to a shuffle.",
+   -1
+  ],
+  [
+   "Molt once a day and are soft as bread for the hour after.",
+   -1
+  ],
+  [
+   "Flee from anything bigger than they are, including a crawler on another crawler's shoulders.",
+   -1
+  ],
+  [
+   "Count a party and leave if it is more than four. Bring a fifth, even a goat.",
+   -1
+  ],
+  [
+   "Sleep through their own name shouted; wake to a whisper.",
+   -1
+  ],
+  [
+   "Stop to read anything written down. A note on the floor is a minute.",
+   -1
+  ],
+  [
+   "Lose the trail at a doorway. Any doorway.",
+   -1
+  ],
+  [
+   "Surrender when the biggest of them is downed first. Pick the biggest.",
+   -1
   ]
  ],
  "SYSTEM_DESC": [
