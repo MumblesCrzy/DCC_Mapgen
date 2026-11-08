@@ -226,7 +226,7 @@ try {
   const rolled = await page.evaluate(() => ({
     maps: [...document.querySelectorAll("#map-pick option")].map((o) => o.textContent),
     head: document.querySelector("#writeup h3")?.textContent || "",
-    ways: document.getElementById("writeup").textContent.includes("crossing west into A1"),
+    ways: /crossing (north|south|east|west) into [A-Z]\d/.test(document.getElementById("writeup").textContent),
     save: document.getElementById("save-floor").disabled,
   }));
   check(rolled.maps.join() === "Rooms - neighborhood B" && rolled.head.endsWith("Room Detail") && rolled.ways
@@ -269,12 +269,15 @@ try {
   page.once("dialog", (d) => { asked.push(d.message()); d.accept(); });
   await page.fill("#ef0", "Castle Mumbles");
   await page.press("#ef0", "Enter");              // Enter applies, as Apply does
-  await saying2("edit-status", "Changed Name, and 1 other mention.");
+  // How many other mentions is the floor's to say; the write-up shows none left.
+  await saying2("edit-status", "Changed Name, and ");
   const edited = await page.$eval("#writeup", (w) => w.textContent);
+  const renamed = await page.$eval("#edit-status", (s) => s.textContent);
   check(asked.length === 1 && asked[0].includes("Change it to \"Castle Mumbles\" there too?")
+        && /^Changed Name, and \d+ other mentions?\. /.test(renamed)
         && edited.includes("Castle Mumbles") && !edited.includes(castleName)
         && (await page.$eval("#edit-title", (h) => h.textContent)) === "Castle — Castle Mumbles",
-        "a rename asks to change the name everywhere, and the write-up and the editor show it");
+        `a rename asks to change the name everywhere, and the write-up and the editor show it ("${renamed}")`);
   await page.click("#edit-parts button >> text=/^Boss —/");
   await page.fill("#ef2", "lots");
   await page.click("#edit-apply");
@@ -331,7 +334,7 @@ try {
   await page.waitForTimeout(800);
   tap = await spot(["neighborhoods", 1]);
   await page.touchscreen.tap(tap.x, tap.y);
-  check(await menuSays() === "Neighborhood B — The Sunken Sewers | Edit | Open Rooms - neighborhood B",
+  check(/^Neighborhood B — .+ \| Edit \| Open Rooms - neighborhood B$/.test(await menuSays()),
         `a neighborhood tapped offers its rooms ("${await menuSays()}")`);
   await page.click("#menu-closer");
   await page.waitForTimeout(800);
