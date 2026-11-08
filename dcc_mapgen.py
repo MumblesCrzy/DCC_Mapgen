@@ -1352,7 +1352,7 @@ class ThreatSign:
 # threats everywhere -- the loot section lists all twelve by name.
 _SHARED_SECTIONS = ("## Other Crawlers", "## Achievements", "## Bestiary",
                     "## What's Switched On", "## Shops and Prices", "## Loot Boxes",
-                    "## Crawler Stats")
+                    "## Crawler Stats", "## Combat")
 
 
 def floor_body(markdown: str) -> str:
@@ -2036,6 +2036,158 @@ def shops_section(floor: int) -> List[str]:
 STAT_ORDER = ("STR", "DEX", "CON", "INT", "CHA")
 
 
+# ===========================================================================
+# COMBAT
+# The table's house rules for a hit, from COMBAT in data/common.json: a mob's
+# dice by its tier, a crawler's weapon or spell by the milestone multiplier.
+# The Bestiary's hits and the Combat section's tables are both worked out from
+# it, so they cannot disagree. Every division rounds down, as the rules say.
+# ===========================================================================
+
+def combat_mult(level: int) -> int:
+    """The milestone multiplier of a skill's or a spell's level: x2 from 5, x3
+    from 10, x4 at 15, then 6, 7, 8, 9, and x12 from 20 up. Unskilled is x1."""
+    m = 1
+    for at, value in COMBAT["mult"]:
+        if level >= at:
+            m = value
+    return m
+
+
+def dice_avg(n: int, sides: int) -> float:
+    return n * (sides + 1) / 2
+
+
+def dice_roll(rng, n: int, sides: int) -> int:
+    return sum(rng.randint(1, sides) for _ in range(n))
+
+
+def _dice_total(dice, rng) -> float:
+    """Dice as (count, sides) pairs: rolled on rng, or their averages without one."""
+    return sum(dice_roll(rng, n, s) if rng else dice_avg(n, s) for n, s in dice)
+
+
+def weapon_damage(dice, item_bonus: int, skill: int, strength: int = 0, uses_str: bool = True,
+                  bonus_dice=(), rng=None) -> float:
+    """A weapon's damage: its dice times the skill's multiplier, plus any bonus
+    dice an item or an ability adds (at x1), the item's bonus, the skill level,
+    and a third of Strength for a melee or a hand-thrown weapon. A gun, a bow,
+    a crossbow or a mount takes no Strength."""
+    return (_dice_total(dice, rng) * combat_mult(skill) + _dice_total(bonus_dice, rng)
+            + item_bonus + skill + (strength // COMBAT["stat_per"] if uses_str else 0))
+
+
+def secondary_strike(dice, item_bonus: int, strength: int, rng=None) -> float:
+    """A free off-hand, butt or ferrule strike: its dice, the item's bonus and
+    a third of Strength. No multiplier, no skill level."""
+    return _dice_total(dice, rng) + item_bonus + strength // COMBAT["stat_per"]
+
+
+def spell_damage(level: int, intelligence: int, dice=None, rng=None) -> float:
+    """A damage spell or a direct heal: its dice (2d6 unless the spell says)
+    times the level's multiplier, plus the level and a third of Intelligence.
+    An area spell rolls once and applies it to every target."""
+    dice = [tuple(x) for x in (dice or [COMBAT["spell_dice"]])]
+    return _dice_total(dice, rng) * combat_mult(level) + level + intelligence // COMBAT["stat_per"]
+
+
+def stored_cell(cast: float) -> float:
+    """What a cell keeps of a cast stored in it: at most the cap."""
+    return min(cast, COMBAT["cell_cap"])
+
+
+def bank_discharge(cells, overclock: bool = False, wet: bool = False, stunned: bool = False) -> int:
+    """A bank of stored cells going off: their sum, times 2 overclocked, and
+    times 1.5 each for a wet target and a stunned one."""
+    total = sum(cells)
+    for on, key in ((overclock, "overclock"), (wet, "wet"), (stunned, "stunned")):
+        if on:
+            total *= COMBAT["bank"][key]
+    return int(total)
+
+
+def hot_tick(level: int, target_max_hp: int) -> int:
+    """A heal-over-time's heal each turn, for ten turns: 3% of the target's full
+    health times the level's multiplier. Intelligence adds nothing."""
+    h = COMBAT["hot"]
+    return int(h["share"] * combat_mult(level) * target_max_hp)
+
+
+def potion_heal(grade: str, target_max_hp: int) -> int:
+    """A potion's heal: its grade's share of the target's full health."""
+    shares = {name.split()[0]: share for name, share in COMBAT["potions"]}
+    return int(shares[grade] * target_max_hp)
+
+
+def pet_attack(level: int, die: int, gear_flat: int = 0, gear_pct: float = 0.0, rng=None) -> float:
+    """A pet's or a minion's hit: one die, and one more for every five of its
+    own levels, plus its gear's flat bonus, all times one plus its gear's
+    percentage (+50% is x1.5)."""
+    n = 1 + level // COMBAT["levels_per_die"]
+    base = dice_roll(rng, n, die) if rng else dice_avg(n, die)
+    return (base + gear_flat) * (1 + gear_pct)
+
+
+def hit_tier(tier: str, name: str = "") -> str:
+    """The COMBAT tier a mob or boss hits as. An ordinary mob is ordinary, an
+    elite (an "Elite ..." mob) hits as a neighborhood boss does, as do a mayor
+    and a hunter; the boss tiers are their own; a top boss hits as a county's."""
+    if tier == "mob" and name.startswith("Elite "):
+        return "neighborhood"
+    t = COMBAT["tier_of"].get(tier, tier)
+    return t if t in COMBAT["tiers"] else "ordinary"
+
+
+def mob_dice(level: int, tier: str = "ordinary") -> Tuple[int, int]:
+    """(dice, sides): one die, and one more every five levels, of the tier's."""
+    return 1 + level // COMBAT["levels_per_die"], COMBAT["tiers"][tier][0]
+
+
+def mob_hit(level: int, strength: int, tier: str = "ordinary", trick_int=None, rng=None) -> float:
+    """A mob's hit: its dice plus a third of its STR, or of its INT when a
+    damaging trick hits harder than its melee."""
+    n, die = mob_dice(level, tier)
+    stat = strength if trick_int is None else trick_int
+    return (dice_roll(rng, n, die) if rng else dice_avg(n, die)) + stat // COMBAT["stat_per"]
+
+
+def mob_max_hit(level: int, strength: int, tier: str = "ordinary") -> int:
+    n, die = mob_dice(level, tier)
+    return n * die + strength // COMBAT["stat_per"]
+
+
+def mob_to_hit_bonus(level: int) -> int:
+    return level // COMBAT["to_hit"]["mob_level_per"]
+
+
+def dex_edge(att_dex: int, def_dex: int, defender_sees_it: bool = True) -> int:
+    """The attacker's Dexterity edge: a third of theirs, less a quarter of the
+    defender's if the defender sees it coming, never beyond the cap."""
+    t = COMBAT["to_hit"]
+    edge = att_dex // t["att_dex_per"] - (def_dex // t["def_dex_per"] if defender_sees_it else 0)
+    return max(-t["dex_cap"], min(t["dex_cap"], edge))
+
+
+def hits(d20: int, skill_bonus: int, item_bonus: int, att_dex: int, def_dex: int, armor: int,
+         defender_sees_it: bool = True) -> bool:
+    """Whether a d20 hits: a natural 20 always, a natural 1 never, otherwise the
+    roll plus the skill bonus (half the skill level for a crawler, a fifth of
+    the level for a pet or a mob), the item bonus and the Dexterity edge against
+    10 plus the defender's armor."""
+    if d20 == 20:
+        return True
+    if d20 == 1:
+        return False
+    return (d20 + skill_bonus + item_bonus + dex_edge(att_dex, def_dex, defender_sees_it)
+            >= COMBAT["to_hit"]["base"] + armor)
+
+
+def hit_chance(skill_bonus: int, item_bonus: int, att_dex: int, def_dex: int, armor: int,
+               defender_sees_it: bool = True) -> float:
+    return sum(hits(r, skill_bonus, item_bonus, att_dex, def_dex, armor, defender_sees_it)
+               for r in range(1, 21)) / 20
+
+
 @dataclass
 class MobBuild:
     """One mob or boss, statted the way a crawler is but on fewer points a level."""
@@ -2047,6 +2199,7 @@ class MobBuild:
     kind: str                  # brute, skirmisher, ...
     stats: Dict[str, int]
     poor: str = ""             # how it is badly built, if it is
+    hit_tier: str = ""         # the COMBAT tier it hits as, if not its own tier's
 
     @property
     def hp(self) -> int:
@@ -2065,15 +2218,56 @@ class MobBuild:
         """How many times it can use its trick on purpose before it runs dry."""
         return self.mp // MOB_BUILDS["trick_cost"]
 
+    # -- what it hits for, by the house rules (see COMBAT) --------------------
+
+    @property
+    def hits_as(self) -> str:
+        return self.hit_tier or hit_tier(self.tier, self.name)
+
+    @property
+    def dice(self) -> Tuple[int, int]:
+        """(dice, sides): one die, and one more every five levels, of its tier's."""
+        return mob_dice(self.level, self.hits_as)
+
+    @property
+    def attacks(self) -> int:
+        return COMBAT["tiers"][self.hits_as][1]
+
+    @property
+    def to_hit(self) -> int:
+        return mob_to_hit_bonus(self.level)
+
+    @property
+    def behind(self) -> str:
+        """What is behind its hit: its STR, or its trick off its INT if that is
+        the bigger and it has the MP for one use. Ties go to the blow."""
+        trick = self.stats["INT"] if self.tricks else 0
+        return "trick" if trick > self.stats["STR"] else "STR"
+
+    @property
+    def flat(self) -> int:
+        """The third of a stat every hit adds."""
+        return self.stats["INT" if self.behind == "trick" else "STR"] // COMBAT["stat_per"]
+
     @property
     def hit(self) -> Tuple[int, str]:
-        """Its biggest single hit, and what is behind it: a full-strength blow off
-        its STR, or its trick off its INT if that is the bigger and it has the MP
-        for one use. Ties go to the blow."""
-        per = MOB_BUILDS["hit_per_point"]
-        blow = self.stats["STR"]
-        trick = self.stats["INT"] if self.tricks else 0
-        return (trick * per, "trick") if trick > blow else (blow * per, "STR")
+        """Its biggest single hit, every die at its most, and what is behind it."""
+        n, die = self.dice
+        return n * die + self.flat, self.behind
+
+    @property
+    def hit_avg(self) -> float:
+        n, die = self.dice
+        return dice_avg(n, die) + self.flat
+
+    @property
+    def round_max(self) -> int:
+        """One round of its hardest hits."""
+        return self.hit[0] * self.attacks
+
+    @property
+    def round_avg(self) -> float:
+        return self.hit_avg * self.attacks
 
     @property
     def points(self) -> int:
@@ -2083,9 +2277,15 @@ class MobBuild:
         """How many crawlers of this level its stat points are worth."""
         return self.points / crawler_points(level)
 
-    def one_shots(self, level: int, half: bool = False) -> bool:
-        """Whether its hit kills a crawler of this level outright."""
-        return self.hit[0] >= crawler_hp(level, half)
+    def drops_in_a_round(self, level: int, half: bool = False) -> bool:
+        """Whether one round of its hardest hits drops a crawler of this level
+        outright."""
+        return self.round_max >= crawler_hp(level, half)
+
+    def rounds_to_drop(self, level: int) -> int:
+        """Rounds of average hits to drop a crawler of this level, their points
+        spread evenly."""
+        return max(1, math.ceil(crawler_hp(level) / self.round_avg))
 
     @property
     def even_for(self) -> int:
@@ -2162,7 +2362,7 @@ def build_mob(name: str, level: int, tier: str = "mob", *, kind_from: str = "",
               description: str = "", where: str = "", band: Optional[Tuple[int, int]] = None,
               default_kind: Optional[str] = None, sentence: bool = False,
               kind: Optional[str] = None, well_built: bool = False,
-              per_level: Optional[int] = None) -> MobBuild:
+              per_level: Optional[int] = None, hit_tier: str = "") -> MobBuild:
     """Stat a mob or boss from its level.
 
     Every stat starts at 4, as an average adult human's does; then the mob gets
@@ -2210,7 +2410,7 @@ def build_mob(name: str, level: int, tier: str = "mob", *, kind_from: str = "",
         whole[i] += 1
     stats = {s: base[s] + whole[i] for i, s in enumerate(STAT_ORDER)}
     return MobBuild(name, where, level, band or (level, level), tier, kind, stats,
-                    poor["name"] if poor else "")
+                    poor["name"] if poor else "", hit_tier)
 
 
 def _middle(band) -> int:
@@ -2234,11 +2434,11 @@ def floor_bestiary(fl) -> List[MobBuild]:
                                  description=f"{m.adj} {m.quirk} {m.description}",
                                  where=where, band=tuple(band)))
 
-    def boss(b, where, noun=""):
+    def boss(b, where, noun="", hit_tier=""):
         if b is None:
             return
         out.append(build_mob(b.name, b.level, b.tier, kind_from=noun or b.form,
-                             description=f"{b.form} {b.mechanic}", where=where,
+                             description=f"{b.form} {b.mechanic}", where=where, hit_tier=hit_tier,
                              default_kind="brute", sentence=not noun))
 
     for nb in getattr(fl, "neighborhoods", None) or []:             # floors 1-2
@@ -2249,7 +2449,9 @@ def floor_bestiary(fl) -> List[MobBuild]:
     for name, b in (getattr(fl, "city_bosses", None) or {}).items():
         boss(b, f"city {name}")
     if getattr(fl, "top_boss", None):
-        boss(fl.top_boss, getattr(fl, "top_tier_name", "") or "the top")
+        # A County, State, Country or Continent boss hits as its tier does.
+        boss(fl.top_boss, getattr(fl, "top_tier_name", "") or "the top",
+             hit_tier=(getattr(fl, "top_tier_name", "") or "county").lower())
     for c in getattr(fl, "cells", None) or []:                     # floors 3 and 6
         if getattr(c, "mob", None):
             mob(c.mob, c.level_range,
@@ -2367,66 +2569,145 @@ def bestiary_section(fl) -> List[str]:
               "worth more than their own points, so a well-equipped party needs fewer "
               "people than this says. It leaves out the boss's own mechanic too, and that "
               "can need more.", "",
-              "*One-shot* means the boss's hit kills a crawler of that level outright, with "
-              "their points spread evenly, and then no number of them is enough. **You're "
-              "going to die**, below, gives the level each boss stops doing it.", "",
+              "*One round* means one round of the boss's hardest hits drops a crawler of that "
+              "level outright, with their points spread evenly, and then no number of them is "
+              "enough. **You're going to die**, below, gives the level each boss stops doing "
+              "it.", "",
               f"| Boss | Level | Points | Crawlers at L{ordinary} | Crawlers at L{leader} "
               f"| Crawlers of its level |",
               "| --- | ---: | ---: | ---: | ---: | ---: |"]
 
         def against(b, level):
-            return "one-shot" if b.one_shots(level) else f"{b.crawlers_at(level):.1f}"
+            return "one round" if b.drops_in_a_round(level) else f"{b.crawlers_at(level):.1f}"
         for b in bosses:
             o.append(f"| {b.name} | {b.level} | {b.points:,} | {against(b, ordinary)} | "
                      f"{against(b, leader)} | {against(b, b.level)} |")
-    o += _going_to_die(beasts)
+    o += _going_to_die(beasts, fl.number)
     o.append("")
     return o
 
 
-def _going_to_die(beasts: List[MobBuild]) -> List[str]:
-    """The level below which each mob and boss kills a crawler in one hit, and the
-    floor's own cutoff: the level its hardest-hitting ordinary mob stops doing it.
-    A party of any size loses to a one-hit kill, one crawler at a time."""
-    per, k = MOB_BUILDS["hit_per_point"], CRAWLER_STATS["knobs"]
+def _going_to_die(beasts: List[MobBuild], floor: int) -> List[str]:
+    """What each mob and boss hits for, by the house rules, and what that does to
+    a crawler: the rounds that drop an ordinary one and a leaderboard one, and
+    the level below which one round of its hardest hits drops a crawler outright,
+    where a party of any size loses one crawler at a time. The floor's own cutoff
+    is from its ordinary mobs."""
+    c = COMBAT
+    ordinary, leader, _ = party_levels(floor, beasts)
+    present = [t for t in c["tiers"] if any(b.hits_as == t for b in beasts)]
+    tiers = ", ".join(("an ordinary mob" if t == "ordinary" else f"a {t} boss") + f" d{c['tiers'][t][0]}"
+                      + (f" with {c['tiers'][t][1]} attacks a round" if c["tiers"][t][1] > 1 else "")
+                      for t in present)
     o = ["", "### You're going to die", "",
-         "Numbers don't help against something that kills in one hit: each crawler who "
-         "steps up goes down before they can do anything, and the next goes the same way. "
-         f"A mob's full-strength hit is its STR x {per}, or its INT x {per} if its trick "
-         f"hits harder and it has the MP for one use. That kills a crawler outright when it "
-         f"is at least their HP, so when the stat behind it is at least "
-         f"{k['hp_per_con'] / per:g} times their CON.", "",
-         "Below, the level a crawler needs to live through it: with their points spread "
-         "evenly, and with half of them in Constitution, as veterans learn to do. A trick "
-         "is counted as a hit; if this one's trick is something else, a charm or a theft, "
-         f"use its STR x {per} instead.", ""]
+         f"A mob's hit is one die, and one more every {c['levels_per_die']} levels, of its "
+         f"tier's die ({tiers}), plus a third of its STR, or of its INT if its trick hits "
+         f"harder and it has the MP for one use. It hits on a d20 plus a fifth of its level, "
+         f"against {c['to_hit']['base']} plus the crawler's armor. An elite hits as a "
+         f"neighborhood boss does. The rules are under Combat, near the end.", "",
+         f"Below, for each: its dice and its attacks a round; how many rounds of average hits "
+         f"drop an ordinary crawler on this floor (level {ordinary}, {crawler_hp(ordinary):,} HP "
+         f"with their points spread evenly) and one on the leaderboard (level {leader}, "
+         f"{crawler_hp(leader):,} HP); and the level below which one round of its hardest "
+         f"hits drops a crawler outright, with their points spread evenly and with half of "
+         f"them in Constitution, as veterans learn to do.", ""]
     mobs = [b for b in beasts if b.tier == "mob"]
     if mobs:
-        worst = max(mobs, key=lambda b: b.hit[0])
-        hit, behind = worst.hit
-        cutoff = lives_through(hit)
-        how = "off STR" if behind == "STR" else "with a trick"
+        worst = max(mobs, key=lambda b: b.round_max)
+        cutoff = lives_through(worst.round_max)
         if cutoff == 1:
-            o += [f"**Nothing ordinary on this floor kills a crawler in one hit**, not even "
-                  f"at level 1: the hardest hit among its ordinary mobs is {hit:,}, "
-                  f"{how}, from {worst.name}.", ""]
+            o += [f"**Nothing ordinary on this floor drops a crawler in one round**, not even "
+                  f"at level 1: the hardest round among its ordinary mobs is {worst.round_max:,}, "
+                  f"from {worst.name}.", ""]
         else:
             o += [f"**This floor's cutoff is level {cutoff}.** Below it, a crawler with their "
-                  f"points spread evenly dies in one hit to the floor's hardest-hitting "
-                  f"ordinary mob: {worst.name}, at {hit:,} {how}. With half their points in "
-                  f"Constitution, a crawler lives through it from level "
-                  f"{lives_through(hit, half=True)}.", ""]
+                  f"points spread evenly can be dropped in one round by the floor's "
+                  f"hardest-hitting ordinary mob: {worst.name}, up to {worst.round_max:,} a "
+                  f"round. With half their points in Constitution, a crawler lives through it "
+                  f"from level {lives_through(worst.round_max, half=True)}.", ""]
 
     def below(hit, half=False):
         level = lives_through(hit, half)
         return "—" if level == 1 else f"below L{level}"
-    o += ["| Mob or boss | Level | Hit | With | One-shots, spread evenly "
-          "| One-shots, half in CON |",
-          "| --- | ---: | ---: | --- | ---: | ---: |"]
-    for b in sorted(beasts, key=lambda b: -b.hit[0]):
-        hit, behind = b.hit
-        o.append(f"| {b.name} | {b.level} | {hit:,} | {behind} | {below(hit)} "
-                 f"| {below(hit, half=True)} |")
+    o += [f"| Mob or boss | Level | To hit | Hit | Max | Attacks | Rounds at L{ordinary} "
+          f"| Rounds at L{leader} | One round, spread evenly | One round, half in CON |",
+          "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |"]
+    for b in sorted(beasts, key=lambda b: -b.round_max):
+        n, die = b.dice
+        trick = " (trick)" if b.behind == "trick" else ""
+        o.append(f"| {b.name} | {b.level} | +{b.to_hit} | {n}d{die}+{b.flat}{trick} | {b.hit[0]:,} "
+                 f"| {b.attacks} | {b.rounds_to_drop(ordinary)} | {b.rounds_to_drop(leader)} "
+                 f"| {below(b.round_max)} | {below(b.round_max, half=True)} |")
+    return o
+
+
+def combat_section() -> List[str]:
+    """The table's house rules for a hit, the same on every floor, formatted
+    from COMBAT so the prose, the tables and the Bestiary cannot disagree."""
+    c, per = COMBAT, COMBAT["stat_per"]
+    third = "a third" if per == 3 else f"a {per}th"
+    o = ["## Combat", "", f"{c['note']} The Bestiary's hits are worked out by these.", ""]
+    o += ["### The milestone multiplier", "",
+          "A skill's or a spell's level sets a multiplier on its dice. Unskilled is level 0.", "",
+          "| Level | Multiplier |", "|---|---:|"]
+    steps = [(0, 1)] + [tuple(x) for x in c["mult"]]
+    for (at, value), nxt in zip(steps, steps[1:] + [None]):
+        if nxt is None:
+            span = f"{at} and up"
+        elif nxt[0] - 1 > at:
+            span = f"{at}–{nxt[0] - 1}"
+        else:
+            span = str(at)
+        o.append(f"| {span} | ×{value} |")
+    o.append("")
+    o += ["### Weapons", "",
+          f"Damage is the weapon's dice times the skill's multiplier, plus any bonus dice an item "
+          f"or an ability adds (at ×1), the item's bonus, the skill's level, and {third} of "
+          f"Strength for a melee or a hand-thrown weapon; a gun, a bow, a crossbow or a mount "
+          f"takes no Strength. A free second strike — an off-hand, a butt, a ferrule — is "
+          f"its dice plus the item's bonus and {third} of Strength, with no multiplier and no "
+          f"skill level. A 1d8 sword at skill 10 with a +2 item and Strength 12 averages "
+          f"{weapon_damage([(1, 8)], 2, 10, 12):g}.", ""]
+    sd = c["spell_dice"]
+    o += ["### Spells", "",
+          f"A damage spell or a direct heal is its dice ({sd[0]}d{sd[1]} unless the spell says) "
+          f"times its level's multiplier, plus its level and {third} of Intelligence. An area "
+          f"spell rolls once and applies it to every target. At level 10 with Intelligence 30 "
+          f"that averages {spell_damage(10, 30):g}.", ""]
+    bank = c["bank"]
+    o += ["### Cells and banks", "",
+          f"A cast stored in a cell keeps at most {c['cell_cap']}. A bank going off does the sum "
+          f"of its cells, ×{bank['overclock']:g} overclocked, ×{bank['wet']:g} on a wet "
+          f"target and ×{bank['stunned']:g} on a stunned one.", ""]
+    h = c["hot"]
+    o += ["### Healing over time and potions", "",
+          f"A heal-over-time heals {h['share']:.0%} of the target's full health, times its "
+          f"level's multiplier, each turn for {h['turns']} turns; Intelligence adds nothing. A "
+          f"potion heals a share of full health: "
+          + ", ".join(f"{name} {share:.0%}" for name, share in c["potions"]) + ".", ""]
+    o += ["### Pets and minions", "",
+          f"A pet's hit is one die, and one more for every {c['levels_per_die']} of its own "
+          f"levels, plus its gear's flat bonus, all times one plus its gear's percentage (+50% "
+          f"is ×1.5). It hits on a d20 plus a fifth of its level.", ""]
+    o += ["### Mobs and bosses", "",
+          f"A mob's hit is one die, and one more every {c['levels_per_die']} levels, of its "
+          f"tier's die, plus {third} of its STR, or of its INT when a damaging trick hits "
+          f"harder; its biggest hit is every die at its most. It hits on a d20 plus a fifth of "
+          f"its level. An elite, a mayor and a hunter hit as a neighborhood boss does; a "
+          f"County, State, Country or Continent boss as its tier.", "",
+          "| Tier | Die | Attacks a round |", "|---|---:|---:|"]
+    for t, (die, att) in c["tiers"].items():
+        o.append(f"| {t} | d{die} | {att} |")
+    o += ["", "The tiers above city are this project's extension of the table.", ""]
+    th = c["to_hit"]
+    o += ["### To hit", "",
+          f"Provisional. A d20, plus the attacker's skill bonus (a half of their skill level for "
+          f"a crawler, a fifth of their level for a pet or a mob), their item bonus and their "
+          f"Dexterity edge, against {th['base']} plus the defender's armor. A natural 20 hits "
+          f"and a natural 1 misses. The edge is a third of the attacker's Dexterity, less a "
+          f"quarter of the defender's if the defender sees it coming, and never beyond "
+          f"±{th['dex_cap']}. Skill 10 (+5), no item, both at Dexterity 12, armor 5: a hit "
+          f"{hit_chance(5, 0, 12, 12, 5):.0%} of the time.", ""]
     return o
 
 
@@ -8535,6 +8816,9 @@ def _render_floor(fl, floor: int) -> str:
     # land at the end of every floor instead of wherever that floor happens to
     # print its roster -- on floors 1 and 2 that is halfway up, ahead of the loot
     # boxes and the achievements, which is no place for a reference table.
+    # The combat house rules, which the Bestiary's hits are worked out by, go
+    # with them: reference text, ahead of the stat rules that close every floor.
+    text = text.rstrip("\n") + "\n\n" + "\n".join(combat_section())
     if getattr(fl, "other_crawlers", None):
         text = text.rstrip("\n") + "\n\n" + "\n".join(stat_rules_section())
     return text

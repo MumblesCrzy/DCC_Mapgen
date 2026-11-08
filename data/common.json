@@ -4915,7 +4915,6 @@
    "xl": 5
   },
   "trick_cost": 3,
-  "hit_per_point": 5,
   "poorly_built_in": 8,
   "types": [
    {
@@ -5442,6 +5441,134 @@
     100,
     110
    ]
+  }
+ },
+ "COMBAT": {
+  "note": "House rules from Floor 6, Day 10. Every division rounds down.",
+  "mult": [
+   [
+    5,
+    2
+   ],
+   [
+    10,
+    3
+   ],
+   [
+    15,
+    4
+   ],
+   [
+    16,
+    6
+   ],
+   [
+    17,
+    7
+   ],
+   [
+    18,
+    8
+   ],
+   [
+    19,
+    9
+   ],
+   [
+    20,
+    12
+   ]
+  ],
+  "stat_per": 3,
+  "spell_dice": [
+   2,
+   6
+  ],
+  "cell_cap": 50,
+  "bank": {
+   "overclock": 2,
+   "wet": 1.5,
+   "stunned": 1.5
+  },
+  "hot": {
+   "share": 0.03,
+   "turns": 10
+  },
+  "potions": [
+   [
+    "healing",
+    0.2
+   ],
+   [
+    "good healing",
+    0.35
+   ],
+   [
+    "great healing",
+    0.5
+   ],
+   [
+    "superb healing",
+    0.75
+   ],
+   [
+    "cosmic healing",
+    1.0
+   ]
+  ],
+  "levels_per_die": 5,
+  "tiers": {
+   "ordinary": [
+    6,
+    1
+   ],
+   "neighborhood": [
+    8,
+    1
+   ],
+   "borough": [
+    10,
+    2
+   ],
+   "city": [
+    12,
+    2
+   ],
+   "county": [
+    12,
+    3
+   ],
+   "state": [
+    12,
+    3
+   ],
+   "country": [
+    20,
+    3
+   ],
+   "continent": [
+    20,
+    4
+   ],
+   "floor": [
+    20,
+    4
+   ]
+  },
+  "tier_of": {
+   "mob": "ordinary",
+   "elite": "neighborhood",
+   "mayor": "neighborhood",
+   "hunter": "neighborhood",
+   "top": "county"
+  },
+  "to_hit": {
+   "base": 10,
+   "dex_cap": 10,
+   "att_dex_per": 3,
+   "def_dex_per": 4,
+   "crawler_skill_per": 2,
+   "mob_level_per": 5
   }
  }
 }

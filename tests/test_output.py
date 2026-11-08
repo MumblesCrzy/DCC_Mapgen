@@ -3439,8 +3439,8 @@ class BestiaryTest(unittest.TestCase):
 
     def test_every_boss_is_measured_against_a_party(self):
         """Points over a crawler's points -- 20, plus 3 a level -- at an ordinary
-        crawler's level, a leaderboard crawler's, and the boss's own; or one-shot,
-        where its hit kills that crawler outright and no number of them will do."""
+        crawler's level, a leaderboard crawler's, and the boss's own; or one round,
+        where a round of its hardest hits drops that crawler and no number will do."""
         for f, res in self.res.items():
             beasts = mg.floor_bestiary(res.floor)
             bosses = [b for b in beasts if b.tier != "mob"]
@@ -3456,8 +3456,8 @@ class BestiaryTest(unittest.TestCase):
                 self.assertEqual(int(cells[2].replace(",", "")), sum(b.stats.values()))
                 for cell, level in zip(cells[3:6], levels + [b.level]):
                     want = sum(b.stats.values()) / (20 + self.CRAWLER * level)
-                    if self._hit(b)[0] >= self._hp(level):
-                        want = "one-shot"
+                    if self._round(b) >= self._hp(level):
+                        want = "one round"
                     else:
                         want = f"{want:.1f}"
                     self.assertEqual(cell, want, f"floor {f} {b.name} at L{level}")
@@ -3498,16 +3498,34 @@ class BestiaryTest(unittest.TestCase):
         self.assertNotIn("twice", mg.CRAWLER_STATS["npc_note"])
 
     # -- you're going to die --------------------------------------------------
-    # A full-strength hit is 5 a point of the stat behind it, a third of the 15 HP
-    # a point of CON gives: STR, or INT for a trick if that is bigger and the mob
-    # has 3 MP for one use. A crawler's CON is 4 plus a fifth of their points
-    # (spread evenly) or half of them (a veteran's build).
+    # The table's house rules: a mob's hit is one die at level 1 and one more every
+    # five levels, of its tier's die -- d6 for an ordinary mob, d8 for a
+    # neighborhood boss and for an elite, d10 for a borough boss and d12 for a
+    # city boss, with two attacks a round from borough up -- plus a third of its
+    # STR, or of its INT for a trick that hits harder (3 MP for one use). A
+    # crawler's CON is 4 plus a fifth of their points (spread evenly) or half of
+    # them (a veteran's build).
+
+    DICE = {"mob": (6, 1), "neighborhood": (8, 1), "borough": (10, 2), "city": (12, 2)}
+
+    def _numbers(self, b):
+        """(dice, sides, attacks, biggest hit, what is behind it), by the rules
+        above for the tiers they name; the generator's own for the rest."""
+        if b.tier in self.DICE:
+            die, attacks = (8, 1) if b.tier == "mob" and b.name.startswith("Elite ") else self.DICE[b.tier]
+            n = 1 + b.level // 5
+            trick = b.stats["INT"] if b.stats["INT"] >= 3 else 0
+            stat, behind = (trick, "trick") if trick > b.stats["STR"] else (b.stats["STR"], "STR")
+            return n, die, attacks, n * die + stat // 3, behind
+        n, die = b.dice
+        return n, die, b.attacks, b.hit[0], b.behind
 
     def _hit(self, b):
-        trick = b.stats["INT"] if b.stats["INT"] >= 3 else 0
-        if trick > b.stats["STR"]:
-            return trick * 5, "trick"
-        return b.stats["STR"] * 5, "STR"
+        return self._numbers(b)[3:5]
+
+    def _round(self, b):
+        n, die, attacks, hit, _ = self._numbers(b)
+        return hit * attacks
 
     @staticmethod
     def _hp(level, half=False):
@@ -3517,32 +3535,42 @@ class BestiaryTest(unittest.TestCase):
     def _lives_from(self, hit, half=False):
         return next(lv for lv in range(1, 100000) if self._hp(lv, half) > hit)
 
-    def test_a_hit_is_three_times_a_crawlers_con_to_kill(self):
+    def test_a_mobs_hit_is_its_tiers_dice(self):
         for name in self.NAMES:
             for tier in self.TIERS:
                 for level in (1, 9, 40, 130):
                     b = mg.build_mob(name, level, tier)
-                    self.assertEqual(b.hit, self._hit(b), f"{name} {tier} L{level}")
+                    n, die, attacks, hit, behind = self._numbers(b)
+                    where = f"{name} {tier} L{level}"
+                    self.assertEqual(b.dice, (n, die), where)
+                    self.assertEqual(b.attacks, attacks, where)
+                    self.assertEqual(b.to_hit, level // 5, where)
+                    self.assertEqual(b.hit, (hit, behind), where)
+                    self.assertEqual(b.round_max, hit * attacks, where)
+                    self.assertAlmostEqual(b.hit_avg, n * (die + 1) / 2 + hit - n * die, msg=where)
+        # An elite hits as a neighborhood boss does; a plain mob with a d6.
+        self.assertEqual(mg.build_mob("Elite Feral Goblins", 50, "mob").dice, (11, 8))
+        self.assertEqual(mg.build_mob("Feral Goblins", 50, "mob").dice, (11, 6))
         for level in (1, 4, 5, 25, 105, 300):
             for half in (False, True):
                 self.assertEqual(mg.crawler_hp(level, half), self._hp(level, half))
-                con = self._hp(level, half) // 15
-                # one-shot exactly when the stat behind the hit is 3x their CON
-                for stat in (3 * con - 1, 3 * con):
-                    self.assertEqual(stat * 5 >= mg.crawler_hp(level, half), stat >= 3 * con)
         for hit in (0, 59, 60, 61, 200, 2710):
             for half in (False, True):
                 self.assertEqual(mg.lives_through(hit, half), self._lives_from(hit, half))
-        # STR 12 hits for 60, exactly a level-1 crawler's HP: that is a kill
-        exact = mg.MobBuild("Probe", "here", 8, (8, 8), "mob", "brute",
-                            {"STR": 12, "DEX": 4, "CON": 4, "INT": 4, "CHA": 4})
+        # One d6 at its most, 6, plus STR 162 // 3, 54: 60, exactly a level-1
+        # crawler's HP. A round equal to their HP drops them.
+        exact = mg.MobBuild("Probe", "here", 1, (1, 1), "mob", "brute",
+                            {"STR": 162, "DEX": 4, "CON": 4, "INT": 4, "CHA": 4})
         self.assertEqual(exact.hit, (self._hp(1), "STR"))
-        self.assertTrue(exact.one_shots(1), "a hit equal to their HP left them alive")
-        self.assertFalse(exact.one_shots(2))
+        self.assertTrue(exact.drops_in_a_round(1), "a round equal to their HP left them alive")
+        self.assertFalse(exact.drops_in_a_round(2))
+        self.assertEqual(exact.rounds_to_drop(1), 2)          # 3.5 + 54 a round, on average
 
     def test_every_floor_says_where_youre_going_to_die(self):
-        """Every mob and boss, hardest hit first, with the level a crawler needs to
-        live through it; and the floor's own cutoff, from its ordinary mobs."""
+        """Every mob and boss, hardest round first, with its dice, its biggest
+        hit, its attacks and its to-hit, the rounds that drop an ordinary and a
+        leaderboard crawler, and the level that lives through a round; and the
+        floor's own cutoff, from its ordinary mobs."""
         for f, res in self.res.items():
             beasts = mg.floor_bestiary(res.floor)
             md = res.markdown
@@ -3553,32 +3581,40 @@ class BestiaryTest(unittest.TestCase):
             rows = [ln for ln in sec.splitlines()
                     if ln.startswith("| ") and "---" not in ln][1:]
             self.assertEqual(len(rows), len(beasts), f"floor {f}")
-            # hardest hit first; a tie keeps the Bestiary's order (Floor 8 has the
-            # same mob in two regions, at two levels)
-            hardest = sorted(beasts, key=lambda b: -self._hit(b)[0])
+            ordinary, leader, _ = mg.party_levels(f, beasts)
+            self.assertIn(f"(level {ordinary}, {self._hp(ordinary):,} HP", sec)
+            # hardest round first; a tie keeps the Bestiary's order
+            hardest = sorted(beasts, key=lambda b: -self._round(b))
             for row, b in zip(rows, hardest):
                 cells = [c.strip() for c in row.strip("|").split("|")]
-                hit, behind = self._hit(b)
-                self.assertEqual(cells[:4], [b.name, str(b.level), f"{hit:,}", behind])
-                for cell, half in ((cells[4], False), (cells[5], True)):
-                    lv = self._lives_from(hit, half)
+                n, die, attacks, hit, behind = self._numbers(b)
+                self.assertEqual(cells[:3], [b.name, str(b.level), f"+{b.level // 5}"], cells[0])
+                self.assertEqual(cells[3], f"{n}d{die}+{hit - n * die}" + (" (trick)" if behind == "trick" else ""),
+                                 cells[0])
+                self.assertEqual((cells[4], cells[5]), (f"{hit:,}", str(attacks)), cells[0])
+                avg = (n * (die + 1) / 2 + hit - n * die) * attacks
+                for cell, lv in ((cells[6], ordinary), (cells[7], leader)):
+                    self.assertEqual(int(cell), max(1, math.ceil(self._hp(lv) / avg)), cells[0])
+                for cell, half in ((cells[8], False), (cells[9], True)):
+                    lv = self._lives_from(hit * attacks, half)
                     self.assertEqual(cell, "—" if lv == 1 else f"below L{lv}", cells[0])
             mobs = [b for b in beasts if b.tier == "mob"]
             if not mobs:
                 self.assertNotIn("This floor's cutoff", sec)
                 continue
-            top = max(self._hit(b)[0] for b in mobs)
+            top = max(self._round(b) for b in mobs)
             cutoff = self._lives_from(top)
             if cutoff == 1:
-                self.assertIn("**Nothing ordinary on this floor kills a crawler in one hit**", sec)
+                self.assertIn("**Nothing ordinary on this floor drops a crawler in one round**", sec)
             else:
                 self.assertIn(f"**This floor's cutoff is level {cutoff}.**", sec, f"floor {f}")
                 self.assertIn(f"from level {self._lives_from(top, True)}.", sec)
 
     def test_the_shape_of_it(self):
-        """An ordinary crawler lives through every ordinary mob on their floor --
-        mobs gain a point a level to their three -- and the Floor 11 boss, meant to
-        be deadly, kills an ordinary crawler there in one hit."""
+        """An ordinary crawler lives through a full round of every ordinary mob on
+        their floor, even at the dice's most -- mobs gain a point a level to their
+        three and hit with one die -- and the Floor 11 boss, meant to be deadly,
+        drops an ordinary crawler there in one round."""
         for f, res in self.res.items():
             beasts = mg.floor_bestiary(res.floor)
             mobs = [b for b in beasts if b.tier == "mob"]
@@ -3586,10 +3622,88 @@ class BestiaryTest(unittest.TestCase):
                 continue
             ordinary = mg.party_levels(f, beasts)[0]
             for b in mobs:
-                self.assertLess(self._hit(b)[0], self._hp(ordinary), f"floor {f}: {b.name}")
+                self.assertLess(self._round(b), self._hp(ordinary), f"floor {f}: {b.name}")
         eleven = mg.floor_bestiary(self.res[11].floor)
         boss = next(b for b in eleven if b.tier != "mob")
-        self.assertGreaterEqual(self._hit(boss)[0], self._hp(mg.party_levels(11, eleven)[0]))
+        self.assertGreaterEqual(boss.round_max, self._hp(mg.party_levels(11, eleven)[0]))
+
+
+class CombatTest(unittest.TestCase):
+    """The table's house rules for a hit (Floor 6, Day 10), written out here as
+    formulas and checked against the generator's. Every division rounds down."""
+
+    MULT = {0: 1, 4: 1, 5: 2, 9: 2, 10: 3, 14: 3, 15: 4, 16: 6, 17: 7, 18: 8, 19: 9, 20: 12, 25: 12}
+
+    def test_the_milestone_multiplier(self):
+        for level, m in self.MULT.items():
+            self.assertEqual(mg.combat_mult(level), m, level)
+
+    def test_weapons(self):
+        # 1d8 at skill 10 (x3) with a +2 item and Strength 12: 4.5 x 3 + 2 + 10 + 4
+        self.assertEqual(mg.weapon_damage([(1, 8)], 2, 10, 12), 29.5)
+        self.assertEqual(mg.weapon_damage([(1, 8)], 2, 10, 12, uses_str=False), 25.5)
+        self.assertEqual(mg.weapon_damage([(1, 8)], 2, 10, 12, bonus_dice=[(1, 4)]), 32.0)
+        self.assertEqual(mg.weapon_damage([(2, 6)], 0, 0, 5), 7 + 1)
+        rng = random.Random(1)
+        for _ in range(20):
+            self.assertTrue(3 + 16 <= mg.weapon_damage([(1, 8)], 2, 10, 12, rng=rng) <= 24 + 16)
+        self.assertEqual(mg.secondary_strike([(1, 4)], 1, 12), 2.5 + 1 + 4)
+
+    def test_spells_cells_and_banks(self):
+        self.assertEqual(mg.spell_damage(10, 30), 7 * 3 + 10 + 10)
+        self.assertEqual(mg.spell_damage(1, 5, dice=[(3, 4)]), 7.5 + 1 + 1)
+        self.assertEqual(mg.stored_cell(70), 50)
+        self.assertEqual(mg.stored_cell(12), 12)
+        self.assertEqual(mg.bank_discharge([50, 30]), 80)
+        self.assertEqual(mg.bank_discharge([50, 30], overclock=True, wet=True), 240)
+        self.assertEqual(mg.bank_discharge([50, 30], stunned=True), 120)
+
+    def test_healing(self):
+        self.assertEqual(mg.hot_tick(10, 600), int(0.03 * 3 * 600))
+        self.assertEqual(mg.hot_tick(1, 600), 18)
+        for grade, share in (("healing", 0.2), ("good", 0.35), ("great", 0.5), ("superb", 0.75),
+                             ("cosmic", 1.0)):
+            self.assertEqual(mg.potion_heal(grade, 600), int(share * 600), grade)
+
+    def test_pets(self):
+        self.assertEqual(mg.pet_attack(12, 6, gear_flat=2, gear_pct=0.5), (3 * 3.5 + 2) * 1.5)
+        self.assertEqual(mg.pet_attack(4, 8), 4.5)
+
+    def test_mobs_and_bosses(self):
+        self.assertEqual(mg.mob_hit(50, 54), 11 * 3.5 + 18)
+        self.assertEqual(mg.mob_max_hit(50, 54, "city"), 11 * 12 + 18)
+        self.assertEqual(mg.mob_hit(50, 54, trick_int=90), 11 * 3.5 + 30)
+        self.assertEqual(mg.mob_to_hit_bonus(50), 10)
+        self.assertEqual(mg.mob_dice(3, "borough"), (1, 10))
+        for tier, dice in (("ordinary", (6, 1)), ("neighborhood", (8, 1)), ("borough", (10, 2)),
+                           ("city", (12, 2))):
+            self.assertEqual(tuple(mg.COMBAT["tiers"][tier]), dice, tier)
+        for tier, as_ in (("mob", "ordinary"), ("neighborhood", "neighborhood"), ("borough", "borough"),
+                          ("city", "city"), ("mayor", "neighborhood"), ("hunter", "neighborhood"),
+                          ("top", "county"), ("floor", "floor")):
+            self.assertEqual(mg.hit_tier(tier), as_, tier)
+        self.assertEqual(mg.hit_tier("mob", "Elite Feral Goblins"), "neighborhood")
+
+    def test_to_hit(self):
+        self.assertEqual(mg.dex_edge(30, 20), 10 - 5)
+        self.assertEqual(mg.dex_edge(60, 0), 10)
+        self.assertEqual(mg.dex_edge(0, 60), -10)
+        self.assertEqual(mg.dex_edge(30, 20, defender_sees_it=False), 10)
+        self.assertTrue(mg.hits(20, 0, 0, 0, 0, 99))
+        self.assertFalse(mg.hits(1, 50, 50, 99, 0, 0))
+        self.assertFalse(mg.hits(10, 5, 1, 12, 12, 10))       # 10 + 5 + 1 + (4 - 3) is 17, under 20
+        self.assertTrue(mg.hits(10, 5, 1, 12, 12, 6))         # and 16 is enough
+        self.assertEqual(mg.hit_chance(5, 0, 12, 12, 5), 0.6)
+
+    def test_the_section_is_on_every_floor_and_shared(self):
+        self.assertIn("## Combat", mg._SHARED_SECTIONS)
+        for f in mg.FLOORS:
+            md = mg.generate(f, "small", 4242, images=False).markdown
+            sec = md[md.index("## Combat"):]
+            for line in ("| 0–4 | ×1 |", "| 15 | ×4 |", "| 20 and up | ×12 |",
+                         "| city | d12 | 2 |", "averages 29.5.", "a hit 60% of the time."):
+                self.assertIn(line, sec, f"floor {f}: {line}")
+            self.assertNotIn("## Combat", mg.floor_body(md), f"floor {f}")
 
 
 class MayorTest(unittest.TestCase):

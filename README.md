@@ -799,32 +799,67 @@ boss's stat points are worth at three levels:
 Stat points don't care how a crawler fights: a caster's Intelligence counts the
 same as a brawler's Strength. The table leaves out gear, class and the boss's
 mechanic, and says so: deeper down, gear and abilities mean a party needs fewer
-people, and the mechanic can mean it needs more. Where the boss kills a crawler of
-that level in one hit, the cell says **one-shot** instead of a number. Then no
-number of crawlers is enough: each one goes down before doing anything.
+people, and the mechanic can mean it needs more. Where one round of the boss's
+hardest hits drops a crawler of that level, the cell says **one round** instead of a
+number. Then no number of crawlers is enough: each one goes down before doing anything.
 
-Last comes **You're going to die**, listing every mob and boss, hardest hit first,
-with the level a crawler needs to live through one hit:
-- **A full-strength hit** is the mob's STR × 5, or INT × 5 for a trick if that is
-  bigger and it has the MP. That is a third of the 15 HP a point of Constitution
-  gives, so a hit kills outright when the stat behind it is at least three times
-  the crawler's CON. The multiplier is `MOB_BUILDS.hit_per_point`.
-- **Two crawlers are measured:** one with their points spread evenly, and a
-  veteran with half of them in Constitution.
-- **The floor's cutoff** is the level its hardest-hitting ordinary mob stops
-  one-shotting the evenly spread crawler. Below that, a crawler shouldn't be on the
+Last comes **You're going to die**, listing every mob and boss, hardest round first,
+with what it hits for by the table's house rules (see [Combat](#combat)) and what
+that does to a crawler:
+- **A hit** is one die at level 1 and one more every five levels, of the tier's die:
+  d6 for an ordinary mob, d8 for a neighborhood boss or an elite, d10 for a borough
+  boss and d12 for a city boss, with two attacks a round from borough up; plus a third
+  of its STR, or of its INT for a trick that hits harder and has the MP. The table
+  gives the dice, the biggest hit, the attacks a round and the to-hit bonus, a fifth
+  of its level.
+- **Rounds to drop** an ordinary crawler on the floor and a leaderboard one, at
+  average rolls, with the crawler's points spread evenly.
+- **One round** is the level below which one round of its hardest hits drops a
+  crawler outright. Two crawlers are measured: one with their points spread evenly,
+  and a veteran with half of them in Constitution.
+- **The floor's cutoff** is the level its hardest-hitting ordinary mob stops dropping
+  the evenly spread crawler in one round. Below that, a crawler shouldn't be on the
   floor at all.
 
-Ordinary mobs gain a point a level to a crawler's three, so an ordinary crawler
-always clears their own floor's mobs. The cutoff is about being underleveled: 17 on
-Floor 4 at medium seed 4242. Bosses are a different matter. That same Floor 4's
-Station Mimic one-shots both an ordinary crawler and a leaderboard one. Floor 11's
-level-134 floor boss hits for 2,710: it one-shots an evenly spread crawler below
-level 295, and a veteran with half their points in Constitution below level 118.
+Ordinary mobs gain a point a level to a crawler's three and hit with one die, so an
+ordinary crawler lives through a full round of their own floor's mobs even at the
+dice's most. Bosses are a different matter: Floor 11's floor boss, with four d20
+attacks a round, drops an evenly spread ordinary crawler in one round.
 
 Each build is seeded by the mob itself, so the same mob at the same level always
 has the same stats, and adding the Bestiary moved nothing else on any floor. The
 numbers live in `MOB_BUILDS` in `data/common.json`.
+
+### Combat
+
+Every write-up carries a **Combat** section, just ahead of the Crawler Stats: the
+table's house rules for a hit, written from Floor 6, Day 10, the same on every floor.
+The Bestiary's hits are worked out by them. In short:
+- **The milestone multiplier:** a skill's or a spell's level multiplies its dice: ×1 to
+  level 4, ×2 from 5, ×3 from 10, ×4 at 15, then ×6, ×7, ×8, ×9, and ×12 from 20.
+- **Weapons:** dice times the multiplier, plus bonus dice at ×1, the item's bonus, the
+  skill level and a third of Strength for melee and hand-thrown weapons (not guns,
+  bows, crossbows or mounts). A free second strike is dice, item bonus and a third of
+  Strength, nothing else.
+- **Spells:** dice (2d6 unless the spell says) times the multiplier, plus the level and
+  a third of Intelligence; an area spell rolls once for every target. A stored cell
+  keeps at most 50, and a bank going off is the sum of its cells, ×2 overclocked and
+  ×1.5 each for a wet or a stunned target.
+- **Healing over time** is 3% of full health times the multiplier a turn for ten turns;
+  **potions** heal 20, 35, 50, 75 or 100% of full health by grade.
+- **Pets** hit one die, and one more per five of their own levels, plus their gear's
+  flat bonus, times one plus its percentage.
+- **Mobs and bosses** hit one die, and one more per five levels, of their tier's die
+  (d6 ordinary, d8 neighborhood and elites, d10 borough with two attacks, d12 city
+  with two), plus a third of STR or INT, at d20 + level ÷ 5 to hit. The tiers above
+  city are this project's extension of the table.
+- **To hit:** d20 + skill bonus (half the skill level; a fifth of the level for a pet or
+  a mob) + item bonus + Dexterity edge (a third of the attacker's less a quarter of a
+  defender's who sees it, never beyond ±10) against 10 + armor; a natural 20 hits, a
+  natural 1 misses. Provisional, as the rules have it.
+
+The numbers are `COMBAT` in `data/common.json`; the section and the Bestiary are
+formatted from it, so retuning one moves both.
 
 ### Mayors
 
@@ -1169,16 +1204,30 @@ city bosses. It checks:
 - every floor with mobs lists every one of them, with the table matching the builds;
 - every boss's party equivalents are its points over a crawler's (20 plus 3 a level),
   with the ordinary level set by the median band top, not one outlier, and
-  "one-shot" exactly where its hit is at least that crawler's HP;
+  "one round" exactly where one round of its hardest hits is at least that
+  crawler's HP;
 - the leaderboard crawler is Carl at the end of the floor's book, with the books'
   levels written into the test;
-- a hit is the bigger of STR × 5 and a trick's INT × 5, and kills when it is at
-  least the crawler's HP, a hit equal to their HP included;
-- every floor lists every mob and boss hardest hit first, with the right level to
-  live through each, and the floor's cutoff comes from its ordinary mobs, not its
-  bosses;
-- an ordinary crawler lives through every ordinary mob on their floor, and the
-  Floor 11 boss kills an ordinary crawler there in one hit.
+- a hit is one die per five levels (and one) of the tier's die plus a third of STR,
+  or of INT for a trick that hits harder; an elite hits as a neighborhood boss; a
+  round equal to the crawler's HP drops them;
+- every floor lists every mob and boss hardest round first, with its dice, biggest
+  hit, attacks and to-hit, the rounds that drop an ordinary and a leaderboard
+  crawler, and the level that lives through a round, and the floor's cutoff comes
+  from its ordinary mobs, not its bosses;
+- an ordinary crawler lives through a round of every ordinary mob on their floor,
+  and the Floor 11 boss drops an ordinary crawler there in one round.
+
+Combat has its own group, with the house rules written into the test as formulas:
+- the milestone multiplier at every step, 1 to 25;
+- a weapon's damage with and without Strength, with bonus dice, rolled within its
+  range; a free second strike; a spell at its level; a cell's cap; a bank with its
+  multipliers; heal-over-time ticks and every potion grade; a pet's dice and gear;
+- a mob's dice, biggest hit, trick, to-hit and tier, and which tier each kind hits
+  as; the Dexterity edge and its cap, natural 20 and 1, a hit's arithmetic and the
+  chance over a d20;
+- the Combat section is on every floor, with its tables, and is shared matter the
+  threat scan ignores.
 
 The land around Floors 3 and 6's settlements, and how far their bosses roam, have
 their own group, with the caps written into the test (1, 2 and 3 cells on a small,
