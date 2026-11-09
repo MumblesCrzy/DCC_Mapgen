@@ -85,6 +85,7 @@ import math
 import random
 import re
 import sys
+import textwrap
 import threading
 import zlib
 from dataclasses import MISSING, dataclass, field, fields, is_dataclass, replace
@@ -3108,6 +3109,41 @@ def _px(v: float) -> float:
 def _fit(t: str, max_chars: int) -> str:
     return t if len(t) <= max_chars else t[: max_chars - 1] + "…"
 
+
+KEY_LINE = 18          # a key line under a map
+KEY_GAP = 10           # and the space above a key's heading
+
+
+def _key_block(rows, W: int, lx: int, heading: str) -> List[Tuple[Optional[tuple], str, bool]]:
+    """A key to go under a map: its heading, then each row's text wrapped to the
+    map's width rather than cut short, since the point of a key is to list
+    everything. rows: (the part a click on it picks, its text). Each line is
+    (that part, or None for the heading; its text; whether it carries a row on)."""
+    if not rows:
+        return []
+    width = int((W - 2 * lx) / 6.4)
+    out = [(None, heading, False)]
+    for path, text in rows:
+        for k, line in enumerate(textwrap.wrap(text, width - 3, break_on_hyphens=False)):
+            out.append((path, line, k > 0))
+    return out
+
+
+def _key_height(block) -> int:
+    return KEY_LINE * len(block) + KEY_GAP if block else 0
+
+
+def _draw_key(o: list, block, lx: int, ky: int, W: int) -> None:
+    """A key from _key_block, its heading's baseline at ky; every line of a row
+    picks the row's part."""
+    for path, line, more in block:
+        if path is None:
+            o.append(_text(lx, ky, line, size=12, weight="bold"))
+        else:
+            o.append(_text(lx + (16 if more else 0), ky, line, size=12))
+            _hit(path, "rect", lx, ky - 13, W - 2 * lx, 17)
+        ky += KEY_LINE
+
 def _stair_icon(x, y, hidden=False):
     """Small stair glyph; dashed outline if hidden."""
     dash = ' stroke-dasharray="3,2"' if hidden else ""
@@ -4493,6 +4529,22 @@ def _mayor_svg(c: Settlement, i: int, x: int, y: int) -> List[str]:
                   size=11, fill="#444")]
 
 
+def settlement_guild_rows(fl) -> List[Tuple[tuple, str]]:
+    """Every settlement's guilds, for the key under the map: the tutorial guild
+    hall, then its race and its class guildhalls. A settlement with none is left
+    out."""
+    rows = []
+    for i, c in enumerate(fl.cells):
+        if not isinstance(c, Settlement):
+            continue
+        parts = ((["tutorial guild hall"] if c.tutorial_guild else [])
+                 + ([f"race: {', '.join(c.race_guilds)}"] if c.race_guilds else [])
+                 + ([f"class: {', '.join(c.class_guilds)}"] if c.class_guilds else []))
+        if parts:
+            rows.append((("cells", i), f"{c.label} {c.name}: " + "; ".join(parts)))
+    return rows
+
+
 def _roam_svg(c: "Region") -> str:
     r = c.roam_range or 0
     return f"roams {r} cell{'' if r == 1 else 's'}" if r else "stays here"
@@ -4502,7 +4554,8 @@ def render3_svg(fl: Floor3) -> str:
     n = fl.grid
     W = max(PAD * 2 + CELL * n, 800)
     stairs_lines = len(fl.stairs)
-    H = HEADER + PAD + CELL * n + LEGEND + 18 * (stairs_lines + 1) + PAD
+    guilds = _key_block(settlement_guild_rows(fl), W, PAD, "Guildhalls, by settlement")
+    H = HEADER + PAD + CELL * n + LEGEND + 18 * (stairs_lines + 1) + _key_height(guilds) + PAD
     ox, oy = (W - CELL * n) // 2, HEADER + PAD
     o = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" font-family="Helvetica, Arial, sans-serif">',
          f'<rect width="{W}" height="{H}" fill="#f6f2ea"/>',
@@ -4568,6 +4621,7 @@ def render3_svg(fl: Floor3) -> str:
         ky += 18
     o.append(_text(lx, ky, f"Elite: {fl.elite.name} — {fl.elite.show} (based in {fl.elite.settlement})", size=12, fill="#7a1f7a"))
     _hit(("elite",), "rect", lx, ky - 13, W - 2 * lx, 17)
+    _draw_key(o, guilds, lx, ky + KEY_LINE + KEY_GAP, W)
     o.append("</svg>")
     return "\n".join(o)
 
@@ -5515,7 +5569,9 @@ def render4_svg(fl: Floor4) -> str:
     W = LEFT + len(ordered) * SPACING + 60
     n_named = len(fl.named)
     legend_h = 60 + 20 * n_named + 20
-    H = TOP + ROW * len(fl.lines) + legend_h + 40
+    guilds = _key_block([(("hubs", k), f"Hub {h['number']}: " + "; ".join(h["guilds"]))
+                         for k, h in enumerate(fl.hubs) if h.get("guilds")], W, 30, "Guilds, by hub")
+    H = TOP + ROW * len(fl.lines) + legend_h + _key_height(guilds) + 40
     o = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" font-family="Helvetica, Arial, sans-serif">',
          f'<rect width="{W}" height="{H}" fill="#f6f2ea"/>',
          _text(30, 36, f"Floor 4 — {fl.name}", size=22, weight="bold"),
@@ -5671,6 +5727,7 @@ def render4_svg(fl: Floor4) -> str:
         o.append(_text(lx + 50, ky, f"{t.name}: {route} (every {t.interval} min, {t.cars} cars)", size=11))
         _hit(("named", k), "rect", lx, ky - 13, W - 2 * lx, 17)
         ky += 20
+    _draw_key(o, guilds, lx, ky + KEY_GAP, W)
     o.append("</svg>")
     return "\n".join(o)
 
@@ -6688,7 +6745,8 @@ def render6_svg(fl: Floor6) -> str:
     n = fl.grid
     W = max(PAD * 2 + CELL * n, 800)
     key_lines = len(fl.stairs) + 2
-    H = HEADER + PAD + CELL * n + LEGEND + 18 * key_lines + PAD
+    guilds = _key_block(settlement_guild_rows(fl), W, PAD, "Guildhalls, by settlement")
+    H = HEADER + PAD + CELL * n + LEGEND + 18 * key_lines + _key_height(guilds) + PAD
     ox, oy = (W - CELL * n) // 2, HEADER + PAD
     lo, hi = FLOOR6_CFG["mob_band"]
     o = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" font-family="Helvetica, Arial, sans-serif">',
@@ -6795,6 +6853,7 @@ def render6_svg(fl: Floor6) -> str:
         ky += 18
     o.append(_text(lx, ky, f"Elite: {fl.elite.name} — {fl.elite.show} (based in {fl.elite.settlement})", size=12, fill="#7a1f7a"))
     _hit(("elite",), "rect", lx, ky - 13, W - 2 * lx, 17)
+    _draw_key(o, guilds, lx, ky + KEY_LINE + KEY_GAP, W)
     o.append("</svg>")
     return "\n".join(o)
 

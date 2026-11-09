@@ -8,6 +8,7 @@ A procedural floor/map generator in the style of the *Dungeon Crawler Carl* book
 
 - **Floors 1 & 2** — neighborhood/borough/city grid, from small up through large (1 City). Beyond that, huge/giant/massive/continent tile multiple Cities together — County (4 Cities), State (9), Country (16), Continent (25) — each City keeping its own City Boss, with one top-tier boss (County/State/Country/Continent) overseeing all of them. Bosses (with a word-bank uniqueness guard so names/forms don't collide), loot boxes, achievements, an Elite, other crawler teams, the tutorial guild, and a full connected **room graph** per neighborhood (safe rooms, hidden passages, guild hall, filler rooms, corridor encounters). Each neighborhood **crosses into the ones beside it** at a room on each side of their shared edge: its Entrance is the way in from the neighbor nearer the floor's entry, and the write-up and both room maps say where each crossing comes out. Each borough's boss chamber sits at the corner its four neighborhoods share, the city's where its boroughs meet and a top-tier boss's at the floor's middle: every neighborhood around one has a way in from one of its rooms, given in that room's line, under the boss ("Reached from") and as a tag in that corner of the room map. `--stair-chance` and `--borough-boss-rate` tune how often neighborhood stairwells and borough bosses show up.
 - **Floor 3** (The Over City) — settlements on a wilderness grid, roaming bosses, locked stairwells, a quest board per town, one Elite.
+  - **Guilds on the map:** a key under the map lists every settlement's guilds, its tutorial guild hall, race guildhalls and class guildhalls, and a line clicked picks the settlement. Floor 6's map has the same key.
   - **Around each settlement:** a town takes up part of its cell, and the rest is wilderness with a mob of its own, levelled by its distance from the hub as a region's is, and a line on what the land is like. No boss lives there, but one may wander in: the write-up lists which, and the map names the first two under the town. Floor 6's settlements, Zockau included, are the same, in jungle. The descriptions are `SETTLEMENT_OUTSKIRTS` in `data/floor3.json` and `JUNGLE_OUTSKIRTS` in `data/floor6.json`.
   - **Roaming bosses:** each boss wanders every cell within its range, settlements' outskirts included, and the write-up lists them. The range is one cell up to a cap set by the map's size: 1 on a small map, 2 on a medium, 3 on a large. It's an editable number on the boss's region; set it to 0 and the boss stays home. Floor 6's bosses roam the same way.
 - **Floor 4** (The Iron Tangle) — schematic rail/transit map, laid out the way the books lay it out, with its content from this project's own word banks rather than the books' plot:
@@ -16,7 +17,7 @@ A procedural floor/map generator in the style of the *Dungeon Crawler Carl* book
   - **Withdrawal:** the drug is named, the Rev-Up Amazing Cure-All Vitamin Immunity Shot, and a supplier hands out the shots at every exit-only cavern. Three stages, each with its symptoms, its toll and what its dead come back as; a schedule for each line, fitted to the countdown; and two things that go wrong on the last day.
   - **Ghoul stations:** the five stairwell stations, each named, on the map too, with one kind of ghoul gathering there. Station 12 belongs to the janitors, three hold what each withdrawal stage raises, and one holds a ghoul of its own. Each says what adds to the crowd, how it grows over the countdown, what it does when the stairwell opens and what its control sigil does; at one of them, enough ghouls merge into a boss.
   - **Getting around:** which car carries whom, and how long the floor takes to cross. Each line says how long its crawlers have before their train reaches 435, how far it is to walk back to the stairwells, and how many stops ahead the nearest exit cavern is. The books give the anchors: a stop every 2 to 20 minutes, about three days from 11 to 435, stations a block or two apart up to 72 and 40 or 50 miles apart out past 300. The curves between them are ours, tunable in `FLOOR4_CFG`. Two special lines run outside the colored ones, one back from the stairwell stations and one for staff only.
-  - **Safe rooms and hubs:** every safe room is somebody's business, with a proprietor, something on offer and a quest. One or two hubs per floor, where far more lines meet than the floor details, have shops, guilds and a noticeboard quest.
+  - **Safe rooms and hubs:** every safe room is somebody's business, with a proprietor, something on offer and a quest. One or two hubs per floor, where far more lines meet than the floor details, have shops, guilds and a noticeboard quest. A key under the map lists each hub's guilds.
   - **Named trains:** every one starts a timed quest when boarded, with a reward and a failure.
   - **Station 75:** an interdiction depot, its repair carts at five times train speed, their times worked out from the same model as the trains. Derailments and boiler blowouts are possible, and bring its crews out.
   - **The tail and the yards:** how to fight the Station Mimic, 435's non-combatant staff, the Abyss's pull, and every yard the floor's lines run from. Station 435 has its own marker on the map.
@@ -419,12 +420,12 @@ A panel opens to the right of the map:
     chamber, which opens that boss.
   - **Floors 3 and 6:** a settlement or region, a region's mob, boss and stairwell, a
     settlement's mayor, quests and outskirts mob, a boss named as wandering into a
-    settlement's outskirts, the Elite, each line of the stairwell list, and on Floor 6 a
-    hunter party by its camp.
+    settlement's outskirts, the Elite, each line of the stairwell list, a settlement by
+    its line in the guild key, and on Floor 6 a hunter party by its camp.
   - **Floor 4:** a line (by its name or the line itself), a station (its marker, its
     number, what it has, its stairwell), a ghoul station by its name over its column,
-    the yards, the depot, the Station Mimic and 435's staff by their columns, and a
-    named train by its line in the key.
+    the yards, the depot, the Station Mimic and 435's staff by their columns, a
+    named train by its line in the key, and a hub by its line in the guild key.
   - **Floor 5:** a quadrant by its slice; its faction, mob, sites, castle and ruler by
     their lines; the castle by its marker; the factions by the line under the map.
   - **Floor 8:** a zone by its slice of its ring, and a deckmaster by its zone's DM line.
@@ -1390,7 +1391,12 @@ Clicking the map has its own group:
   corners are not on it;
 - a map's areas worked out in one thread take nothing from a floor drawn in another;
 - a neighborhood, and anything in it, names its room map for a double-click to go to,
-  and a Floor 10 heat its heat's map; a borough boss has no map of its own.
+  and a Floor 10 heat its heat's map; a borough boss has no map of its own;
+- the guild key under Floors 3 and 6's maps names every guild in every settlement,
+  the tutorial guild hall included, and Floor 4's every guild in every hub, a line
+  wrapped where it runs long rather than cut short; a click on a line picks its
+  settlement or hub, and a floor without guilds draws no key. Floor 7's hub cards
+  carry each hub's guild.
 
 The self-test then clicks a room on its map and checks that the panel opens on it and
 it lights up, that pointing names it, that a drag picks nothing, that a boss clicked

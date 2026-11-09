@@ -822,10 +822,10 @@ class MapClickTest(unittest.TestCase):
             for where, res in self._cases(floor):
                 fl, wanted = res.floor, []
                 for i, c in enumerate(fl.cells):
-                    cell = mg.HitArea((), "rect", (0, 0, 0, 0))
-                    for a in mg.map_hits(fl, ""):
-                        if a.path == ("cells", i):
-                            cell = a
+                    # Its square, drawn first: the guild key under the map picks
+                    # the settlement too.
+                    cell = next((a for a in mg.map_hits(fl, "") if a.path == ("cells", i)),
+                                mg.HitArea((), "rect", (0, 0, 0, 0)))
                     inside = lambda x, y, cell=cell: cell.contains(x, y)
                     name = mg._fit(c.name, 22)
                     wanted.append((lambda t, x, y, n=name, f=inside: t == n and f(x, y), ("cells", i)))
@@ -3704,6 +3704,84 @@ class CombatTest(unittest.TestCase):
                          "| city | d12 | 2 |", "averages 29.5.", "a hit 60% of the time."):
                 self.assertIn(line, sec, f"floor {f}: {line}")
             self.assertNotIn("## Combat", mg.floor_body(md), f"floor {f}")
+
+
+class GuildMapTest(unittest.TestCase):
+    """The picture maps list every guild on the floor, under the map: Floors 3
+    and 6 by settlement (the tutorial guild hall, race and class guildhalls),
+    Floor 4 by hub. A line clicked picks its place. Floor 7's hub cards carry
+    their guild already."""
+
+    TEXT = re.compile(r'<text x="([\d.]+)" y="([\d.]+)"[^>]*>(.*?)</text>')
+
+    def _key(self, svg, heading):
+        """The key's lines, in order, after its heading: (x, y, text)."""
+        import html
+        texts = [(float(x), float(y), html.unescape(t)) for x, y, t in self.TEXT.findall(svg)]
+        at = next(k for k, (_, _, t) in enumerate(texts) if t == heading)
+        return texts[at + 1:]
+
+    def _check(self, res, heading, rows):
+        svg = res.svgs[0][1]
+        if not rows:
+            self.assertNotIn(heading, svg)
+            return
+        lines = self._key(svg, heading)
+        said = " ".join(t for _, _, t in lines)
+        hits = mg.map_hits(res.floor, res.svgs[0][0], res.boss_stairs)
+        for path, start, guilds in rows:
+            for g in guilds:
+                self.assertIn(g, said, f"{start}: {g}")
+            x, y = next((x, y) for x, y, t in lines if t.startswith(start))
+            got = mg.hit_at(hits, x + 3, y - 4)
+            self.assertEqual(got.path if got else None, path, start)
+
+    def test_settlements(self):
+        for f in (3, 6):
+            for size, seed in (("small", 4242), ("medium", 4242), ("large", 4242), ("large", 9)):
+                res = mg.generate(f, size, seed)
+                rows = []
+                for i, c in enumerate(res.floor.cells):
+                    if isinstance(c, mg.Settlement):
+                        guilds = (["tutorial guild hall"] if c.tutorial_guild else []) + c.race_guilds + c.class_guilds
+                        if guilds:
+                            rows.append((("cells", i), f"{c.label} {c.name}:", guilds))
+                with self.subTest(floor=f, size=size, seed=seed):
+                    self.assertTrue(rows or size == "small")
+                    self._check(res, "Guildhalls, by settlement", rows)
+
+    def test_hubs(self):
+        for size, seed in (("small", 4242), ("medium", 4242), ("large", 4242), ("large", 9)):
+            res = mg.generate(4, size, seed)
+            rows = [(("hubs", k), f"Hub {h['number']}:", h["guilds"])
+                    for k, h in enumerate(res.floor.hubs) if h["guilds"]]
+            with self.subTest(size=size, seed=seed):
+                self.assertTrue(rows)
+                self._check(res, "Guilds, by hub", rows)
+
+    def test_no_guilds_no_key(self):
+        """Every settlement has a class guildhall at least, so a floor without
+        guilds is one edited to have none."""
+        for f, heading in ((3, "Guildhalls, by settlement"), (6, "Guildhalls, by settlement"),
+                           (4, "Guilds, by hub")):
+            fl = mg.generate(f, "medium", 4242).floor
+            self.assertIn(heading, mg.floor_svgs(fl, False)[0][1])
+            if f == 4:
+                for h in fl.hubs:
+                    h["guilds"] = []
+            else:
+                for c in fl.cells:
+                    if isinstance(c, mg.Settlement):
+                        c.tutorial_guild, c.race_guilds, c.class_guilds = False, [], []
+            self.assertNotIn(heading, mg.floor_svgs(fl, False)[0][1], f"floor {f}")
+
+    def test_floor_7s_cards_carry_their_guilds(self):
+        for size, seed in (("medium", 4242), ("large", 4242), ("large", 9)):
+            res = mg.generate(7, size, seed)
+            svg = res.svgs[0][1]
+            for h in res.floor.hubs:
+                if h.guild:
+                    self.assertIn(f"guild: {h.guild}", svg, h.label)
 
 
 class MayorTest(unittest.TestCase):
