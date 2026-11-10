@@ -6,6 +6,7 @@ generated anywhere but here, so a seed gives the same floor on a phone as in
 the app -- web/check_pyodide.mjs holds that against tests/golden.json.
 """
 
+import copy
 import json
 import os
 import re
@@ -17,9 +18,9 @@ import dcc_mapgen as mg
 # opened one after another work through each bank before repeating an item.
 _roller = mg.LootRoller()
 
-# Options the mobile page offers. The desktop app has more (stairwell and boss
-# sliders, the Floor 9 and 10 controls); the page leaves those at their defaults.
-WEB_OPTIONS = ("days", "scaling", "region")
+# The options the page offers, by the names FLOOR_OPTIONS groups them under:
+# all of the desktop app's.
+WEB_OPTIONS = ("days", "scaling", "region", "stairs", "floor9", "floor10")
 
 
 def meta() -> str:
@@ -33,36 +34,91 @@ def meta() -> str:
     types = [t["name"] for t in mg.LOOT_BOXES["types"] + mg.LOOT_BOXES["themed_types"]]
     return json.dumps({"floors": floors, "regions": list(mg.FOLKLORE),
                        "tiers": list(mg.LOOT_BOX_TIERS), "types": types,
-                       "threats": mg.benefactor_threats(), "roller_seed": _roller.seed})
+                       "threats": mg.benefactor_threats(), "roller_seed": _roller.seed,
+                       # Floor 9's factions besides the crawler team: a projected
+                       # winner or runner-up counts only if it names one.
+                       "factions9": [t["name"] for t in mg.TEAMS if not t.get("carl")],
+                       # The Campaign and Leaderboard tabs' lists.
+                       "standings": mg.standing_labels(), "outcomes": mg.team_outcomes(),
+                       "races": list(mg.CRAWLER_RACE), "classes": list(mg.CRAWLER_CLASS),
+                       "board_size": mg.BOARD_SIZE})
 
 
-def generate(options: str) -> str:
-    """Build a floor from the page's controls. Returns the write-up, every map
-    with its title, and the boxes the floor suggests; or an error to show."""
-    o = json.loads(options)
+def _whole(raw, name: str, lo=None, hi=None):
+    """A whole number as typed, or None left blank; ValueError says what's wrong."""
+    raw = str(raw if raw is not None else "").strip()
+    if not raw:
+        return None
+    try:
+        n = int(raw)
+    except ValueError:
+        raise ValueError(f"{name} must be a whole number (got {raw!r}).") from None
+    if (lo is not None and n < lo) or (hi is not None and n > hi):
+        raise ValueError(f"{name} must be from {lo} to {hi} (got {n}).")
+    return n
+
+
+def _kwargs(o: dict) -> dict:
+    """The page's controls as generate() arguments, as the desktop app reads its
+    panel: only the options the floor has are passed."""
     floor = int(o["floor"])
     kw = {"floor": floor, "size": o.get("size", "medium")}
-    for key in ("seed", "days"):
-        raw = str(o.get(key) or "").strip()
-        if raw:
-            try:
-                kw[key] = int(raw)
-            except ValueError:
-                return json.dumps({"error": f"{key.capitalize()} must be a whole number "
-                                            f"(got {raw!r})."})
+    seed = _whole(o.get("seed"), "Seed")
+    if seed is not None:
+        kw["seed"] = seed
     allowed = mg.FLOOR_OPTIONS[floor]
-    if "days" not in allowed:
-        kw.pop("days", None)
+    if "days" in allowed:
+        days = _whole(o.get("days"), "Days")
+        if days is not None:
+            kw["days"] = days
     if "scaling" in allowed and o.get("scaling"):
         kw["scaling"] = o["scaling"]
     if "region" in allowed and o.get("region"):
         kw["region"] = o["region"]
+    if "stairs" in allowed:
+        # Held as whole percents, as the desktop app's sliders are; generate()
+        # takes the fraction.
+        chance = _whole(o.get("stair_chance", 100), "Neighborhood stairwell chance", 0, 100)
+        rate = _whole(o.get("borough_rate", 100), "Borough boss rate", 0, 100)
+        kw.update(boss_stairs=bool(o.get("boss_stairs", True)),
+                  stair_chance=(100 if chance is None else chance) / 100,
+                  borough_boss_rate=(100 if rate is None else rate) / 100)
+    if "floor9" in allowed:
+        kw.update(warlords=o.get("warlords") or "canon", wildcard=bool(o.get("wildcard")),
+                  winner=str(o.get("winner") or "").strip() or None,
+                  runner_up=str(o.get("runner_up") or "").strip() or None)
+    if "floor10" in allowed:
+        party = _whole(o.get("party"), "Party size", 2, 4)
+        kw["party"] = 2 if party is None else party
+        if o.get("vehicle"):
+            kw["vehicle"] = o["vehicle"]
+    return kw
+
+
+def generate(options: str) -> str:
+    """Build a floor from the page's controls. Returns the write-up, every map
+    with its title, and the boxes the floor suggests; or an error to show. With a
+    campaign open, its groups carry onto the floor, and the campaign comes back
+    as the floor left it."""
+    global _roster
+    try:
+        kw = _kwargs(json.loads(options))
+    except ValueError as e:
+        return json.dumps({"error": str(e)})
+    if _roster is not None:
+        # A copy: a floor that can't be made leaves the campaign as it was.
+        kw["roster"] = copy.deepcopy(_roster)
     try:
         res = mg.generate(**kw)
     except mg.MapgenError as e:
         return json.dumps({"error": str(e)})
     _undo.clear()                 # a new floor: nothing of the last one's to undo
-    return json.dumps(_show(res))
+    out = _show(res)
+    if _roster is not None:
+        _roster = res.roster      # this floor's outcome, carried to the next
+        out["campaign"] = _campaign()
+        out["carried"] = sum(1 for t in res.floor.other_crawlers if t.first_seen != t.floor)
+    return json.dumps(out)
 
 
 # The floor on show, for Save floor file. Rooms re-rolled on their own are not
@@ -332,3 +388,259 @@ def fan_odds(liked: str) -> str:
     except (ValueError, mg.MapgenError):
         return json.dumps({"error": "0 to 100"})
     return json.dumps({k: odds[k] for k in ("good", "neutral", "bad")})
+
+
+# -- the campaign -------------------------------------------------------------
+# The desktop app's Campaign and Leaderboard tabs. There the campaign is a file
+# saved after every change; here the page keeps its text in the browser, and
+# Save campaign file downloads the same file the desktop app reads and writes.
+
+_roster = None                # the campaign open, if any
+_campaign_name = ""           # the name of its file, to save it under again
+
+
+def _roster_text() -> str:
+    """The campaign file, exactly as the desktop app's save_roster writes it."""
+    return json.dumps(_roster.to_dict(), indent=2, ensure_ascii=False) + "\n"
+
+
+def _team_row(t) -> dict:
+    fate = t.status or ("your own group" if mg.is_us(t) else "not yet reported")
+    note = "" if t.alive else f" (died on floor {t.died_on})"
+    added = " (added by the DM)" if t.added else ""
+    about = f"{t.name} — formed from {t.origin}{note}{added}"
+    return {"name": t.name, "shown": f"{t.name} (added)" if t.added else t.name,
+            "standing": t.disposition, "crawlers": t.crawler_count or None,
+            "met": t.first_seen, "seen": t.floor if t.history else None,
+            "fate": fate if t.alive else f"died on floor {t.died_on} — {fate}",
+            "alive": t.alive, "outcome": t.outcome, "report": t.status,
+            "about": about, "party": mg.party_line(t) if t.crawler_count else ""}
+
+
+def _ranked_row(c) -> dict:
+    claimed = f"Their bounty of {c.bounty:,} gold is claimed" if c.rank else "Nobody claims a bounty"
+    group = f", and {c.team} loses them" if c.team else ""
+    status = (f"rank {c.rank}, bounty {c.bounty:,} gold" if c.rank else
+              "off the list" if c.alive else f"died on floor {c.died_on}")
+    return {"name": c.name, "shown": c.name + (" (added)" if c.added else ""), "rank": c.rank,
+            "alive": c.alive, "multiplier": c.multiplier,
+            "bounty": f"{c.bounty:,}" if c.rank else None,
+            "label": mg.ranked_label(c), "story": mg.ranked_story(c), "status": status,
+            "kill": f"Kill {c.name}? {claimed}{group}."}
+
+
+def _campaign(**more) -> dict:
+    """The campaign as the page shows it, and its file's text for the page to keep."""
+    if _roster is None:
+        return {"open": False,
+                "board_info": "Open or start a campaign on the Campaign tab: the leaderboard "
+                              "is kept in it.", **more}
+    floor = mg.board_floor(_roster)
+    if floor is None:
+        info = (f"No leaderboard yet. It starts on Floor {mg.LEADERBOARD['first_floor']}; "
+                f"generate that floor or deeper in this campaign.")
+    else:
+        info = f"As of floor {floor}. Changes here count towards floor {floor}."
+    # The list first, then former crawlers, then the dead.
+    ranked = sorted(_roster.leaderboard,
+                    key=lambda c: (0 if c.rank else 1 if c.alive else 2, c.rank or 0, c.name))
+    # Who a new leaderboard crawler can come from: a group with crawlers to be
+    # one of, or the players' own, who pick their own races and classes.
+    groups = [{"name": t.name, "us": mg.is_us(t),
+               "members": [{"race": m["race"], "class": m["class"]} for m in t.members]}
+              for t in _roster.teams if t.alive and (t.members or mg.is_us(t))]
+    deepest = max((t.floor for t in _roster.teams), default=None)
+    return {"open": True, "name": _campaign_name, "text": _roster_text(),
+            "teams": [_team_row(t) for t in _roster.teams],
+            "alive": len(_roster.active()), "met": len(_roster.teams),
+            "board": [_ranked_row(c) for c in ranked], "board_floor": floor, "board_info": info,
+            "groups": groups, "met_floor": deepest or (_shown.number if _shown else 1), **more}
+
+
+def _answer(**more) -> str:
+    return json.dumps(_campaign(**more))
+
+
+def campaign_new(name: str = "") -> str:
+    """Start an empty campaign: the next floor generated deals its first groups."""
+    global _roster, _campaign_name
+    _roster, _campaign_name = mg.CampaignRoster(), (name or "campaign.json")
+    return _answer(status=f"Started {_campaign_name}. Floors you generate now carry its groups "
+                          f"from one to the next.")
+
+
+def campaign_open(payload: str) -> str:
+    """Open a campaign file: {"text", "name"}. The same file the desktop app keeps."""
+    global _roster, _campaign_name
+    o = json.loads(payload)
+    try:
+        raw = json.loads(o.get("text") or "")
+    except ValueError as e:
+        return json.dumps({"error": f"That file isn't valid JSON ({e})."})
+    if not isinstance(raw, dict) or not isinstance(raw.get("teams", []), list):
+        return json.dumps({"error": "That isn't a DCC Mapgen campaign file."})
+    try:
+        roster = mg.CampaignRoster.from_dict(raw)
+    except (mg.MapgenError, TypeError, AttributeError) as e:
+        return json.dumps({"error": f"That campaign can't be read: {e}"})
+    _roster, _campaign_name = roster, (o.get("name") or "campaign.json")
+    return _answer(status=f"Campaign {_campaign_name}: {len(roster.active())} group(s) alive "
+                          f"of {len(roster.teams)} met.")
+
+
+def campaign_close(_: str = "") -> str:
+    """Stop carrying groups forward."""
+    global _roster, _campaign_name
+    _roster, _campaign_name = None, ""
+    return _answer(status="Campaign closed; floors generate standalone again.")
+
+
+def campaign_state(_: str = "") -> str:
+    return _answer()
+
+
+def _needs_campaign():
+    if _roster is None:
+        return json.dumps({"error": "Open or start a campaign first; that is where it's kept."})
+    return None
+
+
+def team_save(payload: str) -> str:
+    """Change a group: {"name", "standing", "crawlers", "outcome", "report"}, as
+    the desktop app's Save under Selected group does."""
+    if (no := _needs_campaign()):
+        return no
+    o = json.loads(payload)
+    team = next((t for t in _roster.teams if t.name == o.get("name")), None)
+    standing = str(o.get("standing") or "").strip()
+    if team is None:
+        return json.dumps({"error": "That group isn't in the campaign any more."})
+    if not standing:
+        return json.dumps({"error": "Give the group a standing, such as wary or friendly."})
+    try:
+        crawlers = _whole(o.get("crawlers"), "Crawlers", 1)
+    except ValueError:
+        return json.dumps({"error": "Crawlers needs to be a whole number, or blank if nobody "
+                                    "has counted them."})
+    was_alive, count_was = team.alive, team.crawler_count
+    try:
+        mg.set_status(_roster, team.name, status=str(o.get("report") or ""),
+                      outcome=o.get("outcome") or team.outcome, crawlers=crawlers)
+    except mg.MapgenError as e:
+        return json.dumps({"error": str(e)})
+    team.disposition = standing
+    if was_alive and not team.alive:
+        msg = f"{team.name} is dead, as of floor {team.died_on}"
+    elif not was_alive and team.alive:
+        msg = f"{team.name} is back, and carries onto the next floor"
+    else:
+        msg = mg.standing_note(team)
+    n = team.crawler_count
+    if n != count_was:
+        msg += f"; {n} crawler{'' if n == 1 else 's'}"
+    return _answer(status=msg + ".", selected=team.name)
+
+
+def team_add(payload: str) -> str:
+    """Add a group met at the table: {"name", "origin", "crawlers", "standing",
+    "floor", "status", "outcome"}, as the desktop app's Add group does."""
+    if (no := _needs_campaign()):
+        return no
+    o = json.loads(payload)
+    try:
+        floor = _whole(o.get("floor"), "Met on floor", 1) or _campaign()["met_floor"]
+        crawlers = _whole(o.get("crawlers"), "Crawlers", 1)
+    except ValueError as e:
+        return json.dumps({"error": str(e)})
+    try:
+        team = mg.add_team(_roster, str(o.get("name") or ""), origin=str(o.get("origin") or ""),
+                           standing=str(o.get("standing") or "").strip() or "wary", floor=floor,
+                           status=str(o.get("status") or ""),
+                           outcome=o.get("outcome") or "steady", crawlers=crawlers)
+    except mg.MapgenError as e:
+        return json.dumps({"error": str(e)})
+    return _answer(status=f"Added {team.name}; it carries onto the next floor you generate.",
+                   selected=team.name)
+
+
+def _ranked(name):
+    return next((c for c in _roster.leaderboard if c.name == name), None)
+
+
+def board_save(payload: str) -> str:
+    """A leaderboard crawler's rank (blank: off the list) and multiplier."""
+    if (no := _needs_campaign()):
+        return no
+    o = json.loads(payload)
+    c = _ranked(o.get("name"))
+    if c is None:
+        return json.dumps({"error": "That crawler isn't in the campaign any more."})
+    try:
+        rank = _whole(o.get("rank"), "Rank")
+        mult = _whole(o.get("multiplier"), "Multiplier")
+    except ValueError:
+        return json.dumps({"error": "Rank and multiplier are whole numbers; leave the rank "
+                                    "blank for off the list."})
+    mult = c.multiplier if mult is None else mult
+    try:
+        if rank is None and c.rank is not None:
+            mg.drop_from_board(_roster, c.name)
+        elif rank is not None and rank != c.rank:
+            mg.place_on_board(_roster, c.name, rank)
+        if mult != c.multiplier:
+            mg.set_multiplier(_roster, c.name, mult)
+    except mg.MapgenError as e:
+        return _answer(error=str(e))
+    msg = (f"{c.name}: rank {c.rank}, x{c.multiplier}, bounty {c.bounty:,} gold" if c.rank
+           else f"{c.name}: off the list, x{c.multiplier} remembered")
+    return _answer(status=msg + ".", selected=c.name)
+
+
+def board_kill(name: str) -> str:
+    if (no := _needs_campaign()):
+        return no
+    c = _ranked(name)
+    if c is None:
+        return json.dumps({"error": "That crawler isn't in the campaign any more."})
+    try:
+        mg.drop_from_board(_roster, c.name, died=True)
+    except mg.MapgenError as e:
+        return json.dumps({"error": str(e)})
+    return _answer(status=f"{c.name} is dead, on floor {c.died_on}.", selected=c.name)
+
+
+def board_revive(name: str) -> str:
+    if (no := _needs_campaign()):
+        return no
+    c = _ranked(name)
+    if c is None:
+        return json.dumps({"error": "That crawler isn't in the campaign any more."})
+    try:
+        mg.revive_ranked(_roster, c.name)
+    except mg.MapgenError as e:
+        return json.dumps({"error": str(e)})
+    return _answer(status=f"{c.name} is alive again, off the list until you rank them.",
+                   selected=c.name)
+
+
+def board_add(payload: str) -> str:
+    """Put a crawler on the list: {"name", "team", "race", "class", "rank",
+    "multiplier"}, as the desktop app's Add crawler does."""
+    if (no := _needs_campaign()):
+        return no
+    if mg.board_floor(_roster) is None:
+        return json.dumps({"error": "There's no leaderboard yet."})
+    o = json.loads(payload)
+    try:
+        rank = _whole(o.get("rank"), "Rank") or mg.BOARD_SIZE
+        mult = _whole(o.get("multiplier"), "Multiplier") or 1
+    except ValueError:
+        return json.dumps({"error": "Rank and multiplier are whole numbers."})
+    try:
+        c = mg.place_on_board(_roster, str(o.get("name") or ""), rank,
+                              race=str(o.get("race") or ""), klass=str(o.get("class") or ""),
+                              team=str(o.get("team") or ""), multiplier=mult)
+    except mg.MapgenError as e:
+        return json.dumps({"error": str(e)})
+    return _answer(status=f"{c.name} is on the list at rank {c.rank}, bounty {c.bounty:,} gold.",
+                   selected=c.name)

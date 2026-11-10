@@ -447,10 +447,18 @@ class WebPageTest(unittest.TestCase):
             self.assertEqual(f["label"], mg.FLOOR_LABELS[n])
             big = [s for s in f["sizes"] if s in mg.BIG_SIZES]
             self.assertEqual(bool(big), n in (1, 2), f"floor {n}: {f['sizes']}")
-            self.assertEqual(set(f["options"]),
-                             mg.FLOOR_OPTIONS[n] & {"days", "scaling", "region"}, f"floor {n}")
+            self.assertEqual(set(f["options"]), mg.FLOOR_OPTIONS[n], f"floor {n}: every option the app has")
         self.assertEqual(meta["regions"], list(mg.FOLKLORE))
         self.assertEqual(meta["tiers"], list(mg.LOOT_BOX_TIERS))
+        self.assertEqual((meta["standings"], meta["outcomes"]), (mg.standing_labels(), mg.team_outcomes()))
+        self.assertEqual((meta["races"], meta["classes"], meta["board_size"]),
+                         (list(mg.CRAWLER_RACE), list(mg.CRAWLER_CLASS), mg.BOARD_SIZE))
+        # Floor 9's winner and runner-up are picked from the factions, the only
+        # names the generator takes.
+        self.assertEqual(len(meta["factions9"]), 8)
+        for name in meta["factions9"]:
+            md = mg.generate(9, "small", 5, winner=name).markdown
+            self.assertIn(f"**Projected winner:** {name}.", md)
 
     def test_a_seed_gives_the_same_floor_as_the_generator(self):
         for case in ({"floor": 1, "size": "medium", "seed": 4242},
@@ -658,6 +666,145 @@ class WebPageTest(unittest.TestCase):
         self.assertIn("prepared for fire", res["markdown"])
         odds = json.loads(self.api.fan_odds("70"))
         self.assertEqual(odds, {k: v for k, v in mg.fan_odds(70).items() if k in odds})
+
+    # -- every option, and the campaign: the desktop app's, on the page ----------
+
+    def setUp(self):
+        self.api.campaign_close("")          # each test starts with none open
+
+    def test_every_option_reaches_the_generator(self):
+        """The page passes each option as the desktop app's panel does: the
+        sliders as whole percents, the Floor 9 and 10 controls as they are."""
+        for page, want in (
+                ({"floor": "1", "size": "small", "seed": "5", "boss_stairs": False,
+                  "stair_chance": "40", "borough_rate": "0"},
+                 {"floor": 1, "size": "small", "seed": 5, "boss_stairs": False,
+                  "stair_chance": 0.4, "borough_boss_rate": 0.0}),
+                ({"floor": "2", "size": "medium", "seed": "8", "stair_chance": "75"},
+                 {"floor": 2, "size": "medium", "seed": 8, "stair_chance": 0.75}),
+                ({"floor": "9", "size": "small", "seed": "5", "warlords": "generated",
+                  "wildcard": True, "winner": " Bone Clan ", "runner_up": "The Dream"},
+                 {"floor": 9, "size": "small", "seed": 5, "warlords": "generated",
+                  "wildcard": True, "winner": "Bone Clan", "runner_up": "The Dream"}),
+                ({"floor": "10", "size": "small", "seed": "5", "vehicle": "biological", "party": "3"},
+                 {"floor": 10, "size": "small", "seed": 5, "vehicle": "biological", "party": 3})):
+            got = self._call("generate", page)
+            res = mg.generate(**want)
+            self.assertEqual(got["markdown"], res.markdown, page)
+            self.assertEqual([(m["suffix"], m["svg"]) for m in got["maps"]], res.svgs, page)
+            self.assertNotEqual(got["markdown"], mg.generate(want["floor"], want["size"], want["seed"]).markdown,
+                                f"{page}: the options made no difference")
+        # A floor that doesn't take an option leaves it out.
+        page = self._call("generate", {"floor": "3", "size": "small", "seed": "5", "party": "4",
+                                       "wildcard": True, "stair_chance": "0"})
+        self.assertEqual(page["markdown"], mg.generate(3, "small", 5).markdown)
+        for payload, words in (({"floor": "1", "stair_chance": "150"}, "from 0 to 100"),
+                               ({"floor": "2", "borough_rate": "half"}, "whole number"),
+                               ({"floor": "10", "party": "7"}, "from 2 to 4")):
+            self.assertIn(words, self._call("generate", payload).get("error", ""), payload)
+
+    def test_a_campaign_on_the_page_is_the_desktop_apps(self):
+        """Floors generated in a campaign carry it as the desktop app's do, and
+        its file is the one the desktop app writes."""
+        self.assertFalse(json.loads(self.api.campaign_state(""))["open"])
+        started = json.loads(self.api.campaign_new(""))
+        self.assertEqual((started["open"], started["name"], started["met"]), (True, "campaign.json", 0))
+        roster = mg.CampaignRoster()
+        for floor, seed in ((1, 1), (2, 4), (4, 2)):
+            page = self._call("generate", {"floor": str(floor), "size": "small", "seed": str(seed)})
+            res = mg.generate(floor, "small", seed, roster=roster)
+            roster = res.roster
+            self.assertEqual(page["markdown"], res.markdown, f"floor {floor}")
+            self.assertEqual(page["carried"], sum(1 for t in res.floor.other_crawlers if t.first_seen != t.floor))
+            with tempfile.TemporaryDirectory() as d:
+                path = os.path.join(d, "campaign.json")
+                mg.save_roster(roster, path)
+                with open(path, encoding="utf-8") as f:
+                    self.assertEqual(page["campaign"]["text"], f.read(), f"floor {floor}: the desktop app's file")
+        c = page["campaign"]
+        self.assertEqual([t["name"] for t in c["teams"]], [t.name for t in roster.teams])
+        self.assertEqual((c["alive"], c["met"]), (len(roster.active()), len(roster.teams)))
+        self.assertEqual(c["board_floor"], 4)
+        self.assertEqual([r["name"] for r in c["board"] if r["rank"]], [r.name for r in mg.board(roster)])
+        self.assertEqual(c["met_floor"], 4)
+        # Opened again from its file, here or after a reload, it is the same campaign.
+        again = self._call("campaign_open", {"text": c["text"], "name": "ours.json"})
+        self.assertEqual((again["name"], again["text"], again["teams"]), ("ours.json", c["text"], c["teams"]))
+        # Floor files don't touch it.
+        self.api.open_floor(json.loads(self.api.save_floor(""))["text"])
+        self.assertEqual(json.loads(self.api.campaign_state(""))["text"], c["text"])
+        # A floor that can't be made leaves it as it was.
+        self.assertIn("error", self._call("generate", {"floor": "3", "size": "huge"}))
+        self.assertEqual(json.loads(self.api.campaign_state(""))["text"], c["text"])
+        # Closed, floors are standalone again.
+        self.assertIn("closed", json.loads(self.api.campaign_close(""))["status"])
+        page = self._call("generate", {"floor": "2", "size": "small", "seed": "4"})
+        self.assertEqual(page["markdown"], mg.generate(2, "small", 4).markdown)
+        self.assertNotIn("campaign", page)
+        for text, words in (("{nope", "isn't valid JSON"), ("[1, 2]", "isn't a DCC Mapgen campaign"),
+                            ('{"version": 99}', "version 99")):
+            self.assertIn(words, self._call("campaign_open", {"text": text, "name": "x.json"})["error"])
+        self.assertIn("Open or start a campaign", self._call("team_save", {"name": "x"})["error"])
+
+    def test_the_campaign_tabs_change_what_the_desktop_tabs_do(self):
+        """Each change goes through the call the desktop app's tab makes, with
+        the same checks and the same words for what it did."""
+        self.api.campaign_new("")
+        for floor, seed in ((1, 1), (4, 2)):
+            self._call("generate", {"floor": str(floor), "size": "small", "seed": str(seed)})
+        roster = mg.CampaignRoster.from_dict(json.loads(json.loads(self.api.campaign_state(""))["text"]))
+        name = roster.teams[0].name
+        done = self._call("team_save", {"name": name, "standing": "us", "crawlers": "3",
+                                        "outcome": "steady", "report": "with us now"})
+        mg.set_status(roster, name, status="with us now", outcome="steady", crawlers=3)
+        team = mg.find_team(roster, name)
+        team.disposition = "us"
+        self.assertEqual(done["text"], json.dumps(roster.to_dict(), indent=2, ensure_ascii=False) + "\n")
+        self.assertTrue(done["status"].startswith(name))
+        self.assertEqual(done["selected"], name)
+        row = next(t for t in done["teams"] if t["name"] == name)
+        self.assertEqual((row["standing"], row["crawlers"], row["report"], row["alive"]), ("us", 3, "with us now", True))
+        for payload, words in (({"name": name, "standing": " "}, "standing"),
+                               ({"name": name, "standing": "wary", "crawlers": "lots"}, "whole number"),
+                               ({"name": name, "standing": "wary", "outcome": "exploded"}, "exploded"),
+                               ({"name": "Nobody", "standing": "wary"}, "isn't in the campaign")):
+            self.assertIn(words, self._call("team_save", payload)["error"], payload)
+        added = self._call("team_add", {"name": "The Late Arrivals", "origin": "a bus tour",
+                                        "crawlers": "2", "standing": "friendly"})
+        self.assertEqual(added["status"], "Added The Late Arrivals; it carries onto the next floor you generate.")
+        late = next(t for t in added["teams"] if t["name"] == "The Late Arrivals")
+        self.assertEqual((late["shown"], late["standing"], late["met"], late["crawlers"]),
+                         ("The Late Arrivals (added)", "friendly", 4, 2), "met on the deepest floor seen")
+        self.assertIn("already", self._call("team_add", {"name": "the late arrivals"})["error"])
+        # The leaderboard.
+        first = added["board"][0]
+        moved = self._call("board_save", {"name": first["name"], "rank": "3", "multiplier": "5"})
+        self.assertEqual(moved["status"], f"{first['name']}: rank 3, x5, bounty "
+                                          f"{next(r for r in moved['board'] if r['name'] == first['name'])['bounty']} gold.")
+        self.assertEqual(next(r for r in moved["board"] if r["rank"] == 3)["name"], first["name"])
+        off = self._call("board_save", {"name": first["name"], "rank": "", "multiplier": ""})
+        self.assertEqual(off["status"], f"{first['name']}: off the list, x5 remembered.")
+        self.assertIn("Kill ", next(r for r in off["board"] if r["name"] == first["name"])["kill"])
+        dead = json.loads(self.api.board_kill(first["name"]))
+        self.assertEqual(dead["status"], f"{first['name']} is dead, on floor 4.")
+        self.assertFalse(next(r for r in dead["board"] if r["name"] == first["name"])["alive"])
+        back = json.loads(self.api.board_revive(first["name"]))
+        self.assertIn("is alive again", back["status"])
+        new = self._call("board_add", {"name": "Zev Mudd", "team": "", "race": "Human", "class": "Bard",
+                                       "rank": "1", "multiplier": "2"})
+        self.assertTrue(new["status"].startswith("Zev Mudd is on the list at rank 1, bounty "))
+        self.assertEqual(new["board"][0]["name"], "Zev Mudd")
+        self.assertIn("whole numbers", self._call("board_add", {"name": "X", "rank": "top"})["error"])
+        us = next(g for g in new["groups"] if g["name"] == name)
+        self.assertTrue(us["us"], "the players' own group is offered, to take any race and class")
+
+    def test_no_leaderboard_until_its_floor(self):
+        self.api.campaign_new("")
+        c = self._call("generate", {"floor": "1", "size": "small", "seed": "1"})["campaign"]
+        self.assertIsNone(c["board_floor"])
+        self.assertIn("No leaderboard yet", c["board_info"])
+        self.assertIn("no leaderboard yet", self._call("board_add", {"name": "X"})["error"])
+        self.assertIn("Open or start a campaign", json.loads(self.api.campaign_close(""))["board_info"])
 
     def test_the_site_holds_everything_it_serves(self):
         sys.path.insert(0, self.WEB)

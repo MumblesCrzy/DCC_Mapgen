@@ -61,6 +61,7 @@ const browser = await chromium.launch(
   process.env.BROWSER_CHANNEL ? { channel: process.env.BROWSER_CHANNEL } : {});
 const context = await browser.newContext({
   viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true,
+  permissions: ["clipboard-read", "clipboard-write"],      // for the loot tab's Copy
 });
 const page = await context.newPage();
 const errors = [];
@@ -149,8 +150,39 @@ try {
     await page.keyboard.press(key);
     keyed.push((await focused()).id);
   }
-  check(keyed.join() === "tab-loot,tab-edit,tab-map,tab-edit,tab-loot",
+  check(keyed.join() === "tab-loot,tab-edit,tab-map,tab-board,tab-campaign",
         `arrow keys, Home and End move along the tabs (${keyed.join(", ")})`);
+
+  // Every option the desktop app has, shown for the floors it's for, and
+  // reaching the floor generated.
+  await page.click("#more summary");
+  const optionsFor = async (f) => {
+    await page.selectOption("#floor", f);
+    return page.$$eval("[data-option]", (els) => els.filter((e) => !e.hidden).map((e) => e.dataset.option).join());
+  };
+  const optionsShown = {};
+  for (const f of ["1", "9", "10", "11"]) optionsShown[f] = await optionsFor(f);
+  check(optionsShown[1] === "days,scaling,stairs" && optionsShown[9] === "days,floor9"
+        && optionsShown[10] === "floor10" && optionsShown[11] === ""
+        && await page.$eval("#no-options", (p) => !p.hidden),
+        `each floor shows its own options (${JSON.stringify(optionsShown)})`);
+  await page.selectOption("#floor", "1");
+  await axeCheck("More options open, Floor 1's stairwell and boss controls on show");
+  await page.selectOption("#floor", "9");
+  await page.selectOption("#winner", "Bone Clan");
+  await page.click("#generate");
+  await generated("Floor 9, medium, seed 4242:");
+  check((await page.$eval("#writeup", (w) => w.textContent)).includes("Projected winner: Bone Clan."),
+        "Floor 9's projected winner reaches the write-up");
+  await page.selectOption("#winner", "");
+  await page.selectOption("#floor", "10");
+  await page.selectOption("#vehicle", "biological");
+  await page.click("#generate");
+  await generated("Floor 10, medium, seed 4242:");
+  check((await page.$eval("#writeup", (w) => w.textContent)).includes("(biological)"),
+        "Floor 10's vehicle reaches the write-up");
+  await page.selectOption("#vehicle", "");
+  await page.click("#more summary");
 
   await page.selectOption("#floor", "4");
   await page.click("#generate");
@@ -190,6 +222,15 @@ try {
   await page.click("#tab-text");
   await axeCheck("the write-up in the dark theme");
   await page.emulateMedia({ colorScheme: "light" });
+  // Copy and Clear, as the desktop app's loot tab has.
+  await page.click("#tab-loot");
+  await page.click("#copy-boxes");
+  await saying("Opened boxes copied");
+  const copied = await page.evaluate(() => navigator.clipboard.readText());
+  check(copied.length > 20 && copied.includes("Box"), `Copy puts the boxes opened on the clipboard (${copied.length} characters)`);
+  await page.click("#clear-boxes");
+  check(await page.$$eval("#opened .box", (b) => b.length) === 0 && await page.$eval("#opened-tools", (t) => t.hidden)
+        && (await focused()).id === "open", "Clear empties them, and focus goes back to Open");
 
   // Floor files: Save floor file downloads one, and Open draws it again.
   const keep = await mkdtemp(join(tmpdir(), "dccmapgen-smoke-"));
@@ -211,6 +252,26 @@ try {
   check(await page.$eval("#writeup", (w) => w.textContent) === wrote
         && await page.$eval("#floor", (f) => f.value) === "1",
         `Open a floor file draws it again ("${await said()}")`);
+
+  // Save everything: the desktop app's Save output, as one zip of a folder: the
+  // write-up, the floor file and every map as PNG.
+  const mapCount = await page.$$eval("#map-pick option", (o) => o.length);
+  const [all] = await Promise.all([page.waitForEvent("download", { timeout: 120_000 }), page.click("#save-all")]);
+  const zipFile = join(keep, all.suggestedFilename());
+  await all.saveAs(zipFile);
+  const zipped = await readFile(zipFile);
+  const entries = zipped.readUInt16LE(zipped.length - 22 + 10);
+  const listed = zipped.toString("latin1");
+  check(all.suggestedFilename() === "floor1_medium_seed4242.zip" && zipped.readUInt32LE(0) === 0x04034b50
+        && entries === mapCount + 2 && listed.includes("floor1_medium_seed4242/floor1_medium_seed4242.floor.json")
+        && listed.includes("floor1_medium_seed4242/floor1_medium_seed4242_room_A.png"),
+        `Save everything downloads a zip of the write-up, the floor file and ${mapCount} maps (${entries} files)`);
+  await page.click("#tab-map");
+  const [png] = await Promise.all([page.waitForEvent("download"), page.click("#save-png")]);
+  const pngFile = join(keep, png.suggestedFilename());
+  await png.saveAs(pngFile);
+  check(png.suggestedFilename() === "floor1_medium_seed4242.png"
+        && (await readFile(pngFile)).subarray(1, 4).toString() === "PNG", "Save this map (PNG) downloads a PNG");
 
   // Re-roll rooms: from the write-up saved as Markdown, one neighborhood's rooms.
   await page.click("#tab-text");
@@ -434,6 +495,74 @@ try {
   const at1 = await page.$eval("#map-img", (i) => [i.getBoundingClientRect().left, i.getBoundingClientRect().top]);
   check(Math.abs(at1[0] - at0[0] - 60) < 1 && Math.abs(at1[1] - at0[1] + 50) < 1,
         `a drag from the blank around the map moves it (${(at1[0] - at0[0]).toFixed(1)}, ${(at1[1] - at0[1]).toFixed(1)})`);
+
+  // Campaign and Leaderboard, the desktop app's tabs: a campaign carries its
+  // groups from floor to floor, takes the DM's changes, is kept for a reload,
+  // and saves as the file the desktop app reads.
+  const sayingIn = (id, part) => page.waitForFunction(
+    ([i, w]) => document.getElementById(i).textContent.includes(w), [id, part], { timeout: 60_000 });
+  await page.click("#tab-campaign");
+  check(await page.$eval("#camp-groups", (c) => c.hidden) && await page.$eval("#camp-save", (b) => b.disabled),
+        "the Campaign tab starts with no campaign open");
+  await axeCheck("the Campaign tab, no campaign open");
+  await page.click("#camp-new");
+  await sayingIn("camp-status", "Started campaign.json.");
+  await page.selectOption("#floor", "1");
+  await page.fill("#seed", "1");
+  await page.click("#generate");
+  await generated("Floor 1, medium, seed 1:");
+  await page.selectOption("#floor", "4");
+  await page.fill("#seed", "2");
+  await page.click("#generate");
+  await generated("Floor 4, medium, seed 2:");
+  check((await said()).includes("carried in from the campaign"), `a floor carries the campaign's groups in ("${await said()}")`);
+  await page.click("#tab-campaign");
+  const groups = await page.$$eval("#camp-teams button", (b) => b.length);
+  await page.click("#camp-teams button >> nth=0");
+  at = await focused();
+  check(groups >= 2 && at.id === "camp-sel", `${groups} groups listed; picking one moves focus to its name ("${at.text}")`);
+  await page.fill("#camp-standing", "us");
+  await page.click("#camp-form button[type=submit]");
+  await sayingIn("camp-edit-status", "the players' own group");
+  check((await page.$eval("#camp-teams button[aria-current=true]", (b) => b.textContent)).includes("us ·"),
+        "a group's standing changes to us");
+  await page.click("#camp-add summary");
+  await page.fill("#ca-name", "The Smoke Testers");
+  await page.click("#camp-add-form button[type=submit]");
+  await sayingIn("camp-add-status", "Added The Smoke Testers");
+  check(await page.$$eval("#camp-teams button", (b) => b.length) === groups + 1, "a group met at the table is added");
+  await axeCheck("the Campaign tab, a group picked and one added");
+  await page.click("#tab-board");
+  const ranked = await page.$$eval("#board-list button", (b) => b.length);
+  await page.click("#board-list button >> nth=0");
+  await page.fill("#board-rank", "3");
+  await page.click("#board-apply");
+  await sayingIn("board-status", ": rank 3, x");
+  page.once("dialog", (d) => d.accept());
+  await page.click("#board-kill");
+  await sayingIn("board-status", "is dead, on floor 4");
+  check(ranked >= 10 && await page.$eval("#board-kill", (b) => b.disabled) && !(await page.$eval("#board-revive", (b) => b.disabled)),
+        `the leaderboard lists ${ranked}, and a crawler is re-ranked and killed`);
+  await page.click("#board-revive");
+  await sayingIn("board-status", "is alive again");
+  await axeCheck("the Leaderboard tab, a crawler picked");
+  await page.click("#tab-campaign");
+  const [campFile] = await Promise.all([page.waitForEvent("download"), page.click("#camp-save")]);
+  const campPath = join(keep, campFile.suggestedFilename());
+  await campFile.saveAs(campPath);
+  const camp = JSON.parse(await readFile(campPath, "utf8"));
+  check(campFile.suggestedFilename() === "campaign.json" && camp.version === 1
+        && camp.teams.some((t) => t.name === "The Smoke Testers") && camp.teams.some((t) => t.disposition === "us")
+        && camp.leaderboard.length >= 10, "Save campaign file downloads the campaign, changes and all");
+  await page.reload();
+  await page.waitForSelector("#generate:not([disabled])", { timeout: 180_000 });
+  check((await page.$eval("#camp-info", (p) => p.textContent)).startsWith("campaign.json:")
+        && await page.$$eval("#camp-teams button", (b) => b.length) === groups + 1, "a reload brings the campaign back");
+  page.once("dialog", (d) => d.accept());
+  await page.click("#tab-campaign");
+  await page.click("#camp-close");
+  await sayingIn("camp-status", "Campaign closed");
+  check(await page.$eval("#camp-groups", (c) => c.hidden), "Close puts the campaign away");
 
   // A bad seed is reported, not crashed on.
   await page.fill("#seed", "abc");

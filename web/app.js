@@ -122,7 +122,11 @@ async function boot() {
   $("generate").textContent = "Generate";
   $("open").disabled = false;
   $("open-floor").disabled = false;
+  $("camp-new").disabled = false;
+  $("camp-open").disabled = false;
   $("reroll-go").disabled = !$("reroll-file").files.length;
+  // The campaign before the floor: a floor brought back doesn't touch it.
+  restoreCampaign();
   if (!restoreShown()) setStatus("Ready. Pick a floor and generate.");
 }
 
@@ -132,11 +136,24 @@ function fillControls() {
   const saved = recall("floor");
   if (saved && meta.floors.some((f) => String(f.number) === saved)) floor.value = saved;
   for (const r of meta.regions) $("region").add(new Option(r, r));
+  for (const f of meta.factions9) {
+    $("winner").add(new Option(f, f));
+    $("runner-up").add(new Option(f, f));
+  }
   for (const t of meta.tiers) $("tier").add(new Option(t, t));
   $("tier").value = "Silver";
   for (const t of meta.types) $("box-types").append(new Option(t));
   for (const t of meta.threats) $("threat").add(new Option(t, t));
   $("roller-seed").textContent = `Box session seed ${meta.roller_seed}. Newest boxes at the top.`;
+  // The campaign's lists. Standing takes any wording: the listed ones come
+  // with reaction text, and "us" is the players' own group.
+  $("standings").replaceChildren(...meta.standings.map((s) => new Option(s)));
+  for (const id of ["camp-outcome", "ca-outcome"]) {
+    $(id).replaceChildren(...meta.outcomes.map((o) => new Option(o, o)));
+  }
+  $("ca-outcome").value = "steady";
+  $("ba-classes").replaceChildren(...meta.classes.map((c) => new Option(c)));
+  $("ba-rank").value = meta.board_size;
   syncFloor();
   const size = recall("size");
   if (size && [...$("size").options].some((o) => o.value === size)) $("size").value = size;
@@ -172,10 +189,16 @@ async function generate() {
   await new Promise((r) => setTimeout(r, 30));
   try {
     const f = currentFloor();
+    // Every option goes; web_api passes on only the ones this floor has.
     const res = call("generate", {
       floor: f.number, size: $("size").value, seed: $("seed").value,
       days: f.options.includes("days") ? $("days").value : "",
       scaling: $("scaling").value, region: $("region").value,
+      boss_stairs: $("boss-stairs").checked, stair_chance: $("stair-chance").value,
+      borough_rate: $("borough-rate").value,
+      warlords: $("warlords").value, wildcard: $("wildcard").checked,
+      winner: $("winner").value, runner_up: $("runner-up").value,
+      vehicle: $("vehicle").value, party: $("party").value,
     });
     if (res.error) {
       setStatus(res.error, true);
@@ -184,9 +207,18 @@ async function generate() {
     remember("floor", String(res.floor));
     remember("size", $("size").value);
     const n = res.maps.length;
+    // With a campaign open, the floor carried its groups in, and moved it on.
+    let carried = "";
+    if (res.campaign) {
+      showCampaign(res.campaign);
+      carried = res.carried
+        ? ` ${res.carried} group${res.carried === 1 ? "" : "s"} carried in from the campaign.`
+        : " The campaign carries this floor's groups on.";
+      setStatus(`Floor ${res.floor}:${carried}`, false, "camp-status");
+    }
     // Read aloud, so in words: "floor4_medium_seed4242" is spelled out.
     show(res, `Floor ${res.floor}, ${res.size}, seed ${res.seed}: ${n} map${n === 1 ? "" : "s"} `
-              + "and a write-up. Same seed, same floor.");
+              + `and a write-up. Same seed, same floor.${carried}`);
   } catch (e) {
     setStatus(`Something went wrong: ${e.message}`, true);
     console.error(e);
@@ -212,6 +244,7 @@ function show(res, words, { scroll = true, keep = true, where = "status", editAt
     $("seed").value = res.seed;
   }
   $("save-floor").disabled = res.kind !== "floor";
+  $("save-all").disabled = false;
   showMaps();
   if (editAt && mapAt > 0 && mapAt < res.maps.length) {
     $("map-pick").value = String(mapAt);
@@ -344,6 +377,7 @@ function showMaps() {
   pick.replaceChildren(...result.maps.map((m, i) => new Option(m.title, i)));
   pick.hidden = result.maps.length < 2;
   $("save-svg").disabled = false;
+  $("save-png").disabled = false;
   showMap(0);
 }
 
@@ -402,12 +436,141 @@ function wheelZoom(e) {
   panzoom.zoomToPoint(panzoom.getScale() * factor, { clientX: e.clientX, clientY: e.clientY });
 }
 
-// The + and - buttons zoom about the middle of what is on show, not the map's.
+// The + and - buttons zoom about the middle of what is on show, not the map's;
+// 1:1 goes to the map's own size about the same point.
 function zoomStep(direction) {
   if (!panzoom) return;
+  zoomTo(panzoom.getScale() * Math.exp(0.25 * direction));
+}
+
+function zoomTo(scale) {
+  if (!panzoom) return;
   const view = $("viewer").getBoundingClientRect();
-  panzoom.zoomToPoint(panzoom.getScale() * Math.exp(0.25 * direction),
-                      { clientX: view.left + view.width / 2, clientY: view.top + view.height / 2 });
+  panzoom.zoomToPoint(scale, { clientX: view.left + view.width / 2, clientY: view.top + view.height / 2 });
+}
+
+// -- saving ---------------------------------------------------------------------------
+// The desktop app's Save output: the write-up, the floor file and every map as
+// PNG, here in one .zip of a folder. The browser draws each map itself.
+
+// A map as PNG: twice its size for a phone's screen, unless that would pass
+// what a browser's canvas can hold (about 16 million pixels on a phone).
+function pngBlob(svg) {
+  return new Promise((resolve, reject) => {
+    const [w, h] = svgSize(svg);
+    const scale = w * h * 4 <= 16_000_000 ? 2 : 1;
+    const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
+    const img = new Image();
+    img.onload = () => {
+      const canvas = Object.assign(document.createElement("canvas"),
+                                   { width: Math.round(w * scale), height: Math.round(h * scale) });
+      canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("the browser couldn't draw the map"))),
+                    "image/png");
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("the browser couldn't read the map"));
+    };
+    img.src = url;
+  });
+}
+
+// A .zip of files stored as they are: the maps are PNG, already compressed, and
+// a zip needs no more than this to open anywhere. files: [name, Uint8Array].
+const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
+  let c = n;
+  for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+  return c >>> 0;
+});
+
+function crc32(bytes) {
+  let c = 0xffffffff;
+  for (const b of bytes) c = CRC_TABLE[(c ^ b) & 0xff] ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+function zipFiles(files) {
+  const now = new Date();
+  const time = (now.getHours() << 11) | (now.getMinutes() << 5) | (now.getSeconds() >> 1);
+  const date = ((now.getFullYear() - 1980) << 9) | ((now.getMonth() + 1) << 5) | now.getDate();
+  const names = new TextEncoder();
+  const parts = [];
+  const central = [];
+  let offset = 0;
+  for (const [name, data] of files) {
+    const n = names.encode(name);
+    const crc = crc32(data);
+    // The local header, then the file; the central directory says the same again.
+    const head = new DataView(new ArrayBuffer(30));
+    const dir = new DataView(new ArrayBuffer(46));
+    for (const [v, at] of [[head, 0], [dir, 2]]) {
+      v.setUint16(4 + at, 20, true);                 // version needed
+      v.setUint16(6 + at, 0x0800, true);             // names in UTF-8
+      v.setUint16(10 + at, time, true);
+      v.setUint16(12 + at, date, true);
+      v.setUint32(14 + at, crc, true);
+      v.setUint32(18 + at, data.length, true);       // stored: the same size twice
+      v.setUint32(22 + at, data.length, true);
+      v.setUint16(26 + at, n.length, true);
+    }
+    head.setUint32(0, 0x04034b50, true);
+    dir.setUint32(0, 0x02014b50, true);
+    dir.setUint16(4, 20, true);                      // made by
+    dir.setUint32(42, offset, true);
+    parts.push(new Uint8Array(head.buffer), n, data);
+    central.push(new Uint8Array(dir.buffer), n);
+    offset += 30 + n.length + data.length;
+  }
+  const size = central.reduce((sum, p) => sum + p.length, 0);
+  const end = new DataView(new ArrayBuffer(22));
+  end.setUint32(0, 0x06054b50, true);
+  end.setUint16(8, files.length, true);
+  end.setUint16(10, files.length, true);
+  end.setUint32(12, size, true);
+  end.setUint32(16, offset, true);
+  return new Blob([...parts, ...central, new Uint8Array(end.buffer)], { type: "application/zip" });
+}
+
+async function saveEverything() {
+  if (!result) return;
+  const btn = $("save-all");
+  btn.disabled = true;
+  const text = new TextEncoder();
+  const base = result.basename;
+  const files = [[`${base}/${base}.md`, text.encode(result.markdown)]];
+  try {
+    if (result.kind === "floor") {
+      const file = call("save_floor", "");
+      if (!file.error) files.push([`${base}/${file.name}`, text.encode(file.text)]);
+    }
+    const n = result.maps.length;
+    for (const [i, m] of result.maps.entries()) {
+      if (i % 5 === 0) {
+        setStatus(`Saving: drawing map ${i + 1} of ${n} as PNG…`);
+        await new Promise((r) => setTimeout(r, 0));
+      }
+      files.push([`${base}/${base}${m.suffix}.png`, new Uint8Array(await (await pngBlob(m.svg)).arrayBuffer())]);
+    }
+    download(`${base}.zip`, zipFiles(files), "application/zip");
+    setStatus(`Saved ${base}.zip: the write-up, ${result.kind === "floor" ? "the floor file " : ""}`
+              + `and ${n} map${n === 1 ? "" : "s"} as PNG, in a folder.`);
+  } catch (e) {
+    setStatus(`Couldn't save: ${e.message}`, true);
+    console.error(e);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function saveMapPng() {
+  const m = mapNow();
+  try {
+    download(`${result.basename}${m.suffix}.png`, await pngBlob(m.svg), "image/png");
+  } catch (e) {
+    setStatus(`Couldn't save that map as PNG: ${e.message}`, true);
+  }
 }
 
 // -- the write-up -------------------------------------------------------------------
@@ -502,8 +665,30 @@ function openBoxes() {
   const card = Object.assign(document.createElement("div"), { className: "box" });
   card.append(...markdown(res.markdown).childNodes);
   $("opened").prepend(card);
+  openedText.unshift(res.markdown);
+  $("opened-tools").hidden = false;
   markScrollers();
   setStatus(`Opened ${res.count} × ${res.label} for Floor ${res.floor}.`);
+}
+
+// Every box opened this visit, newest first, as Markdown: what Copy copies.
+let openedText = [];
+
+async function copyBoxes() {
+  try {
+    await navigator.clipboard.writeText(openedText.join("\n").trim());
+    setStatus("Opened boxes copied to the clipboard.");
+  } catch {
+    setStatus("This browser wouldn't let the page copy. Select the boxes' text and copy that.", true);
+  }
+}
+
+function clearBoxes() {
+  openedText = [];
+  $("opened").replaceChildren();
+  $("opened-tools").hidden = true;
+  setStatus("Cleared the opened boxes.");
+  $("open").focus();
 }
 
 // -- the editor ---------------------------------------------------------------------
@@ -848,6 +1033,246 @@ function wireMapTaps() {
   });
 }
 
+// -- the campaign -------------------------------------------------------------------
+// The desktop app's Campaign and Leaderboard tabs. The campaign is kept in this
+// browser, as the floor on show is; Save campaign file downloads the file the
+// desktop app reads and writes, to keep anywhere or carry on there.
+
+let campaign = { open: false };    // as web_api gives it
+let campSelected = null;           // the group picked, by name
+let boardSelected = null;          // the leaderboard crawler picked, by name
+const CAMPAIGN = "dccmapgen.campaign";
+
+function keepCampaign() {
+  try {
+    if (campaign.open) localStorage.setItem(CAMPAIGN, JSON.stringify({ name: campaign.name, text: campaign.text }));
+    else localStorage.removeItem(CAMPAIGN);
+  } catch { /* private mode: kept for this visit only */ }
+}
+
+function restoreCampaign() {
+  let kept = null;
+  try { kept = JSON.parse(localStorage.getItem(CAMPAIGN) || "null"); } catch { kept = null; }
+  const res = kept && typeof kept.text === "string"
+    ? call("campaign_open", { text: kept.text, name: kept.name }) : null;
+  showCampaign(res && !res.error ? res : call("campaign_state", ""));
+}
+
+// A campaign call's answer: drawn on both tabs, kept for a reload, and what it
+// did said beside where it was done. False if it was refused.
+function campaignDone(res, where) {
+  if (res.open !== undefined) showCampaign(res);
+  if (res.error) {
+    setStatus(res.error, true, where);
+    return false;
+  }
+  if (res.status) setStatus(res.status, false, where);
+  return true;
+}
+
+function showCampaign(c) {
+  campaign = c;
+  keepCampaign();
+  const open = c.open;
+  $("camp-info").textContent = open
+    ? `${c.name}: ${c.alive} of ${c.met} group${c.met === 1 ? "" : "s"} alive. Every floor you `
+      + "generate carries them on. It's kept in this browser; Save campaign file keeps a copy "
+      + "anywhere, and the desktop app opens it."
+    : "No campaign open. Start one and the groups of other crawlers carry from each floor you "
+      + "generate to the next, with their standing, their crawlers and their fate. A campaign "
+      + "file from the desktop app opens here too.";
+  $("camp-save").disabled = !open;
+  $("camp-close").disabled = !open;
+  $("camp-groups").hidden = !open;
+  $("camp-add").hidden = !open;
+  const teams = open ? c.teams : [];
+  if (!teams.some((t) => t.name === campSelected)) campSelected = null;
+  $("camp-empty").hidden = teams.length > 0;
+  $("camp-teams").replaceChildren(...teams.map(teamItem));
+  // Met on floor: the deepest floor the campaign has seen, as the desktop app
+  // offers it, unless the form is open and may have been typed in.
+  if (open && !$("camp-add").open) $("ca-floor").value = c.met_floor;
+  showTeam();
+  showBoard();
+}
+
+function teamItem(t) {
+  const facts = [t.standing,
+    t.crawlers ? `${t.crawlers} crawler${t.crawlers === 1 ? "" : "s"}` : "not counted",
+    `met on floor ${t.met}`, t.seen ? `last seen on floor ${t.seen}` : "not seen yet"].join(" · ");
+  const b = el("button", { type: "button", className: t.alive ? "" : "gone" },
+    el("span", { className: "who", textContent: t.shown }),
+    el("small", { textContent: facts }), el("small", { textContent: t.fate }));
+  if (t.name === campSelected) b.setAttribute("aria-current", "true");
+  b.addEventListener("click", () => {
+    campSelected = t.name;
+    showCampaign(campaign);
+    showTeam(true);
+  });
+  return el("li", {}, b);
+}
+
+// The group picked, in a form: what the desktop app's Selected group holds.
+function showTeam(focus = false) {
+  const t = campaign.open && campaign.teams.find((x) => x.name === campSelected);
+  $("camp-edit").hidden = !t;
+  if (!t) return;
+  $("camp-sel").textContent = t.shown;
+  $("camp-about").replaceChildren(t.about, ...(t.party ? [el("br"), t.party] : []));
+  $("camp-standing").value = t.standing;
+  $("camp-crawlers").value = t.crawlers ?? "";
+  $("camp-outcome").value = t.outcome;
+  $("camp-report").value = t.report;
+  setStatus("", false, "camp-edit-status");
+  if (focus) goTo($("camp-sel"));
+}
+
+function saveTeam(e) {
+  e.preventDefault();
+  campaignDone(call("team_save", {
+    name: campSelected, standing: $("camp-standing").value, crawlers: $("camp-crawlers").value,
+    outcome: $("camp-outcome").value, report: $("camp-report").value,
+  }), "camp-edit-status");
+}
+
+function addTeam(e) {
+  e.preventDefault();
+  const res = call("team_add", {
+    name: $("ca-name").value, origin: $("ca-origin").value, crawlers: $("ca-crawlers").value,
+    floor: $("ca-floor").value, standing: $("ca-standing").value, outcome: $("ca-outcome").value,
+    status: $("ca-status").value,
+  });
+  if (res.selected) campSelected = res.selected;
+  if (campaignDone(res, "camp-add-status")) {
+    for (const id of ["ca-name", "ca-origin", "ca-crawlers", "ca-status"]) $(id).value = "";
+    $("ca-floor").value = campaign.met_floor;
+  }
+}
+
+// Starting or opening a campaign puts away the one open, which this browser
+// then forgets: ask first.
+function replacing(what) {
+  return !campaign.open || window.confirm(`${what} ${campaign.name} is put away, and this browser `
+    + "forgets it; it's kept only if you've saved its file.");
+}
+
+function newCampaign() {
+  if (!replacing("Start a new campaign?")) return;
+  campSelected = boardSelected = null;
+  campaignDone(call("campaign_new", ""), "camp-status");
+}
+
+async function openCampaign(file) {
+  if (!replacing(`Open ${file.name}?`)) return;
+  campSelected = boardSelected = null;
+  campaignDone(call("campaign_open", { text: await file.text(), name: file.name }), "camp-status");
+}
+
+function saveCampaign() {
+  download(campaign.name, campaign.text, "application/json");
+  setStatus(`Saved ${campaign.name}. Open it here or in the desktop app to carry on.`, false, "camp-status");
+}
+
+function closeCampaign() {
+  if (!window.confirm(`Close ${campaign.name}? This browser forgets it; Save campaign file first `
+                      + "to keep it.")) return;
+  campSelected = boardSelected = null;
+  campaignDone(call("campaign_close", ""), "camp-status");
+}
+
+// -- the leaderboard ----------------------------------------------------------------
+
+function showBoard() {
+  const c = campaign;
+  $("board-info").textContent = c.board_info;
+  const rows = c.open ? c.board : [];
+  if (!rows.some((r) => r.name === boardSelected)) boardSelected = null;
+  $("board-list").replaceChildren(...rows.map(rankedItem));
+  $("board-add").hidden = !(c.open && c.board_floor);
+  if (c.open) {
+    const team = $("ba-team");
+    const keep = team.value;
+    team.replaceChildren(new Option("none", ""), ...c.groups.map((g) => new Option(g.name, g.name)));
+    team.value = c.groups.some((g) => g.name === keep) ? keep : "";
+    groupPicked(false);
+  }
+  showRanked();
+}
+
+function rankedItem(r) {
+  const head = r.rank ? `${r.rank}. ${r.shown}` : `${r.shown} (${r.alive ? "off the list" : "dead"})`;
+  const facts = [r.label, `×${r.multiplier}`, r.bounty ? `bounty ${r.bounty} gold` : ""]
+    .filter(Boolean).join(" · ");
+  const b = el("button", { type: "button", className: r.rank ? "" : "gone" },
+    el("span", { className: "who", textContent: head }),
+    el("small", { textContent: facts }), el("small", { textContent: r.story }));
+  if (r.name === boardSelected) b.setAttribute("aria-current", "true");
+  b.addEventListener("click", () => {
+    boardSelected = r.name;
+    showBoard();
+    showRanked(true);
+  });
+  return el("li", {}, b);
+}
+
+function showRanked(focus = false) {
+  const r = campaign.open && campaign.board.find((x) => x.name === boardSelected);
+  $("board-edit").hidden = !r;
+  if (!r) return;
+  $("board-sel").textContent = r.rank ? `${r.rank}. ${r.shown}` : r.shown;
+  $("board-about").replaceChildren(`${r.label ? `${r.label} ` : ""}(${r.status})`, el("br"), r.story);
+  $("board-rank").value = r.rank ?? "";
+  $("board-mult").value = r.multiplier;
+  for (const id of ["board-rank", "board-mult", "board-apply", "board-kill"]) $(id).disabled = !r.alive;
+  $("board-revive").disabled = r.alive;
+  setStatus("", false, "board-status");
+  if (focus) goTo($("board-sel"));
+}
+
+function saveRanked(e) {
+  e.preventDefault();
+  campaignDone(call("board_save", { name: boardSelected, rank: $("board-rank").value,
+                                   multiplier: $("board-mult").value }), "board-status");
+}
+
+function killRanked() {
+  const r = campaign.board.find((x) => x.name === boardSelected);
+  if (r && window.confirm(r.kill)) campaignDone(call("board_kill", r.name), "board-status");
+}
+
+function reviveRanked() {
+  campaignDone(call("board_revive", boardSelected), "board-status");
+}
+
+// A crawler from a group is one of its members: its races to pick from, the
+// class coming with them. The players' own group, or none, takes any.
+function groupPicked(fill = true) {
+  const g = campaign.open && campaign.groups.find((x) => x.name === $("ba-team").value);
+  const members = g && !g.us ? g.members : null;
+  $("ba-races").replaceChildren(...(members ? members.map((m) => m.race) : meta.races).map((r) => new Option(r)));
+  $("ba-class").readOnly = Boolean(members);
+  if (members && fill) {
+    $("ba-race").value = members[0].race;
+    $("ba-class").value = members[0].class;
+  }
+}
+
+function racePicked() {
+  const g = campaign.groups.find((x) => x.name === $("ba-team").value);
+  const m = g && !g.us && g.members.find((x) => x.race === $("ba-race").value);
+  if (m) $("ba-class").value = m.class;
+}
+
+function addRanked(e) {
+  e.preventDefault();
+  const res = call("board_add", {
+    name: $("ba-name").value, team: $("ba-team").value, race: $("ba-race").value,
+    class: $("ba-class").value, rank: $("ba-rank").value, multiplier: $("ba-mult").value,
+  });
+  if (res.selected) boardSelected = res.selected;
+  if (campaignDone(res, "board-add-status")) $("ba-name").value = "";
+}
+
 // -- tabs and wiring ----------------------------------------------------------------
 
 function selectTab(tab) {
@@ -890,10 +1315,16 @@ function wire() {
     if (!$("panel-map").hidden) fit();
     markScrollers();
   });
+  $("zoom-one").addEventListener("click", () => zoomTo(1));
   $("save-svg").addEventListener("click", () => {
     const m = result.maps[+$("map-pick").value || 0];
     download(`${result.basename}${m.suffix}.svg`, m.svg, "image/svg+xml");
   });
+  $("save-png").addEventListener("click", saveMapPng);
+  $("save-all").addEventListener("click", saveEverything);
+  for (const id of ["stair-chance", "borough-rate"]) {
+    $(id).addEventListener("input", () => { $(`${id}-out`).textContent = $(id).value; });
+  }
   $("save-md").addEventListener("click",
     () => download(`${result.basename}.md`, result.markdown, "text/markdown"));
   $("map-words").addEventListener("click", readMap);
@@ -926,6 +1357,28 @@ function wire() {
   }
   $("liked").addEventListener("input", showOdds);
   $("open").addEventListener("click", openBoxes);
+  $("copy-boxes").addEventListener("click", copyBoxes);
+  $("clear-boxes").addEventListener("click", clearBoxes);
+  $("camp-new").addEventListener("click", newCampaign);
+  $("camp-open").addEventListener("click", () => $("camp-file").click());
+  $("camp-file").addEventListener("change", (e) => {
+    const file = e.target.files[0];
+    e.target.value = "";                   // the same file can be opened again
+    if (file) openCampaign(file);
+  });
+  $("camp-save").addEventListener("click", saveCampaign);
+  $("camp-close").addEventListener("click", closeCampaign);
+  $("camp-form").addEventListener("submit", saveTeam);
+  $("camp-add-form").addEventListener("submit", addTeam);
+  $("camp-add").addEventListener("toggle", () => {
+    if ($("camp-add").open && campaign.open) $("ca-floor").value = campaign.met_floor;
+  });
+  $("board-form").addEventListener("submit", saveRanked);
+  $("board-kill").addEventListener("click", killRanked);
+  $("board-revive").addEventListener("click", reviveRanked);
+  $("board-add-form").addEventListener("submit", addRanked);
+  $("ba-team").addEventListener("change", () => groupPicked());
+  $("ba-race").addEventListener("change", racePicked);
 }
 
 // Offline and add-to-home-screen. A new release installs a new service worker;

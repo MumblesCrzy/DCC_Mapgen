@@ -53,6 +53,55 @@
           <span>Folklore region</span>
           <select id="region"><option value="">random</option></select>
         </label>
+        <div data-option="stairs">
+          <label class="check"><input type="checkbox" id="boss-stairs" checked> Stairwells in borough and city boss chambers</label>
+          <label class="field">
+            <span>Neighborhood stairwell chance: <output id="stair-chance-out" for="stair-chance">100</output>%</span>
+            <input id="stair-chance" type="range" min="0" max="100" step="1" value="100">
+          </label>
+          <label class="field">
+            <span>Borough boss rate: <output id="borough-rate-out" for="borough-rate">100</output>%</span>
+            <input id="borough-rate" type="range" min="0" max="100" step="1" value="100">
+          </label>
+        </div>
+        <div data-option="floor9">
+          <label class="field">
+            <span>Warlord names</span>
+            <select id="warlords">
+              <option value="canon">canon</option>
+              <option value="generated">generated</option>
+            </select>
+          </label>
+          <label class="check"><input type="checkbox" id="wildcard"> Wildcard faction instead of the crawler team</label>
+          <div class="row">
+            <label class="field">
+              <span>Projected winner</span>
+              <select id="winner"><option value="">the crawler team</option></select>
+            </label>
+            <label class="field">
+              <span>Projected runner-up</span>
+              <select id="runner-up"><option value="">rolled</option></select>
+            </label>
+          </div>
+        </div>
+        <div class="row" data-option="floor10">
+          <label class="field">
+            <span>Vehicle</span>
+            <select id="vehicle">
+              <option value="">random</option>
+              <option value="mechanical">mechanical</option>
+              <option value="biological">biological</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Party size</span>
+            <select id="party">
+              <option>2</option>
+              <option>3</option>
+              <option>4</option>
+            </select>
+          </label>
+        </div>
         <p class="hint" id="no-options">This floor has no other options.</p>
       </details>
       <button id="generate" class="primary" disabled>Loading…</button>
@@ -60,6 +109,7 @@
         <button id="open-floor" class="secondary" disabled>Open a floor file</button>
         <button id="save-floor" class="secondary" disabled>Save floor file</button>
       </div>
+      <button id="save-all" class="secondary" disabled>Save everything (.zip)</button>
       <input type="file" id="floor-file" accept=".json,application/json" hidden>
       <details id="reroll">
         <summary>Re-roll one neighborhood's rooms</summary>
@@ -89,6 +139,8 @@
       <button role="tab" id="tab-text" aria-controls="panel-text" aria-selected="false" tabindex="-1">Write-up</button>
       <button role="tab" id="tab-loot" aria-controls="panel-loot" aria-selected="false" tabindex="-1">Loot boxes</button>
       <button role="tab" id="tab-edit" aria-controls="panel-edit" aria-selected="false" tabindex="-1">Edit</button>
+      <button role="tab" id="tab-campaign" aria-controls="panel-campaign" aria-selected="false" tabindex="-1">Campaign</button>
+      <button role="tab" id="tab-board" aria-controls="panel-board" aria-selected="false" tabindex="-1">Leaderboard</button>
     </nav>
 
     <section class="panel" id="panel-map" role="tabpanel" aria-labelledby="tab-map">
@@ -97,6 +149,7 @@
         <div class="zoom">
           <button id="zoom-out" aria-label="Zoom out">−</button>
           <button id="zoom-fit">Fit</button>
+          <button id="zoom-one" aria-label="Actual size">1:1</button>
           <button id="zoom-in" aria-label="Zoom in">+</button>
         </div>
       </div>
@@ -113,7 +166,10 @@
         </div>
       </div>
       <button id="map-words" class="secondary" hidden>Read this map as text</button>
-      <button id="save-svg" class="secondary" disabled>Save this map (SVG)</button>
+      <div class="file-row">
+        <button id="save-png" class="secondary" disabled>Save this map (PNG)</button>
+        <button id="save-svg" class="secondary" disabled>Save this map (SVG)</button>
+      </div>
     </section>
 
     <section class="panel" id="panel-text" role="tabpanel" aria-labelledby="tab-text" hidden>
@@ -156,6 +212,10 @@
         </label>
         <button id="open" class="primary" disabled>Open</button>
         <p class="hint" id="roller-seed"></p>
+        <div class="file-row" id="opened-tools" hidden>
+          <button id="copy-boxes" class="secondary">Copy</button>
+          <button id="clear-boxes" class="secondary">Clear</button>
+        </div>
       </div>
       <div class="opened" id="opened"></div>
     </section>
@@ -180,6 +240,118 @@
         </form>
         <p class="status" id="edit-status" role="status"></p>
       </div>
+    </section>
+
+    <section class="panel" id="panel-campaign" role="tabpanel" aria-labelledby="tab-campaign" hidden>
+      <div class="card">
+        <h2>Campaign</h2>
+        <p class="hint" id="camp-info"></p>
+        <div class="file-row">
+          <button id="camp-new" class="secondary" disabled>New campaign</button>
+          <button id="camp-open" class="secondary" disabled>Open campaign file</button>
+        </div>
+        <div class="file-row">
+          <button id="camp-save" class="secondary" disabled>Save campaign file</button>
+          <button id="camp-close" class="secondary" disabled>Close campaign</button>
+        </div>
+        <input type="file" id="camp-file" accept=".json,application/json" hidden>
+        <p class="status" id="camp-status" role="status"></p>
+      </div>
+      <div class="card" id="camp-groups" hidden>
+        <h2>Groups</h2>
+        <p class="hint" id="camp-empty">No groups yet: the next floor you generate deals the first ones.</p>
+        <ul class="roster" id="camp-teams"></ul>
+      </div>
+      <div class="card" id="camp-edit" hidden>
+        <h2 id="camp-sel" tabindex="-1"></h2>
+        <p class="hint" id="camp-about"></p>
+        <form id="camp-form">
+          <div class="row">
+            <label class="field"><span>Standing</span><input id="camp-standing" list="standings" autocomplete="off"></label>
+            <label class="field"><span>Crawlers</span><input id="camp-crawlers" inputmode="numeric" placeholder="not counted" autocomplete="off"></label>
+          </div>
+          <label class="field"><span>Fate</span><select id="camp-outcome"></select></label>
+          <label class="field"><span>Latest report</span><input id="camp-report" autocomplete="off"></label>
+          <button type="submit" class="primary">Save</button>
+        </form>
+        <p class="status" id="camp-edit-status" role="status"></p>
+        <p class="hint">All of it carries onto the next floor you generate; that floor deals every
+          living group a fresh report, except one standing "us": the players' own group, which it
+          leaves to you. Fewer crawlers drops the most recent to join.</p>
+      </div>
+      <details class="card" id="camp-add" hidden>
+        <summary>Add a group met at the table</summary>
+        <form id="camp-add-form">
+          <label class="field"><span>Name</span><input id="ca-name" autocomplete="off"></label>
+          <label class="field"><span>Formed from</span><input id="ca-origin" autocomplete="off"></label>
+          <div class="row">
+            <label class="field"><span>Crawlers</span><input id="ca-crawlers" inputmode="numeric" placeholder="the generator's" autocomplete="off"></label>
+            <label class="field"><span>Met on floor</span><input id="ca-floor" inputmode="numeric" autocomplete="off"></label>
+          </div>
+          <div class="row">
+            <label class="field"><span>Standing</span><input id="ca-standing" list="standings" value="wary" autocomplete="off"></label>
+            <label class="field"><span>Fate</span><select id="ca-outcome"></select></label>
+          </div>
+          <label class="field"><span>Latest report</span><input id="ca-status" autocomplete="off"></label>
+          <button type="submit" class="primary">Add</button>
+          <p class="status" id="camp-add-status" role="status"></p>
+          <p class="hint">Formed from reads as "formed from a hen party on a zeppelin tour"; leave it
+            blank if nobody knows. Leave Crawlers blank and the generator sizes the group, as it does
+            any other; met on floor 3 or deeper, a count is dealt races and classes straight away.
+            Standing "us" is the players' own group: the generator deals it nothing.</p>
+        </form>
+      </details>
+      <datalist id="standings"></datalist>
+    </section>
+
+    <section class="panel" id="panel-board" role="tabpanel" aria-labelledby="tab-board" hidden>
+      <div class="card">
+        <h2>Dungeon Leaderboard</h2>
+        <p class="hint" id="board-info"></p>
+        <ul class="roster" id="board-list"></ul>
+      </div>
+      <div class="card" id="board-edit" hidden>
+        <h2 id="board-sel" tabindex="-1"></h2>
+        <p class="hint" id="board-about"></p>
+        <form id="board-form">
+          <div class="row">
+            <label class="field"><span>Rank</span><input id="board-rank" inputmode="numeric" placeholder="off the list" autocomplete="off"></label>
+            <label class="field"><span>Multiplier</span><input id="board-mult" inputmode="numeric" autocomplete="off"></label>
+          </div>
+          <button type="submit" class="primary" id="board-apply">Save</button>
+        </form>
+        <div class="file-row">
+          <button id="board-kill" class="secondary">Killed…</button>
+          <button id="board-revive" class="secondary">Bring back</button>
+        </div>
+        <p class="status" id="board-status" role="status"></p>
+        <p class="hint">Clear the rank to take a crawler off the list; give a former one a rank to
+          bring them back, multiplier remembered. Everyone below a new rank moves down one, and tenth
+          is pushed off. Each floor generated adds one to the multiplier of everyone still on the list.</p>
+      </div>
+      <details class="card" id="board-add" hidden>
+        <summary>Add a crawler</summary>
+        <form id="board-add-form">
+          <label class="field"><span>Name</span><input id="ba-name" autocomplete="off"></label>
+          <label class="field"><span>Group</span><select id="ba-team"></select></label>
+          <div class="row">
+            <label class="field"><span>Race</span><input id="ba-race" list="ba-races" autocomplete="off"></label>
+            <label class="field"><span>Class</span><input id="ba-class" list="ba-classes" autocomplete="off"></label>
+          </div>
+          <div class="row">
+            <label class="field"><span>Rank</span><input id="ba-rank" inputmode="numeric" autocomplete="off"></label>
+            <label class="field"><span>Multiplier</span><input id="ba-mult" inputmode="numeric" value="1" autocomplete="off"></label>
+          </div>
+          <button type="submit" class="primary">Add</button>
+          <p class="status" id="board-add-status" role="status"></p>
+          <p class="hint">Leave Group as none for a stranger, or for one of the party. A crawler from
+            a group is one of its members, so pick their race from it; the class comes with them. One
+            from the players' own group (standing "us") takes any race and class. Whoever holds the
+            rank now, and everyone below, moves down one.</p>
+        </form>
+        <datalist id="ba-races"></datalist>
+        <datalist id="ba-classes"></datalist>
+      </details>
     </section>
   </main>
 

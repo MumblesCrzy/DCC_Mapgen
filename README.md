@@ -339,7 +339,7 @@ On Linux the desktop app needs your distribution's Tk package if it isn't alread
 
 ### Option C: in a browser, phones included
 
-Nothing to install: open **https://mumblescrzy.github.io/DCC_Mapgen/**. It is a smaller version of the app; see [Web page](#web-page-phones). It is also the one to use with a screen reader.
+Nothing to install: open **https://mumblescrzy.github.io/DCC_Mapgen/**. It does what the desktop app does, campaigns included; see [Web page](#web-page-phones). It is also the one to use with a screen reader.
 
 ## Desktop app
 
@@ -500,9 +500,11 @@ Bestiary stats it at the new level. What changes, and what doesn't:
 
 For phones and tablets, or any browser: pick a floor, size and seed, and the page
 shows the map (pinch, the mouse wheel or the buttons to zoom, about where you point;
-drag to move it), the write-up (with a list to jump
-between sections), and a Loot Boxes tab like the desktop app's. **Save** downloads the
-Markdown, or the map on show as SVG.
+drag to move it; **1:1** for its own size), the write-up (with a list to jump between
+sections), and the desktop app's other tabs: Loot Boxes, Edit, Campaign and
+Leaderboard. **Save everything** downloads the write-up, the floor file and every map
+as PNG, in a folder in one `.zip`, as the desktop app's Save output does; a map on its
+own saves as PNG or SVG, and the write-up as Markdown.
 
 **With a screen reader, use the web page.** It works with NVDA, JAWS, Narrator,
 VoiceOver and TalkBack. The desktop app doesn't: Tk, the toolkit it is built with,
@@ -556,10 +558,24 @@ shows a screen reader nothing but the window's title.
   There is no server, and nothing is sent anywhere.
 - The first visit downloads Python, a few megabytes, and takes a few seconds to start
   on a phone. After that it is cached.
-- It is the smaller version of the app. It has no campaigns or leaderboard, no PNG
-  export (the browser draws the SVG itself), and leaves the stairwell and boss sliders
-  and the Floor 9 and 10 options at their defaults. The Massive and Continent sizes
-  work, but make 257–401 maps, so they are slow on a phone.
+- **Every option the desktop app has**, under **More options**, shown for the floors
+  that take it: the countdown, mob levels and folklore region; on Floors 1 and 2 the
+  boss-chamber stairwells and the neighborhood stairwell and borough boss sliders; Floor
+  9's warlord names, wildcard faction and projected winner and runner-up (picked from the
+  factions, the only names the generator takes); Floor 10's vehicle and party size.
+- **Campaign and Leaderboard**, the desktop app's tabs: start a campaign or open a
+  campaign file, and every floor generated carries its groups on. Pick a group to change
+  its standing ("us" for the players' own), crawler count, fate or latest report; add a
+  group met at the table; and on the leaderboard re-rank a crawler, change their
+  multiplier, kill them or bring them back, or add one. The campaign is kept in the
+  browser, as the floor on show is, and comes back on a reload; **Save campaign file**
+  downloads the same file the desktop app reads and writes, so a campaign moves between
+  the two. Opening a floor file doesn't touch it.
+- **Loot Boxes** opens boxes on the visit's roller, as the desktop app's tab does, with
+  **Copy** for everything opened and **Clear**.
+- What only the desktop app has: its menu's keyboard shortcuts, Reload floor file (open
+  the file again instead) and Open in browser (the page is one). The Massive and
+  Continent sizes work, but make 257–401 maps, so they are slow on a phone.
 
 How it is built and checked:
 
@@ -632,7 +648,9 @@ and it's dealt like any other group from the next floor on.
 
 In the desktop app this is the **Campaign** tab: open or start a roster, and every
 floor generated afterwards carries it. The table lists everyone met so far, the dead
-greyed out with the floor that killed them, and standing is editable there.
+greyed out with the floor that killed them, and standing is editable there. The
+[web page](#web-page-phones) has the same tab; it keeps the campaign in the browser,
+and **Save campaign file** downloads the same file, to keep or to open in the app.
 
 Not every group the party meets comes out of the generator. **Add group...** adds one
 met at the table — a name, who they were before the Collapse, how many crawlers are
@@ -963,7 +981,7 @@ The rules for killing a ranked crawler are printed under the table: the Bounty B
 for the killer, and the Venison Box for a crawler who reaches the next floor still
 ranked. The leaderboard is what gives a Bounty Box its figure.
 
-In the desktop app this is the **Leaderboard** tab. It lists everyone ever ranked:
+In the desktop app and on the web page this is the **Leaderboard** tab. It lists everyone ever ranked:
 the list first, then former crawlers, then the dead. For the selected crawler:
 
 - **Rank:** give a former crawler a rank to bring them back with their multiplier,
@@ -1452,7 +1470,16 @@ neighborhood and opens its rooms, finds that a drag opens nothing and that a mou
 pointing names a room, taps the room and edits it (focus following), finds it outlined
 on its map, and goes back to the main map. Zooming keeps the map where you point: the
 wheel zooms about the pointer, + about the middle, a drag moves the map as far as the
-pointer moved, and Fit shows the whole map, centred, at the top.
+pointer moved, and Fit shows the whole map, centred, at the top. Every floor shows its
+own options (axe-core finding nothing with Floor 1's sliders open), and Floor 9's
+projected winner and Floor 10's vehicle reach the write-up. **Save everything**
+downloads a zip holding the write-up, the floor file and every map as PNG, and a map
+saves on its own as PNG; Copy puts the boxes opened on the clipboard and Clear empties
+them. A campaign started on the page carries a group onto the next floor; a group
+picked takes focus, changes standing to "us", and one met at the table is added; a
+leaderboard crawler is re-ranked, killed and brought back; axe-core finds nothing on
+either tab; Save campaign file downloads the campaign, changes and all; a reload brings
+it back, and Close puts it away.
 
 The page's Python side has its own tests in the main suite: a floor file saved on the
 page is the file the desktop app saves and opens to the same floor; a bad one (broken
@@ -1467,6 +1494,19 @@ and a value of the wrong kind, a locked value or a part that's gone changes noth
 A tap on the page's map finds what a click in the desktop app does: the same areas in
 the same order on every map, each named as the editor names it, with the map that shows
 it up close; an edit renames them; re-rolled rooms have none.
+Every option reaches the generator as the desktop app's panel passes it, the sliders as
+whole percents, and changes the floor; a floor that doesn't take one leaves it out; a
+slider past 100, a party of seven or a percent that isn't a number says so; and every
+faction offered as Floor 9's winner is one the generator takes. Floors generated in a
+campaign on the page are the floors the desktop app generates in one, and the campaign
+file is the one it writes, opening again to the same campaign; a floor file opened
+doesn't touch it, a floor that can't be made leaves it as it was, and closed, floors
+are standalone again. Each change on the Campaign and Leaderboard tabs is the desktop
+tab's call with its checks and its words: a standing, count, fate and report saved; a
+blank standing, a count that isn't one, an unknown fate or a group that's gone refused;
+a group added on the deepest floor seen, and not twice; a crawler re-ranked, taken off
+with the multiplier remembered, killed, brought back and added. There is no
+leaderboard to add to before Floor 4.
 
 Floors 1 and 2's crossings have their own group:
 - every edge two neighborhoods share has one crossing each way, the same two rooms from
