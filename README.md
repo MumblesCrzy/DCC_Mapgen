@@ -828,8 +828,8 @@ that does to a crawler:
 - **A mob's hit** is one die at level 1 and one more every five levels, d6s for an
   ordinary mob and d8s for an elite, plus a third of its STR, or of its INT for a
   trick that hits harder and has the MP.
-- **A boss's hit** is a third of its STR in dice of its tier's die, plus a third of its
-  STR. The die climbs with the tiers: d6 for a neighborhood boss, d8 borough, d10 city,
+- **A boss's hit** is as many dice, of its tier's die, plus a third of its main stat:
+  INT for a caster, STR for the rest. The die climbs with the tiers: d6 for a neighborhood boss, d8 borough, d10 city,
   d12 county, d20 state and d100 country and up, with two attacks a round from borough,
   three from county and four from continent. The table gives the dice, the biggest
   hit, the attacks a round and the to-hit bonus, a fifth of the level.
@@ -845,7 +845,7 @@ that does to a crawler:
 Ordinary mobs gain a point a level to a crawler's three and hit with one die, so an
 ordinary crawler lives through a full round of their own floor's mobs even at the
 dice's most. Bosses are a different matter: Floor 11's floor boss, with four attacks
-a round of 180d100+180, drops an evenly spread ordinary crawler in one round.
+a round of 27d100+180, drops an evenly spread ordinary crawler in one round.
 
 Each build is seeded by the mob itself, so the same mob at the same level always
 has the same stats, and adding the Bestiary moved nothing else on any floor. The
@@ -872,8 +872,8 @@ The Bestiary's hits are worked out by them. In short:
   flat bonus, times one plus its percentage.
 - **Mobs** hit one die, and one more per five levels (d6 ordinary, d8 for elites,
   mayors and hunters), plus a third of STR or INT, at d20 + level ÷ 5 to hit.
-- **Bosses** hit a third of their STR in dice of their tier's die, plus a third of their
-  STR: d6 neighborhood, d8 borough, d10 city, d12 county, d20 state, d100 country,
+- **Bosses** hit one die, and one more per five levels, of their tier's die, plus a
+  third of their main stat (INT for a caster, STR for the rest): d6 neighborhood, d8 borough, d10 city, d12 county, d20 state, d100 country,
   continent and floor. The attacks a round past city are this project's extension of
   the table.
 - **To hit:** d20 + skill bonus (half the skill level; a fifth of the level for a pet or
@@ -1232,8 +1232,8 @@ city bosses. It checks:
 - the leaderboard crawler is Carl at the end of the floor's book, with the books'
   levels written into the test;
 - a mob's hit is one die per five levels (and one), d6s or an elite's d8s, plus a third
-  of STR, or of INT for a trick that hits harder; a boss's is a third of its STR in
-  its tier's dice plus a third of its STR, whatever its trick; a round equal to the
+  of STR, or of INT for a trick that hits harder; a boss's is as many of its
+  tier's dice plus a third of its INT if it's a caster and its STR if not; a round equal to the
   crawler's HP drops them;
 - every floor lists every mob and boss hardest round first, with its dice, biggest
   hit, attacks and to-hit, the rounds that drop an ordinary and a leaderboard
@@ -1248,8 +1248,8 @@ Combat has its own group, with the house rules written into the test as formulas
   range; a free second strike; a spell at its level; a cell's cap; a bank with its
   multipliers; heal-over-time ticks and every potion grade; a pet's dice and gear;
 - a mob's dice, biggest hit, trick, to-hit and row, and which row each kind hits by;
-  a boss's dice by its STR, one at least, rolled within its range, and the ladder of
-  dice and attacks up the tiers; the Dexterity edge and its cap, natural 20 and 1, a
+  a boss's dice by its level, rolled within its range, with its main stat added, and
+  the ladder of dice and attacks up the tiers; the Dexterity edge and its cap, natural 20 and 1, a
   hit's arithmetic and the chance over a d20;
 - the boss that feeds on the countdown gains a phase every six hours;
 - the Combat section is on every floor, with its tables, and is shared matter the

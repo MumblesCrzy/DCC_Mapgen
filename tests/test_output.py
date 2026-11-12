@@ -3648,10 +3648,11 @@ class BestiaryTest(unittest.TestCase):
     # The table's house rules. A mob's hit is one die at level 1 and one more
     # every five levels -- d6 for an ordinary mob, d8 for an elite (and a mayor
     # and a hunter) -- plus a third of its STR, or of its INT for a trick that
-    # hits harder (3 MP for one use). A boss's hit is a third of its STR in dice
-    # of its tier's die -- d6 neighborhood, d8 borough, d10 city, d12 county, d20
-    # state, d100 country and up -- plus a third of its STR, with two attacks a
-    # round from borough, three from county and four from continent. A
+    # hits harder (3 MP for one use). A boss's hit is the same count of dice of
+    # its tier's die -- d6 neighborhood, d8 borough, d10 city, d12 county, d20
+    # state, d100 country and up -- plus a third of its main stat, INT for a
+    # caster and STR for the rest, with two attacks a round from borough, three
+    # from county and four from continent. A
     # crawler's CON is 4 plus a fifth of their points (spread evenly) or half of
     # them (a veteran's build).
 
@@ -3664,8 +3665,9 @@ class BestiaryTest(unittest.TestCase):
         tier = b.hit_tier or {"top": "county", "province": "county"}.get(b.tier, b.tier)
         if tier in self.BOSS_DICE:
             die, attacks = self.BOSS_DICE[tier]
-            n = max(1, b.stats["STR"] // 3)
-            return n, die, attacks, n * die + b.stats["STR"] // 3, "STR"
+            n = 1 + b.level // 5
+            main = "INT" if b.kind == "caster" else "STR"
+            return n, die, attacks, n * die + b.stats[main] // 3, main
         elite = b.tier in ("mayor", "hunter") or b.name.startswith("Elite ")
         die, attacks = self.MOB_DICE["elite" if elite else "ordinary"]
         n = 1 + b.level // 5
@@ -3701,14 +3703,18 @@ class BestiaryTest(unittest.TestCase):
                     self.assertEqual(b.hit, (hit, behind), where)
                     self.assertEqual(b.round_max, hit * attacks, where)
                     self.assertAlmostEqual(b.hit_avg, n * (die + 1) / 2 + hit - n * die, msg=where)
-        # An elite rolls d8s by the mob rule, a plain mob d6s; a boss a third of
-        # its STR in its tier's dice, its STR behind it even with a trick.
+        # An elite rolls d8s by the mob rule, a plain mob d6s; a boss the same
+        # count of its tier's dice, with its INT behind it if it's a caster and
+        # its STR if not.
         self.assertEqual(mg.build_mob("Elite Feral Goblins", 50, "mob").dice, (11, 8))
         self.assertEqual(mg.build_mob("Feral Goblins", 50, "mob").dice, (11, 6))
         for tier, die in (("neighborhood", 6), ("borough", 8), ("city", 10)):
-            boss = mg.build_mob("Goblin Shamankas", 60, tier)
-            self.assertEqual(boss.dice, (boss.stats["STR"] // 3, die), tier)
-            self.assertEqual(boss.behind, "STR", tier)
+            caster = mg.build_mob("Goblin Shamankas", 60, tier)
+            brute = mg.build_mob("Tunnel Trolls", 60, tier)
+            self.assertEqual((caster.kind, brute.kind), ("caster", "brute"))
+            self.assertEqual((caster.dice, brute.dice), ((13, die), (13, die)), tier)
+            self.assertEqual(caster.hit, (13 * die + caster.stats["INT"] // 3, "INT"), tier)
+            self.assertEqual(brute.hit, (13 * die + brute.stats["STR"] // 3, "STR"), tier)
         top = mg.build_mob("Tunnel Trolls", 120, "top", hit_tier="country")
         self.assertEqual((top.dice[1], top.attacks), (100, 3))
         for level in (1, 4, 5, 25, 105, 300):
@@ -3749,7 +3755,8 @@ class BestiaryTest(unittest.TestCase):
                 cells = [c.strip() for c in row.strip("|").split("|")]
                 n, die, attacks, hit, behind = self._numbers(b)
                 self.assertEqual(cells[:3], [b.name, str(b.level), f"+{b.level // 5}"], cells[0])
-                self.assertEqual(cells[3], f"{n}d{die}+{hit - n * die}" + (" (trick)" if behind == "trick" else ""),
+                self.assertEqual(cells[3], f"{n}d{die}+{hit - n * die}"
+                                 + {"trick": " (trick)", "INT": " (INT)"}.get(behind, ""),
                                  cells[0])
                 self.assertEqual((cells[4], cells[5]), (f"{hit:,}", str(attacks)), cells[0])
                 avg = (n * (die + 1) / 2 + hit - n * die) * attacks
@@ -3837,16 +3844,16 @@ class CombatTest(unittest.TestCase):
         self.assertEqual(mg.mob_dice(3, "elite"), (1, 8))
         self.assertEqual({t: tuple(v) for t, v in mg.COMBAT["tiers"].items()},
                          {"ordinary": (6, 1), "elite": (8, 1)})
-        # A boss: STR // 3 dice of its tier's die, plus STR // 3. The dice climb
-        # with the tiers: d6, d8, d10, d12, d20, d100.
-        self.assertEqual(mg.boss_dice(30, "borough"), (10, 8))
-        self.assertEqual(mg.boss_hit(30, "borough"), 10 * 4.5 + 10)
-        self.assertEqual(mg.boss_max_hit(30, "borough"), 10 * 8 + 10)
-        self.assertEqual(mg.boss_max_hit(541, "floor"), 180 * 100 + 180)
-        self.assertEqual(mg.boss_dice(2, "neighborhood"), (1, 6), "one die at least")
+        # A boss: 1 + level // 5 dice of its tier's die, plus its main stat // 3.
+        # The dice climb with the tiers: d6, d8, d10, d12, d20, d100.
+        self.assertEqual(mg.boss_dice(30, "borough"), (7, 8))
+        self.assertEqual(mg.boss_hit(30, 30, "borough"), 7 * 4.5 + 10)
+        self.assertEqual(mg.boss_max_hit(30, 30, "borough"), 7 * 8 + 10)
+        self.assertEqual(mg.boss_max_hit(134, 541, "floor"), 27 * 100 + 180)
+        self.assertEqual(mg.boss_dice(4, "neighborhood"), (1, 6), "one die at level 1 to 4")
         rng = random.Random(3)
         for _ in range(20):
-            self.assertTrue(10 + 10 <= mg.boss_hit(30, "borough", rng=rng) <= 80 + 10)
+            self.assertTrue(7 + 10 <= mg.boss_hit(30, 30, "borough", rng=rng) <= 56 + 10)
         ladder = [tuple(mg.COMBAT["boss_dice"][t]) for t in
                   ("neighborhood", "borough", "city", "county", "state", "country", "continent", "floor")]
         self.assertEqual([die for die, _ in ladder], [6, 8, 10, 12, 20, 100, 100, 100])
@@ -3882,7 +3889,7 @@ class CombatTest(unittest.TestCase):
             sec = md[md.index("## Combat"):]
             for line in ("| 0–4 | ×1 |", "| 15 | ×4 |", "| 20 and up | ×12 |",
                          "| elite | d8 | 1 |", "| city | d10 | 2 |", "| country | d100 | 3 |",
-                         "hits for 10d8+10, 55 on average and 90 at most.",
+                         "hits for 7d8+10, 41.5 on average and 66 at most.",
                          "averages 29.5.", "a hit 60% of the time."):
                 self.assertIn(line, sec, f"floor {f}: {line}")
             self.assertNotIn("## Combat", mg.floor_body(md), f"floor {f}")
