@@ -3645,27 +3645,33 @@ class BestiaryTest(unittest.TestCase):
         self.assertNotIn("twice", mg.CRAWLER_STATS["npc_note"])
 
     # -- you're going to die --------------------------------------------------
-    # The table's house rules: a mob's hit is one die at level 1 and one more every
-    # five levels, of its tier's die -- d6 for an ordinary mob, d8 for a
-    # neighborhood boss and for an elite, d10 for a borough boss and d12 for a
-    # city boss, with two attacks a round from borough up -- plus a third of its
-    # STR, or of its INT for a trick that hits harder (3 MP for one use). A
+    # The table's house rules. A mob's hit is one die at level 1 and one more
+    # every five levels -- d6 for an ordinary mob, d8 for an elite (and a mayor
+    # and a hunter) -- plus a third of its STR, or of its INT for a trick that
+    # hits harder (3 MP for one use). A boss's hit is a third of its STR in dice
+    # of its tier's die -- d6 neighborhood, d8 borough, d10 city, d12 county, d20
+    # state, d100 country and up -- plus a third of its STR, with two attacks a
+    # round from borough, three from county and four from continent. A
     # crawler's CON is 4 plus a fifth of their points (spread evenly) or half of
     # them (a veteran's build).
 
-    DICE = {"mob": (6, 1), "neighborhood": (8, 1), "borough": (10, 2), "city": (12, 2)}
+    MOB_DICE = {"ordinary": (6, 1), "elite": (8, 1)}
+    BOSS_DICE = {"neighborhood": (6, 1), "borough": (8, 2), "city": (10, 2), "county": (12, 3),
+                 "state": (20, 3), "country": (100, 3), "continent": (100, 4), "floor": (100, 4)}
 
     def _numbers(self, b):
-        """(dice, sides, attacks, biggest hit, what is behind it), by the rules
-        above for the tiers they name; the generator's own for the rest."""
-        if b.tier in self.DICE:
-            die, attacks = (8, 1) if b.tier == "mob" and b.name.startswith("Elite ") else self.DICE[b.tier]
-            n = 1 + b.level // 5
-            trick = b.stats["INT"] if b.stats["INT"] >= 3 else 0
-            stat, behind = (trick, "trick") if trick > b.stats["STR"] else (b.stats["STR"], "STR")
-            return n, die, attacks, n * die + stat // 3, behind
-        n, die = b.dice
-        return n, die, b.attacks, b.hit[0], b.behind
+        """(dice, sides, attacks, biggest hit, what is behind it), by the rules above."""
+        tier = b.hit_tier or {"top": "county", "province": "county"}.get(b.tier, b.tier)
+        if tier in self.BOSS_DICE:
+            die, attacks = self.BOSS_DICE[tier]
+            n = max(1, b.stats["STR"] // 3)
+            return n, die, attacks, n * die + b.stats["STR"] // 3, "STR"
+        elite = b.tier in ("mayor", "hunter") or b.name.startswith("Elite ")
+        die, attacks = self.MOB_DICE["elite" if elite else "ordinary"]
+        n = 1 + b.level // 5
+        trick = b.stats["INT"] if b.stats["INT"] >= 3 else 0
+        stat, behind = (trick, "trick") if trick > b.stats["STR"] else (b.stats["STR"], "STR")
+        return n, die, attacks, n * die + stat // 3, behind
 
     def _hit(self, b):
         return self._numbers(b)[3:5]
@@ -3695,9 +3701,16 @@ class BestiaryTest(unittest.TestCase):
                     self.assertEqual(b.hit, (hit, behind), where)
                     self.assertEqual(b.round_max, hit * attacks, where)
                     self.assertAlmostEqual(b.hit_avg, n * (die + 1) / 2 + hit - n * die, msg=where)
-        # An elite hits as a neighborhood boss does; a plain mob with a d6.
+        # An elite rolls d8s by the mob rule, a plain mob d6s; a boss a third of
+        # its STR in its tier's dice, its STR behind it even with a trick.
         self.assertEqual(mg.build_mob("Elite Feral Goblins", 50, "mob").dice, (11, 8))
         self.assertEqual(mg.build_mob("Feral Goblins", 50, "mob").dice, (11, 6))
+        for tier, die in (("neighborhood", 6), ("borough", 8), ("city", 10)):
+            boss = mg.build_mob("Goblin Shamankas", 60, tier)
+            self.assertEqual(boss.dice, (boss.stats["STR"] // 3, die), tier)
+            self.assertEqual(boss.behind, "STR", tier)
+        top = mg.build_mob("Tunnel Trolls", 120, "top", hit_tier="country")
+        self.assertEqual((top.dice[1], top.attacks), (100, 3))
         for level in (1, 4, 5, 25, 105, 300):
             for half in (False, True):
                 self.assertEqual(mg.crawler_hp(level, half), self._hp(level, half))
@@ -3818,18 +3831,38 @@ class CombatTest(unittest.TestCase):
 
     def test_mobs_and_bosses(self):
         self.assertEqual(mg.mob_hit(50, 54), 11 * 3.5 + 18)
-        self.assertEqual(mg.mob_max_hit(50, 54, "city"), 11 * 12 + 18)
+        self.assertEqual(mg.mob_max_hit(50, 54, "elite"), 11 * 8 + 18)
         self.assertEqual(mg.mob_hit(50, 54, trick_int=90), 11 * 3.5 + 30)
         self.assertEqual(mg.mob_to_hit_bonus(50), 10)
-        self.assertEqual(mg.mob_dice(3, "borough"), (1, 10))
-        for tier, dice in (("ordinary", (6, 1)), ("neighborhood", (8, 1)), ("borough", (10, 2)),
-                           ("city", (12, 2))):
-            self.assertEqual(tuple(mg.COMBAT["tiers"][tier]), dice, tier)
+        self.assertEqual(mg.mob_dice(3, "elite"), (1, 8))
+        self.assertEqual({t: tuple(v) for t, v in mg.COMBAT["tiers"].items()},
+                         {"ordinary": (6, 1), "elite": (8, 1)})
+        # A boss: STR // 3 dice of its tier's die, plus STR // 3. The dice climb
+        # with the tiers: d6, d8, d10, d12, d20, d100.
+        self.assertEqual(mg.boss_dice(30, "borough"), (10, 8))
+        self.assertEqual(mg.boss_hit(30, "borough"), 10 * 4.5 + 10)
+        self.assertEqual(mg.boss_max_hit(30, "borough"), 10 * 8 + 10)
+        self.assertEqual(mg.boss_max_hit(541, "floor"), 180 * 100 + 180)
+        self.assertEqual(mg.boss_dice(2, "neighborhood"), (1, 6), "one die at least")
+        rng = random.Random(3)
+        for _ in range(20):
+            self.assertTrue(10 + 10 <= mg.boss_hit(30, "borough", rng=rng) <= 80 + 10)
+        ladder = [tuple(mg.COMBAT["boss_dice"][t]) for t in
+                  ("neighborhood", "borough", "city", "county", "state", "country", "continent", "floor")]
+        self.assertEqual([die for die, _ in ladder], [6, 8, 10, 12, 20, 100, 100, 100])
+        self.assertEqual([att for _, att in ladder], [1, 2, 2, 3, 3, 3, 4, 4])
         for tier, as_ in (("mob", "ordinary"), ("neighborhood", "neighborhood"), ("borough", "borough"),
-                          ("city", "city"), ("mayor", "neighborhood"), ("hunter", "neighborhood"),
-                          ("top", "county"), ("floor", "floor")):
+                          ("city", "city"), ("mayor", "elite"), ("hunter", "elite"),
+                          ("top", "county"), ("province", "county"), ("floor", "floor")):
             self.assertEqual(mg.hit_tier(tier), as_, tier)
-        self.assertEqual(mg.hit_tier("mob", "Elite Feral Goblins"), "neighborhood")
+        self.assertEqual(mg.hit_tier("mob", "Elite Feral Goblins"), "elite")
+        self.assertFalse(mg.is_boss_row("elite"))
+        self.assertTrue(mg.is_boss_row("neighborhood"))
+
+    def test_the_countdown_boss_gains_a_phase_every_six_hours(self):
+        grand = [m for bank in mg.BOSS_MECHANICS.values() if isinstance(bank, list) for m in bank]
+        self.assertIn("Feeds on the floor countdown: it gains a phase every six hours.", grand)
+        self.assertFalse([m for m in grand if "every hour" in m])
 
     def test_to_hit(self):
         self.assertEqual(mg.dex_edge(30, 20), 10 - 5)
@@ -3848,7 +3881,9 @@ class CombatTest(unittest.TestCase):
             md = mg.generate(f, "small", 4242, images=False).markdown
             sec = md[md.index("## Combat"):]
             for line in ("| 0–4 | ×1 |", "| 15 | ×4 |", "| 20 and up | ×12 |",
-                         "| city | d12 | 2 |", "averages 29.5.", "a hit 60% of the time."):
+                         "| elite | d8 | 1 |", "| city | d10 | 2 |", "| country | d100 | 3 |",
+                         "hits for 10d8+10, 55 on average and 90 at most.",
+                         "averages 29.5.", "a hit 60% of the time."):
                 self.assertIn(line, sec, f"floor {f}: {line}")
             self.assertNotIn("## Combat", mg.floor_body(md), f"floor {f}")
 

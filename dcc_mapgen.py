@@ -2130,17 +2130,27 @@ def pet_attack(level: int, die: int, gear_flat: int = 0, gear_pct: float = 0.0, 
 
 
 def hit_tier(tier: str, name: str = "") -> str:
-    """The COMBAT tier a mob or boss hits as. An ordinary mob is ordinary, an
-    elite (an "Elite ..." mob) hits as a neighborhood boss does, as do a mayor
-    and a hunter; the boss tiers are their own; a top boss hits as a county's."""
+    """The COMBAT row a mob or boss hits by. An ordinary mob rolls the ordinary
+    row, and an elite (an "Elite ..." mob), a mayor and a hunter the elite row,
+    both by the mob rule; a boss rolls its own tier's row of the boss dice, and a
+    top boss a county's unless it is given its own tier."""
     if tier == "mob" and name.startswith("Elite "):
-        return "neighborhood"
+        return "elite"
     t = COMBAT["tier_of"].get(tier, tier)
-    return t if t in COMBAT["tiers"] else "ordinary"
+    return t if t in COMBAT["tiers"] or t in COMBAT["boss_dice"] else "ordinary"
+
+
+def is_boss_row(row: str) -> bool:
+    """Whether a COMBAT row is a boss tier's, hitting by the boss rule."""
+    return row in COMBAT["boss_dice"]
+
+
+def tier_attacks(row: str) -> int:
+    return (COMBAT["boss_dice"].get(row) or COMBAT["tiers"][row])[1]
 
 
 def mob_dice(level: int, tier: str = "ordinary") -> Tuple[int, int]:
-    """(dice, sides): one die, and one more every five levels, of the tier's."""
+    """(dice, sides) for a mob: one die, and one more every five levels, of its row's."""
     return 1 + level // COMBAT["levels_per_die"], COMBAT["tiers"][tier][0]
 
 
@@ -2154,6 +2164,25 @@ def mob_hit(level: int, strength: int, tier: str = "ordinary", trick_int=None, r
 
 def mob_max_hit(level: int, strength: int, tier: str = "ordinary") -> int:
     n, die = mob_dice(level, tier)
+    return n * die + strength // COMBAT["stat_per"]
+
+
+def boss_dice(strength: int, tier: str) -> Tuple[int, int]:
+    """(dice, sides) for a boss: a third of its STR in dice, one at least, of its
+    tier's die, which climbs with the boss tiers (d6 for a neighborhood boss up
+    to d100)."""
+    return max(1, strength // COMBAT["stat_per"]), COMBAT["boss_dice"][tier][0]
+
+
+def boss_hit(strength: int, tier: str, rng=None) -> float:
+    """A boss's hit: a third of its STR in dice of its tier's die, plus a third
+    of its STR."""
+    n, die = boss_dice(strength, tier)
+    return (dice_roll(rng, n, die) if rng else dice_avg(n, die)) + strength // COMBAT["stat_per"]
+
+
+def boss_max_hit(strength: int, tier: str) -> int:
+    n, die = boss_dice(strength, tier)
     return n * die + strength // COMBAT["stat_per"]
 
 
@@ -2226,13 +2255,20 @@ class MobBuild:
         return self.hit_tier or hit_tier(self.tier, self.name)
 
     @property
+    def is_boss(self) -> bool:
+        return is_boss_row(self.hits_as)
+
+    @property
     def dice(self) -> Tuple[int, int]:
-        """(dice, sides): one die, and one more every five levels, of its tier's."""
+        """(dice, sides): a mob's one die and one more every five levels; a
+        boss's third of its STR in dice of its tier's die."""
+        if self.is_boss:
+            return boss_dice(self.stats["STR"], self.hits_as)
         return mob_dice(self.level, self.hits_as)
 
     @property
     def attacks(self) -> int:
-        return COMBAT["tiers"][self.hits_as][1]
+        return tier_attacks(self.hits_as)
 
     @property
     def to_hit(self) -> int:
@@ -2242,6 +2278,8 @@ class MobBuild:
     def behind(self) -> str:
         """What is behind its hit: its STR, or its trick off its INT if that is
         the bigger and it has the MP for one use. Ties go to the blow."""
+        if self.is_boss:
+            return "STR"              # a boss's hit is its STR's, by the boss rule
         trick = self.stats["INT"] if self.tricks else 0
         return "trick" if trick > self.stats["STR"] else "STR"
 
@@ -2596,16 +2634,24 @@ def _going_to_die(beasts: List[MobBuild], floor: int) -> List[str]:
     is from its ordinary mobs."""
     c = COMBAT
     ordinary, leader, _ = party_levels(floor, beasts)
-    present = [t for t in c["tiers"] if any(b.hits_as == t for b in beasts)]
-    tiers = ", ".join(("an ordinary mob" if t == "ordinary" else f"a {t} boss") + f" d{c['tiers'][t][0]}"
-                      + (f" with {c['tiers'][t][1]} attacks a round" if c["tiers"][t][1] > 1 else "")
-                      for t in present)
-    o = ["", "### You're going to die", "",
-         f"A mob's hit is one die, and one more every {c['levels_per_die']} levels, of its "
-         f"tier's die ({tiers}), plus a third of its STR, or of its INT if its trick hits "
-         f"harder and it has the MP for one use. It hits on a d20 plus a fifth of its level, "
-         f"against {c['to_hit']['base']} plus the crawler's armor. An elite hits as a "
-         f"neighborhood boss does. The rules are under Combat, near the end.", "",
+    rows = {**c["tiers"], **c["boss_dice"]}
+    present = [t for t in rows if any(b.hits_as == t for b in beasts)]
+
+    def dice(group):
+        return ", ".join({"ordinary": "an ordinary mob", "elite": "an elite"}.get(t, f"a {t} boss")
+                         + f" d{rows[t][0]}" + (f" with {rows[t][1]} attacks a round" if rows[t][1] > 1 else "")
+                         for t in present if t in group)
+    said = []
+    if dice(c["tiers"]):
+        said.append(f"A mob's hit is one die, and one more every {c['levels_per_die']} levels, of "
+                    f"its die ({dice(c['tiers'])}), plus a third of its STR, or of its INT if its "
+                    f"trick hits harder and it has the MP for one use.")
+    if dice(c["boss_dice"]):
+        said.append(f"A boss's hit is a third of its STR in dice of its tier's die "
+                    f"({dice(c['boss_dice'])}), plus a third of its STR.")
+    said.append(f"Each hits on a d20 plus a fifth of its level, against {c['to_hit']['base']} "
+                f"plus the crawler's armor. The rules are under Combat, near the end.")
+    o = ["", "### You're going to die", "", " ".join(said), "",
          f"Below, for each: its dice and its attacks a round; how many rounds of average hits "
          f"drop an ordinary crawler on this floor (level {ordinary}, {crawler_hp(ordinary):,} HP "
          f"with their points spread evenly) and one on the leaderboard (level {leader}, "
@@ -2690,16 +2736,25 @@ def combat_section() -> List[str]:
           f"A pet's hit is one die, and one more for every {c['levels_per_die']} of its own "
           f"levels, plus its gear's flat bonus, all times one plus its gear's percentage (+50% "
           f"is ×1.5). It hits on a d20 plus a fifth of its level.", ""]
-    o += ["### Mobs and bosses", "",
+    o += ["### Mobs", "",
           f"A mob's hit is one die, and one more every {c['levels_per_die']} levels, of its "
-          f"tier's die, plus {third} of its STR, or of its INT when a damaging trick hits "
-          f"harder; its biggest hit is every die at its most. It hits on a d20 plus a fifth of "
-          f"its level. An elite, a mayor and a hunter hit as a neighborhood boss does; a "
-          f"County, State, Country or Continent boss as its tier.", "",
-          "| Tier | Die | Attacks a round |", "|---|---:|---:|"]
+          f"die, plus {third} of its STR, or of its INT when a damaging trick hits harder; its "
+          f"biggest hit is every die at its most. An elite, a mayor and a hunter roll the "
+          f"elite's die. It hits on a d20 plus a fifth of its level.", "",
+          "| Mob | Die | Attacks a round |", "|---|---:|---:|"]
     for t, (die, att) in c["tiers"].items():
         o.append(f"| {t} | d{die} | {att} |")
-    o += ["", "The tiers above city are this project's extension of the table.", ""]
+    n, die = boss_dice(30, "borough")
+    o += ["", "### Bosses", "",
+          f"A boss's hit is {third} of its STR in dice of its tier's die, plus {third} of its "
+          f"STR: a borough boss with STR 30 hits for {n}d{die}+{30 // per}, "
+          f"{boss_hit(30, 'borough'):g} on average and {boss_max_hit(30, 'borough')} at most. "
+          f"The die climbs with the boss tiers; a top boss of a huge Floor 1 or 2 rolls its own "
+          f"tier's. It hits on a d20 plus a fifth of its level.", "",
+          "| Tier | Die | Attacks a round |", "|---|---:|---:|"]
+    for t, (die, att) in c["boss_dice"].items():
+        o.append(f"| {t} | d{die} | {att} |")
+    o += ["", "The attacks a round past city are this project's extension of the table.", ""]
     th = c["to_hit"]
     o += ["### To hit", "",
           f"Provisional. A d20, plus the attacker's skill bonus (a half of their skill level for "

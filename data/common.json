@@ -901,7 +901,7 @@
    "Drags the party into a pocket arena; the way out opens when it dies.",
    "Resets the fight to full health once, and remembers everything the party did.",
    "The System sells live buffs to viewers. The crowd decides how hard this gets.",
-   "Feeds on the floor countdown: every hour that passes adds a phase.",
+   "Feeds on the floor countdown: it gains a phase every six hours.",
    "Its death is broadcast floor-wide, and everything nearby comes to watch."
   ]
  },
@@ -5522,45 +5522,18 @@
     6,
     1
    ],
-   "neighborhood": [
+   "elite": [
     8,
     1
-   ],
-   "borough": [
-    10,
-    2
-   ],
-   "city": [
-    12,
-    2
-   ],
-   "county": [
-    12,
-    3
-   ],
-   "state": [
-    12,
-    3
-   ],
-   "country": [
-    20,
-    3
-   ],
-   "continent": [
-    20,
-    4
-   ],
-   "floor": [
-    20,
-    4
    ]
   },
   "tier_of": {
    "mob": "ordinary",
-   "elite": "neighborhood",
-   "mayor": "neighborhood",
-   "hunter": "neighborhood",
-   "top": "county"
+   "elite": "elite",
+   "mayor": "elite",
+   "hunter": "elite",
+   "top": "county",
+   "province": "county"
   },
   "to_hit": {
    "base": 10,
@@ -5569,6 +5542,40 @@
    "def_dex_per": 4,
    "crawler_skill_per": 2,
    "mob_level_per": 5
+  },
+  "boss_dice": {
+   "neighborhood": [
+    6,
+    1
+   ],
+   "borough": [
+    8,
+    2
+   ],
+   "city": [
+    10,
+    2
+   ],
+   "county": [
+    12,
+    3
+   ],
+   "state": [
+    20,
+    3
+   ],
+   "country": [
+    100,
+    3
+   ],
+   "continent": [
+    100,
+    4
+   ],
+   "floor": [
+    100,
+    4
+   ]
   }
  }
 }

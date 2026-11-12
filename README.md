@@ -825,12 +825,14 @@ number. Then no number of crawlers is enough: each one goes down before doing an
 Last comes **You're going to die**, listing every mob and boss, hardest round first,
 with what it hits for by the table's house rules (see [Combat](#combat)) and what
 that does to a crawler:
-- **A hit** is one die at level 1 and one more every five levels, of the tier's die:
-  d6 for an ordinary mob, d8 for a neighborhood boss or an elite, d10 for a borough
-  boss and d12 for a city boss, with two attacks a round from borough up; plus a third
-  of its STR, or of its INT for a trick that hits harder and has the MP. The table
-  gives the dice, the biggest hit, the attacks a round and the to-hit bonus, a fifth
-  of its level.
+- **A mob's hit** is one die at level 1 and one more every five levels, d6s for an
+  ordinary mob and d8s for an elite, plus a third of its STR, or of its INT for a
+  trick that hits harder and has the MP.
+- **A boss's hit** is a third of its STR in dice of its tier's die, plus a third of its
+  STR. The die climbs with the tiers: d6 for a neighborhood boss, d8 borough, d10 city,
+  d12 county, d20 state and d100 country and up, with two attacks a round from borough,
+  three from county and four from continent. The table gives the dice, the biggest
+  hit, the attacks a round and the to-hit bonus, a fifth of the level.
 - **Rounds to drop** an ordinary crawler on the floor and a leaderboard one, at
   average rolls, with the crawler's points spread evenly.
 - **One round** is the level below which one round of its hardest hits drops a
@@ -842,8 +844,8 @@ that does to a crawler:
 
 Ordinary mobs gain a point a level to a crawler's three and hit with one die, so an
 ordinary crawler lives through a full round of their own floor's mobs even at the
-dice's most. Bosses are a different matter: Floor 11's floor boss, with four d20
-attacks a round, drops an evenly spread ordinary crawler in one round.
+dice's most. Bosses are a different matter: Floor 11's floor boss, with four attacks
+a round of 180d100+180, drops an evenly spread ordinary crawler in one round.
 
 Each build is seeded by the mob itself, so the same mob at the same level always
 has the same stats, and adding the Bestiary moved nothing else on any floor. The
@@ -868,10 +870,12 @@ The Bestiary's hits are worked out by them. In short:
   **potions** heal 20, 35, 50, 75 or 100% of full health by grade.
 - **Pets** hit one die, and one more per five of their own levels, plus their gear's
   flat bonus, times one plus its percentage.
-- **Mobs and bosses** hit one die, and one more per five levels, of their tier's die
-  (d6 ordinary, d8 neighborhood and elites, d10 borough with two attacks, d12 city
-  with two), plus a third of STR or INT, at d20 + level ÷ 5 to hit. The tiers above
-  city are this project's extension of the table.
+- **Mobs** hit one die, and one more per five levels (d6 ordinary, d8 for elites,
+  mayors and hunters), plus a third of STR or INT, at d20 + level ÷ 5 to hit.
+- **Bosses** hit a third of their STR in dice of their tier's die, plus a third of their
+  STR: d6 neighborhood, d8 borough, d10 city, d12 county, d20 state, d100 country,
+  continent and floor. The attacks a round past city are this project's extension of
+  the table.
 - **To hit:** d20 + skill bonus (half the skill level; a fifth of the level for a pet or
   a mob) + item bonus + Dexterity edge (a third of the attacker's less a quarter of a
   defender's who sees it, never beyond ±10) against 10 + armor; a natural 20 hits, a
@@ -1227,9 +1231,10 @@ city bosses. It checks:
   crawler's HP;
 - the leaderboard crawler is Carl at the end of the floor's book, with the books'
   levels written into the test;
-- a hit is one die per five levels (and one) of the tier's die plus a third of STR,
-  or of INT for a trick that hits harder; an elite hits as a neighborhood boss; a
-  round equal to the crawler's HP drops them;
+- a mob's hit is one die per five levels (and one), d6s or an elite's d8s, plus a third
+  of STR, or of INT for a trick that hits harder; a boss's is a third of its STR in
+  its tier's dice plus a third of its STR, whatever its trick; a round equal to the
+  crawler's HP drops them;
 - every floor lists every mob and boss hardest round first, with its dice, biggest
   hit, attacks and to-hit, the rounds that drop an ordinary and a leaderboard
   crawler, and the level that lives through a round, and the floor's cutoff comes
@@ -1242,9 +1247,11 @@ Combat has its own group, with the house rules written into the test as formulas
 - a weapon's damage with and without Strength, with bonus dice, rolled within its
   range; a free second strike; a spell at its level; a cell's cap; a bank with its
   multipliers; heal-over-time ticks and every potion grade; a pet's dice and gear;
-- a mob's dice, biggest hit, trick, to-hit and tier, and which tier each kind hits
-  as; the Dexterity edge and its cap, natural 20 and 1, a hit's arithmetic and the
-  chance over a d20;
+- a mob's dice, biggest hit, trick, to-hit and row, and which row each kind hits by;
+  a boss's dice by its STR, one at least, rolled within its range, and the ladder of
+  dice and attacks up the tiers; the Dexterity edge and its cap, natural 20 and 1, a
+  hit's arithmetic and the chance over a d20;
+- the boss that feeds on the countdown gains a phase every six hours;
 - the Combat section is on every floor, with its tables, and is shared matter the
   threat scan ignores.
 
